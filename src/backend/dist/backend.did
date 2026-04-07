@@ -1,0 +1,661 @@
+type WorkspaceInput = record {name: text;};
+type Workspace = 
+ record {
+   createdAt: Timestamp;
+   id: EntityId;
+   name: text;
+   ownerId: UserId;
+   tenantId: TenantId;
+ };
+type WalletTransaction = 
+ record {
+   accountId: EntityId;
+   amount: nat;
+   asset: AssetType;
+   createdAt: Timestamp;
+   fromAddress: opt text;
+   id: EntityId;
+   memo: opt text;
+   status: TransactionStatus;
+   tenantId: TenantId;
+   toAddress: opt text;
+   txType: TransactionType;
+ };
+type WalletAccount = 
+ record {
+   accountId: text;
+   btcBalance: nat;
+   createdAt: Timestamp;
+   displayName: text;
+   icpBalance: nat;
+   id: EntityId;
+   principalId: text;
+   tenantId: TenantId;
+   updatedAt: Timestamp;
+   userId: UserId;
+ };
+type UserProfileInput = 
+ record {
+   displayName: text;
+   email: text;
+   role: Role;
+   workspaceId: EntityId;
+ };
+type UserProfile = 
+ record {
+   createdAt: Timestamp;
+   displayName: text;
+   email: text;
+   role: Role;
+   tenantId: TenantId;
+   userId: UserId;
+   workspaceId: EntityId;
+ };
+type UserId = principal;
+type TransactionType = 
+ variant {
+   Receive;
+   Send;
+   Stake;
+   Swap;
+   Unstake;
+ };
+type TransactionStatus = 
+ variant {
+   Cancelled;
+   Completed;
+   Failed;
+   Pending;
+ };
+type Timestamp = int;
+type TenantId = text;
+type TaskStatus = 
+ variant {
+   Blocked;
+   Done;
+   InProgress;
+   Todo;
+ };
+type TaskPriority = 
+ variant {
+   Critical;
+   High;
+   Low;
+   Medium;
+ };
+type TaskInput = 
+ record {
+   assigneeId: opt UserId;
+   crossLinks: vec CrossLink;
+   description: text;
+   dueDate: opt Timestamp;
+   priority: TaskPriority;
+   projectId: EntityId;
+   title: text;
+ };
+type Task = 
+ record {
+   assigneeId: opt UserId;
+   createdAt: Timestamp;
+   crossLinks: vec CrossLink;
+   description: text;
+   dueDate: opt Timestamp;
+   id: EntityId;
+   priority: TaskPriority;
+   projectId: EntityId;
+   status: TaskStatus;
+   tenantId: TenantId;
+   title: text;
+   updatedAt: Timestamp;
+ };
+type Role = 
+ variant {
+   Admin;
+   Manager;
+   TeamMember;
+ };
+type RecurringPayment = 
+ record {
+   accountId: EntityId;
+   amount: nat;
+   asset: AssetType;
+   createdAt: Timestamp;
+   frequency: PayFrequency;
+   id: EntityId;
+   isActive: bool;
+   nextRunAt: Timestamp;
+   tenantId: TenantId;
+   toAddress: text;
+ };
+type RecurrenceRule = 
+ variant {
+   Daily;
+   Monthly;
+   None;
+   Weekly;
+   Yearly;
+ };
+type ProjectStatus = 
+ variant {
+   Active;
+   Archived;
+   Completed;
+   OnHold;
+ };
+type ProjectInput = 
+ record {
+   description: text;
+   memberIds: vec UserId;
+   name: text;
+ };
+type Project = 
+ record {
+   createdAt: Timestamp;
+   crossLinks: vec CrossLink;
+   description: text;
+   id: EntityId;
+   memberIds: vec UserId;
+   name: text;
+   ownerId: UserId;
+   status: ProjectStatus;
+   tenantId: TenantId;
+   updatedAt: Timestamp;
+ };
+type PayrollStatus = 
+ variant {
+   Active;
+   Completed;
+   Paused;
+ };
+type PayrollRecord = 
+ record {
+   amount: nat;
+   createdAt: Timestamp;
+   currency: text;
+   employeeId: EntityId;
+   id: EntityId;
+   period: text;
+   processedAt: opt Timestamp;
+   status: PayrollStatus;
+   tenantId: TenantId;
+ };
+type PayFrequency = 
+ variant {
+   BiWeekly;
+   Monthly;
+   Quarterly;
+   Weekly;
+ };
+type NoteInput = 
+ record {
+   content: text;
+   crossLinks: vec CrossLink;
+   tags: vec text;
+   title: text;
+ };
+type Note = 
+ record {
+   authorId: UserId;
+   content: text;
+   createdAt: Timestamp;
+   crossLinks: vec CrossLink;
+   id: EntityId;
+   tags: vec text;
+   tenantId: TenantId;
+   title: text;
+   updatedAt: Timestamp;
+ };
+type MessageInput = 
+ record {
+   channelId: EntityId;
+   content: text;
+   crossLinks: vec CrossLink;
+   replyToId: opt EntityId;
+ };
+type Message = 
+ record {
+   channelId: EntityId;
+   content: text;
+   createdAt: Timestamp;
+   crossLinks: vec CrossLink;
+   id: EntityId;
+   replyToId: opt EntityId;
+   senderId: UserId;
+   tenantId: TenantId;
+   updatedAt: Timestamp;
+ };
+type EventInput = 
+ record {
+   attendeeIds: vec UserId;
+   crossLinks: vec CrossLink;
+   description: text;
+   endTime: Timestamp;
+   recurrence: RecurrenceRule;
+   startTime: Timestamp;
+   title: text;
+ };
+type Event = 
+ record {
+   attendeeIds: vec UserId;
+   createdAt: Timestamp;
+   createdBy: UserId;
+   crossLinks: vec CrossLink;
+   description: text;
+   endTime: Timestamp;
+   id: EntityId;
+   recurrence: RecurrenceRule;
+   startTime: Timestamp;
+   tenantId: TenantId;
+   title: text;
+   updatedAt: Timestamp;
+ };
+type EscrowStatus = 
+ variant {
+   Cancelled;
+   Disputed;
+   Funded;
+   Pending;
+   Released;
+ };
+type EscrowInput = 
+ record {
+   amount: nat;
+   conditions: vec text;
+   crossLinks: vec CrossLink;
+   currency: text;
+   description: text;
+   dueDate: opt Timestamp;
+   payeeId: UserId;
+   title: text;
+ };
+type EscrowContract = 
+ record {
+   amount: nat;
+   conditions: vec text;
+   createdAt: Timestamp;
+   crossLinks: vec CrossLink;
+   currency: text;
+   description: text;
+   dueDate: opt Timestamp;
+   id: EntityId;
+   payeeId: UserId;
+   payerId: UserId;
+   status: EscrowStatus;
+   tenantId: TenantId;
+   title: text;
+   updatedAt: Timestamp;
+ };
+type EntityId = text;
+type EmployeeInput = 
+ record {
+   currency: text;
+   email: text;
+   firstName: text;
+   lastName: text;
+   payFrequency: PayFrequency;
+   salary: nat;
+   startDate: Timestamp;
+   taxRate: nat;
+   userId: UserId;
+ };
+type Employee = 
+ record {
+   createdAt: Timestamp;
+   currency: text;
+   email: text;
+   firstName: text;
+   id: EntityId;
+   isActive: bool;
+   lastName: text;
+   payFrequency: PayFrequency;
+   salary: nat;
+   startDate: Timestamp;
+   taxRate: nat;
+   tenantId: TenantId;
+   userId: UserId;
+ };
+type CrossLink = 
+ record {
+   entityId: EntityId;
+   entityType: text;
+   linkLabel: text;
+   tenantId: TenantId;
+ };
+type ChannelInput = 
+ record {
+   description: text;
+   isPublic: bool;
+   memberIds: vec UserId;
+   name: text;
+ };
+type Channel = 
+ record {
+   createdAt: Timestamp;
+   createdBy: UserId;
+   description: text;
+   id: EntityId;
+   isPublic: bool;
+   memberIds: vec UserId;
+   name: text;
+   tenantId: TenantId;
+ };
+type BackupStatus = 
+ variant {
+   Completed;
+   Failed;
+   Pending;
+   Running;
+ };
+type Backup = 
+ record {
+   backupLabel: text;
+   completedAt: opt Timestamp;
+   createdAt: Timestamp;
+   createdBy: UserId;
+   id: EntityId;
+   sizeBytes: opt nat;
+   status: BackupStatus;
+   tenantId: TenantId;
+ };
+type AutomationTrigger = 
+ variant {
+   OnEscrowUpdate;
+   OnEventReminder;
+   OnNoteCreated;
+   OnPaymentDue;
+   OnTaskStatusChange;
+   Scheduled;
+ };
+type AutomationRule = 
+ record {
+   action: AutomationAction;
+   createdAt: Timestamp;
+   createdBy: UserId;
+   description: text;
+   id: EntityId;
+   isActive: bool;
+   name: text;
+   tenantId: TenantId;
+   trigger: AutomationTrigger;
+ };
+type AutomationAction = 
+ variant {
+   CreateTask;
+   RunPayroll;
+   SendNotification;
+   UpdateStatus;
+ };
+type AuditLog = 
+ record {
+   action: text;
+   details: text;
+   entityId: EntityId;
+   entityType: text;
+   id: EntityId;
+   tenantId: TenantId;
+   timestamp: Timestamp;
+   userId: UserId;
+ };
+type AssetType = 
+ variant {
+   BTC;
+   ICP;
+ };
+service : {
+  addEmployee: (tenantId: TenantId, input: EmployeeInput) ->
+   (variant {
+      err: text;
+      ok: Employee;
+    });
+  archiveProject: (tenantId: TenantId, id: EntityId) ->
+   (variant {
+      err: text;
+      ok: Project;
+    });
+  cancelEscrow: (tenantId: TenantId, id: EntityId) ->
+   (variant {
+      err: text;
+      ok: EscrowContract;
+    });
+  cancelRecurringPayment: (tenantId: TenantId, id: EntityId) ->
+   (variant {
+      err: text;
+      ok: RecurringPayment;
+    });
+  createAutomationRule: (tenantId: TenantId, name: text, description: 
+   text, trigger: AutomationTrigger, action: AutomationAction) ->
+   (variant {
+      err: text;
+      ok: AutomationRule;
+    });
+  createBackup: (tenantId: TenantId, backupLabel: text) ->
+   (variant {
+      err: text;
+      ok: Backup;
+    });
+  createChannel: (tenantId: TenantId, input: ChannelInput) ->
+   (variant {
+      err: text;
+      ok: Channel;
+    });
+  createEscrow: (tenantId: TenantId, input: EscrowInput) ->
+   (variant {
+      err: text;
+      ok: EscrowContract;
+    });
+  createEvent: (tenantId: TenantId, input: EventInput) ->
+   (variant {
+      err: text;
+      ok: Event;
+    });
+  createNote: (tenantId: TenantId, input: NoteInput) ->
+   (variant {
+      err: text;
+      ok: Note;
+    });
+  createProject: (tenantId: TenantId, input: ProjectInput) ->
+   (variant {
+      err: text;
+      ok: Project;
+    });
+  createRecurringPayment: (tenantId: TenantId, accountId: EntityId,
+   toAddress: text, amount: nat, asset: AssetType, frequency:
+   PayFrequency) -> (variant {
+                       err: text;
+                       ok: RecurringPayment;
+                     });
+  createTask: (tenantId: TenantId, input: TaskInput) ->
+   (variant {
+      err: text;
+      ok: Task;
+    });
+  createWalletAccount: (tenantId: TenantId, displayName: text) ->
+   (variant {
+      err: text;
+      ok: WalletAccount;
+    });
+  createWorkspace: (tenantId: TenantId, input: WorkspaceInput) ->
+   (variant {
+      err: text;
+      ok: Workspace;
+    });
+  deactivateEmployee: (tenantId: TenantId, id: EntityId) ->
+   (variant {
+      err: text;
+      ok: Employee;
+    });
+  deleteEvent: (tenantId: TenantId, id: EntityId) ->
+   (variant {
+      err: text;
+      ok: bool;
+    });
+  deleteMessage: (tenantId: TenantId, id: EntityId) ->
+   (variant {
+      err: text;
+      ok: bool;
+    });
+  deleteNote: (tenantId: TenantId, id: EntityId) ->
+   (variant {
+      err: text;
+      ok: bool;
+    });
+  deleteTask: (tenantId: TenantId, id: EntityId) ->
+   (variant {
+      err: text;
+      ok: bool;
+    });
+  disputeEscrow: (tenantId: TenantId, id: EntityId) ->
+   (variant {
+      err: text;
+      ok: EscrowContract;
+    });
+  fundEscrow: (tenantId: TenantId, id: EntityId) ->
+   (variant {
+      err: text;
+      ok: EscrowContract;
+    });
+  getBackup: (tenantId: TenantId, id: EntityId) ->
+   (variant {
+      err: text;
+      ok: Backup;
+    }) query;
+  getChannel: (tenantId: TenantId, id: EntityId) ->
+   (variant {
+      err: text;
+      ok: Channel;
+    }) query;
+  getEmployee: (tenantId: TenantId, id: EntityId) ->
+   (variant {
+      err: text;
+      ok: Employee;
+    }) query;
+  getEscrow: (tenantId: TenantId, id: EntityId) ->
+   (variant {
+      err: text;
+      ok: EscrowContract;
+    }) query;
+  getEvent: (tenantId: TenantId, id: EntityId) ->
+   (variant {
+      err: text;
+      ok: Event;
+    }) query;
+  getMessages: (tenantId: TenantId, channelId: EntityId, limit: nat, before:
+   opt Timestamp) -> (vec Message) query;
+  getMyProfile: (tenantId: TenantId) -> (opt UserProfile) query;
+  getMyWalletAccount: (tenantId: TenantId) -> (opt WalletAccount) query;
+  getNote: (tenantId: TenantId, id: EntityId) ->
+   (variant {
+      err: text;
+      ok: Note;
+    }) query;
+  getProject: (tenantId: TenantId, id: EntityId) ->
+   (variant {
+      err: text;
+      ok: Project;
+    }) query;
+  getTask: (tenantId: TenantId, id: EntityId) ->
+   (variant {
+      err: text;
+      ok: Task;
+    }) query;
+  getWalletAccount: (tenantId: TenantId, id: EntityId) ->
+   (variant {
+      err: text;
+      ok: WalletAccount;
+    }) query;
+  getWorkspace: (tenantId: TenantId, id: EntityId) ->
+   (variant {
+      err: text;
+      ok: Workspace;
+    }) query;
+  getWorkspaceStats: (tenantId: TenantId) ->
+   (record {
+      employeeCount: nat;
+      escrowCount: nat;
+      noteCount: nat;
+      projectCount: nat;
+      walletAccountCount: nat;
+    }) query;
+  joinChannel: (tenantId: TenantId, id: EntityId) ->
+   (variant {
+      err: text;
+      ok: Channel;
+    });
+  listAuditLogs: (tenantId: TenantId, limit: nat) -> (vec AuditLog) query;
+  listAutomationRules: (tenantId: TenantId) -> (vec AutomationRule) query;
+  listBackups: (tenantId: TenantId) -> (vec Backup) query;
+  listChannels: (tenantId: TenantId) -> (vec Channel) query;
+  listEmployees: (tenantId: TenantId) -> (vec Employee) query;
+  listEscrows: (tenantId: TenantId) -> (vec EscrowContract) query;
+  listEvents: (tenantId: TenantId, from: Timestamp, to: Timestamp) ->
+   (vec Event) query;
+  listMyEvents: (tenantId: TenantId) -> (vec Event) query;
+  listNotes: (tenantId: TenantId) -> (vec Note) query;
+  listPayrollRecords: (tenantId: TenantId, employeeId: opt EntityId) ->
+   (vec PayrollRecord) query;
+  listProfiles: (tenantId: TenantId) -> (vec UserProfile) query;
+  listProjects: (tenantId: TenantId) -> (vec Project) query;
+  listRecurringPayments: (tenantId: TenantId, accountId: EntityId) ->
+   (vec RecurringPayment) query;
+  listTasks: (tenantId: TenantId, projectId: EntityId) -> (vec Task) query;
+  listTransactions: (tenantId: TenantId, accountId: EntityId) ->
+   (vec WalletTransaction) query;
+  listWorkspaces: (tenantId: TenantId) -> (vec Workspace) query;
+  processPayroll: (tenantId: TenantId, employeeId: EntityId, period: 
+   text) -> (variant {
+               err: text;
+               ok: PayrollRecord;
+             });
+  releaseEscrow: (tenantId: TenantId, id: EntityId) ->
+   (variant {
+      err: text;
+      ok: EscrowContract;
+    });
+  searchNotes: (tenantId: TenantId, searchQuery: text) -> (vec Note) query;
+  sendAsset: (tenantId: TenantId, accountId: EntityId, asset: AssetType,
+   amount: nat, toAddress: text, memo: opt text) ->
+   (variant {
+      err: text;
+      ok: WalletTransaction;
+    });
+  sendMessage: (tenantId: TenantId, input: MessageInput) ->
+   (variant {
+      err: text;
+      ok: Message;
+    });
+  toggleAutomationRule: (tenantId: TenantId, id: EntityId) ->
+   (variant {
+      err: text;
+      ok: AutomationRule;
+    });
+  updateEmployee: (tenantId: TenantId, id: EntityId, input: EmployeeInput) ->
+   (variant {
+      err: text;
+      ok: Employee;
+    });
+  updateEvent: (tenantId: TenantId, id: EntityId, input: EventInput) ->
+   (variant {
+      err: text;
+      ok: Event;
+    });
+  updateNote: (tenantId: TenantId, id: EntityId, input: NoteInput) ->
+   (variant {
+      err: text;
+      ok: Note;
+    });
+  updateProject: (tenantId: TenantId, id: EntityId, input: ProjectInput) ->
+   (variant {
+      err: text;
+      ok: Project;
+    });
+  updateTask: (tenantId: TenantId, id: EntityId, input: TaskInput) ->
+   (variant {
+      err: text;
+      ok: Task;
+    });
+  upsertProfile: (tenantId: TenantId, input: UserProfileInput) ->
+   (variant {
+      err: text;
+      ok: UserProfile;
+    });
+}

@@ -1,0 +1,73 @@
+import Common "../types/common";
+import NTypes "../types/notes";
+import Notes "../lib/notes";
+
+/// Public-API module for Notes.
+/// Each function receives the current store, performs the operation,
+/// and returns the result plus the updated store (for state-mutating operations).
+module {
+
+  public func createNote(
+    store : [(Common.EntityId, NTypes.Note)],
+    tenantId : Common.TenantId,
+    caller : Common.UserId,
+    input : NTypes.NoteInput,
+  ) : { result : { #ok : NTypes.Note; #err : Text }; store : [(Common.EntityId, NTypes.Note)] } {
+    let (note, updated) = Notes.createNote(store, tenantId, caller, input);
+    { result = #ok note; store = updated }
+  };
+
+  public func getNote(
+    store : [(Common.EntityId, NTypes.Note)],
+    tenantId : Common.TenantId,
+    id : Common.EntityId,
+  ) : { #ok : NTypes.Note; #err : Text } {
+    switch (Notes.getNote(store, tenantId, id)) {
+      case (?n) #ok n;
+      case null #err "Note not found";
+    }
+  };
+
+  public func listNotes(
+    store : [(Common.EntityId, NTypes.Note)],
+    tenantId : Common.TenantId,
+  ) : [NTypes.Note] {
+    Notes.listNotes(store, tenantId)
+  };
+
+  public func updateNote(
+    store : [(Common.EntityId, NTypes.Note)],
+    tenantId : Common.TenantId,
+    id : Common.EntityId,
+    caller : Common.UserId,
+    input : NTypes.NoteInput,
+  ) : { result : { #ok : NTypes.Note; #err : Text }; store : [(Common.EntityId, NTypes.Note)] } {
+    let (maybeNote, updated) = Notes.updateNote(store, tenantId, id, caller, input);
+    switch (maybeNote) {
+      case (?n) ({ result = #ok(n); store = updated });
+      case null ({ result = #err("Note not found or access denied"); store = store });
+    }
+  };
+
+  public func deleteNote(
+    store : [(Common.EntityId, NTypes.Note)],
+    tenantId : Common.TenantId,
+    id : Common.EntityId,
+    caller : Common.UserId,
+  ) : { result : { #ok : Bool; #err : Text }; store : [(Common.EntityId, NTypes.Note)] } {
+    let (ok, updated) = Notes.deleteNote(store, tenantId, id, caller);
+    if (ok) {
+      { result = #ok true; store = updated }
+    } else {
+      { result = #err "Note not found or access denied"; store = store }
+    }
+  };
+
+  public func searchNotes(
+    store : [(Common.EntityId, NTypes.Note)],
+    tenantId : Common.TenantId,
+    searchQuery : Text,
+  ) : [NTypes.Note] {
+    Notes.searchNotes(store, tenantId, searchQuery)
+  };
+};

@@ -1,0 +1,31 @@
+{
+  "overview": "Fourthspace is a comprehensive all-in-one workspace platform integrating Notes, Projects, Chat, Calendar, Payroll, Escrow, and Wallet — with role-based access, cross-category linking, analytics, automation, and a unified dashboard.",
+  "features": [
+    "7 integrated workspace categories: Notes, Projects, Chat, Calendar, Payroll, Escrow, Wallet",
+    "Role-based access control (Admin, Manager, Team Member)",
+    "Unified dashboard with Workspace Overview",
+    "Cross-category deep linking",
+    "Backup and restore with admin panel and scheduling",
+    "Analytics dashboard and automation rules engine",
+    "Polished AI tools with mock responses",
+    "Simulated ICP/BTC wallet with recurring payments",
+    "Enhanced landing page with calculator and pricing comparison",
+    "Light/dark mode, fully responsive design",
+    "Comprehensive audit logging"
+  ],
+  "category": "productivity",
+  "tags": [
+    "workspace",
+    "productivity",
+    "project-management",
+    "notes",
+    "chat",
+    "calendar",
+    "payroll",
+    "escrow",
+    "wallet",
+    "team-collaboration",
+    "dashboard"
+  ],
+  "last_updated": "2026-04-07T22:08:38.982Z"
+}

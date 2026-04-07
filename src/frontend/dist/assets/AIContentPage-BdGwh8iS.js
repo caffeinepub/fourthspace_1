@@ -1,0 +1,328 @@
+import { a as useNavigate, r as reactExports, j as jsxRuntimeExports, B as Button, m as FileText, S as Sparkles } from "./index-D7inqmxR.js";
+import { B as Badge } from "./index-BJuRsRYe.js";
+import { C as Card, a as CardHeader, b as CardTitle, c as CardContent } from "./card-wy6FYjGT.js";
+import { L as Label } from "./label-CBtn2p-5.js";
+import { S as Select, a as SelectTrigger, b as SelectValue, c as SelectContent, d as SelectItem } from "./select-D0Yw2k_p.js";
+import { S as Separator } from "./separator-B6dqygkP.js";
+import { T as Textarea } from "./textarea-DoR08WA4.js";
+import { u as ue } from "./index-p-k3Ndic.js";
+import { A as ArrowLeft } from "./arrow-left-mNBAKt8w.js";
+import { L as LoaderCircle } from "./loader-circle-CEvzFFjS.js";
+import { S as Save } from "./save-gMXGM8pU.js";
+import { C as CheckCheck, a as Copy } from "./copy-Bjz05tAL.js";
+import "./index-IXOTxK3N.js";
+import "./index-BGFsRO7G.js";
+import "./check-EW6vRiNm.js";
+const MOCK_RESPONSES = {
+  blog: `# The Future of Remote Work: Building High-Performing Teams Across Time Zones
+
+The modern workplace has undergone a seismic shift. What began as a temporary response to global disruption has evolved into a permanent paradigm — one that demands new leadership strategies, communication frameworks, and cultural norms.
+
+## Key Insights
+
+**1. Asynchronous-First Communication**
+High-performing remote teams don't rely on synchronous meetings for every decision. They build robust documentation habits and leverage structured async workflows that respect teammates' time zones.
+
+**2. Outcome-Based Performance Metrics**
+Rather than measuring hours worked, leading organizations have shifted to outcome-based metrics. This creates accountability while preserving the autonomy that makes remote work so appealing.
+
+**3. Intentional Culture Building**
+Culture doesn't happen by accident in distributed teams. It requires deliberate investment — virtual team rituals, recognition systems, and opportunities for informal connection.
+
+## Practical Next Steps
+
+Start with a communication audit. Map out every channel your team uses and ask: is this the right medium for this message? Then establish clear norms and watch productivity — and morale — climb.
+
+*Ready to transform your remote work strategy? The tools are here. The question is how you use them.*`,
+  email: `Subject: Q3 Performance Review — Action Items & Next Steps
+
+Hi Team,
+
+I hope this message finds you well. Following our Q3 performance review session yesterday, I wanted to summarize the key takeaways and outline the action items we've agreed upon.
+
+**Key Highlights**
+- Revenue target achieved at 94% — strong performance given market headwinds
+- Customer satisfaction scores improved by 8 points quarter-over-quarter
+- Two critical product features shipped ahead of schedule
+
+**Action Items**
+
+| Owner     | Task                          | Deadline |
+|-----------|-------------------------------|----------|
+| Marketing | Finalize Q4 campaign brief    | Oct 15   |
+| Product   | Prioritize backlog for sprint | Oct 12   |
+| Sales     | Submit pipeline forecast      | Oct 10   |
+
+Our next all-hands is scheduled for October 20th at 10:00 AM EST. Please come prepared with your team updates and blockers.
+
+Thank you all for a strong quarter. Let's keep the momentum going.
+
+Best regards,
+The Leadership Team`,
+  meeting: `# Meeting Notes — Quarterly Business Review
+Date: ${(/* @__PURE__ */ new Date()).toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" })}
+Attendees: Sarah Chen, Marcus Rodriguez, Priya Patel, James O'Brien
+
+---
+
+## Agenda Items Covered
+
+### 1. Q3 Performance Summary
+- Revenue: $2.4M vs $2.55M target (94% attainment)
+- Active users up 22% YoY
+- Customer churn reduced to 3.2% (from 4.8%)
+
+### 2. Product Roadmap Update
+- Feature A shipped Sept 28 — positive early adoption signals
+- Feature B delayed 2 weeks due to infrastructure dependency
+- Mobile app v2.1 on track for October release
+
+### 3. Team Capacity & Headcount
+- Engineering: 2 open roles in final interview stages
+- Q4 capacity looks healthy pending closures
+
+---
+
+## Decisions Made
+- Prioritize mobile over web for next sprint cycle
+- Freeze scope on Feature C until Q1
+- Move weekly syncs from Monday to Tuesday
+
+## Follow-Ups
+- Marcus to share updated roadmap by EOD Friday
+- Priya to coordinate onboarding plan for new hires`,
+  project: `# Project Summary: Platform Infrastructure Modernization
+
+**Status:** In Progress (Phase 2 of 4)
+**Lead:** Engineering Team
+**Last Updated:** ${(/* @__PURE__ */ new Date()).toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" })}
+
+---
+
+## Executive Summary
+
+The platform migration is progressing on schedule. Phase 1 (database schema migration) completed 3 days ahead of schedule. Phase 2 (API layer refactoring) is currently 65% complete with no critical blockers.
+
+## Progress Overview
+
+| Phase | Description       | Status       | Completion |
+|-------|-------------------|--------------|------------|
+| 1     | Database Migration| Complete     | 100%       |
+| 2     | API Refactoring   | In Progress  | 65%        |
+| 3     | Frontend Integration| Pending    | 0%         |
+| 4     | QA & Deployment   | Pending      | 0%         |
+
+## Budget Status
+- Allocated: $180,000
+- Spent to date: $94,500 (52.5%)
+- Forecast to complete: $165,000 (under budget by $15K)
+
+## Next Milestones
+- API layer complete: Oct 18
+- Phase 3 kickoff: Oct 21
+- Final deployment: Nov 10`,
+  social: `🚀 Big things are happening at Fourthspace this quarter.
+
+We've been heads down building features our users actually asked for — and the results speak for themselves: 22% more active users, faster load times, and a brand-new AI workspace assistant that's already saving teams hours every week.
+
+The best products aren't built in boardrooms. They're built with feedback from the people who use them every day. Thank you for being part of this journey.
+
+What feature would YOU like to see next? Drop it in the comments 👇
+
+#ProductUpdate #WorkspaceTools #Fourthspace #BuildInPublic #SaaS`
+};
+function AIContentPage() {
+  const navigate = useNavigate();
+  const [prompt, setPrompt] = reactExports.useState("");
+  const [contentType, setContentType] = reactExports.useState("blog");
+  const [tone, setTone] = reactExports.useState("professional");
+  const [loading, setLoading] = reactExports.useState(false);
+  const [result, setResult] = reactExports.useState(null);
+  const [copied, setCopied] = reactExports.useState(false);
+  const handleGenerate = async () => {
+    if (!prompt.trim()) {
+      ue.error("Please enter a prompt first.");
+      return;
+    }
+    setLoading(true);
+    setResult(null);
+    await new Promise((r) => setTimeout(r, 1500));
+    setResult(MOCK_RESPONSES[contentType]);
+    setLoading(false);
+  };
+  const handleCopy = async () => {
+    if (!result) return;
+    await navigator.clipboard.writeText(result);
+    setCopied(true);
+    ue.success("Copied to clipboard!");
+    setTimeout(() => setCopied(false), 2e3);
+  };
+  const handleSaveNote = () => {
+    ue.success("Saved as note! Find it in your Notes section.");
+  };
+  return /* @__PURE__ */ jsxRuntimeExports.jsxs(
+    "div",
+    {
+      className: "flex flex-col min-h-full p-6 max-w-4xl mx-auto w-full",
+      "data-ocid": "ai-content",
+      children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-3 mb-6", children: [
+          /* @__PURE__ */ jsxRuntimeExports.jsxs(
+            Button,
+            {
+              variant: "ghost",
+              size: "sm",
+              onClick: () => navigate({ to: "/app/ai" }),
+              "data-ocid": "ai-content-back",
+              children: [
+                /* @__PURE__ */ jsxRuntimeExports.jsx(ArrowLeft, { className: "w-4 h-4 mr-1" }),
+                "Back"
+              ]
+            }
+          ),
+          /* @__PURE__ */ jsxRuntimeExports.jsx(Separator, { orientation: "vertical", className: "h-5" }),
+          /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-2", children: [
+            /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "w-8 h-8 rounded-lg bg-violet-500/10 flex items-center justify-center", children: /* @__PURE__ */ jsxRuntimeExports.jsx(FileText, { className: "w-4 h-4 text-violet-500" }) }),
+            /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { children: [
+              /* @__PURE__ */ jsxRuntimeExports.jsx("h1", { className: "text-lg font-display font-semibold text-foreground leading-none", children: "Content Creator" }),
+              /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "text-xs text-muted-foreground mt-0.5", children: "Generate professional content instantly" })
+            ] })
+          ] }),
+          /* @__PURE__ */ jsxRuntimeExports.jsxs(Badge, { className: "ml-auto bg-violet-500/10 text-violet-600 border-violet-200 dark:border-violet-800 dark:text-violet-400", children: [
+            /* @__PURE__ */ jsxRuntimeExports.jsx(Sparkles, { className: "w-3 h-3 mr-1" }),
+            "AI Powered"
+          ] })
+        ] }),
+        /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "grid grid-cols-1 lg:grid-cols-2 gap-6 flex-1", children: [
+          /* @__PURE__ */ jsxRuntimeExports.jsxs(Card, { className: "border-border", children: [
+            /* @__PURE__ */ jsxRuntimeExports.jsx(CardHeader, { className: "pb-3", children: /* @__PURE__ */ jsxRuntimeExports.jsx(CardTitle, { className: "text-base font-display", children: "Describe what you want to create" }) }),
+            /* @__PURE__ */ jsxRuntimeExports.jsxs(CardContent, { className: "flex flex-col gap-4", children: [
+              /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex flex-col gap-1.5", children: [
+                /* @__PURE__ */ jsxRuntimeExports.jsx(Label, { htmlFor: "prompt", className: "text-sm font-medium", children: "Prompt" }),
+                /* @__PURE__ */ jsxRuntimeExports.jsx(
+                  Textarea,
+                  {
+                    id: "prompt",
+                    placeholder: "Describe what you want to create...",
+                    value: prompt,
+                    onChange: (e) => setPrompt(e.target.value),
+                    rows: 5,
+                    className: "resize-none",
+                    "data-ocid": "ai-content-prompt"
+                  }
+                )
+              ] }),
+              /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "grid grid-cols-2 gap-3", children: [
+                /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex flex-col gap-1.5", children: [
+                  /* @__PURE__ */ jsxRuntimeExports.jsx(Label, { htmlFor: "content-type", className: "text-sm font-medium", children: "Content Type" }),
+                  /* @__PURE__ */ jsxRuntimeExports.jsxs(
+                    Select,
+                    {
+                      value: contentType,
+                      onValueChange: (v) => setContentType(v),
+                      children: [
+                        /* @__PURE__ */ jsxRuntimeExports.jsx(
+                          SelectTrigger,
+                          {
+                            id: "content-type",
+                            "data-ocid": "ai-content-type-select",
+                            children: /* @__PURE__ */ jsxRuntimeExports.jsx(SelectValue, {})
+                          }
+                        ),
+                        /* @__PURE__ */ jsxRuntimeExports.jsxs(SelectContent, { children: [
+                          /* @__PURE__ */ jsxRuntimeExports.jsx(SelectItem, { value: "blog", children: "Blog Post" }),
+                          /* @__PURE__ */ jsxRuntimeExports.jsx(SelectItem, { value: "email", children: "Email" }),
+                          /* @__PURE__ */ jsxRuntimeExports.jsx(SelectItem, { value: "meeting", children: "Meeting Notes" }),
+                          /* @__PURE__ */ jsxRuntimeExports.jsx(SelectItem, { value: "project", children: "Project Summary" }),
+                          /* @__PURE__ */ jsxRuntimeExports.jsx(SelectItem, { value: "social", children: "Social Media Post" })
+                        ] })
+                      ]
+                    }
+                  )
+                ] }),
+                /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex flex-col gap-1.5", children: [
+                  /* @__PURE__ */ jsxRuntimeExports.jsx(Label, { htmlFor: "tone", className: "text-sm font-medium", children: "Tone" }),
+                  /* @__PURE__ */ jsxRuntimeExports.jsxs(Select, { value: tone, onValueChange: (v) => setTone(v), children: [
+                    /* @__PURE__ */ jsxRuntimeExports.jsx(SelectTrigger, { id: "tone", "data-ocid": "ai-content-tone-select", children: /* @__PURE__ */ jsxRuntimeExports.jsx(SelectValue, {}) }),
+                    /* @__PURE__ */ jsxRuntimeExports.jsxs(SelectContent, { children: [
+                      /* @__PURE__ */ jsxRuntimeExports.jsx(SelectItem, { value: "professional", children: "Professional" }),
+                      /* @__PURE__ */ jsxRuntimeExports.jsx(SelectItem, { value: "casual", children: "Casual" }),
+                      /* @__PURE__ */ jsxRuntimeExports.jsx(SelectItem, { value: "formal", children: "Formal" }),
+                      /* @__PURE__ */ jsxRuntimeExports.jsx(SelectItem, { value: "creative", children: "Creative" })
+                    ] })
+                  ] })
+                ] })
+              ] }),
+              /* @__PURE__ */ jsxRuntimeExports.jsx(
+                Button,
+                {
+                  className: "w-full bg-gradient-to-r from-violet-600 to-purple-600 text-white border-0 hover:opacity-90 transition-opacity",
+                  onClick: handleGenerate,
+                  disabled: loading,
+                  "data-ocid": "ai-content-generate",
+                  children: loading ? /* @__PURE__ */ jsxRuntimeExports.jsxs(jsxRuntimeExports.Fragment, { children: [
+                    /* @__PURE__ */ jsxRuntimeExports.jsx(LoaderCircle, { className: "w-4 h-4 mr-2 animate-spin" }),
+                    "Generating..."
+                  ] }) : /* @__PURE__ */ jsxRuntimeExports.jsxs(jsxRuntimeExports.Fragment, { children: [
+                    /* @__PURE__ */ jsxRuntimeExports.jsx(Sparkles, { className: "w-4 h-4 mr-2" }),
+                    "Generate Content"
+                  ] })
+                }
+              )
+            ] })
+          ] }),
+          /* @__PURE__ */ jsxRuntimeExports.jsxs(Card, { className: "border-border flex flex-col", children: [
+            /* @__PURE__ */ jsxRuntimeExports.jsxs(CardHeader, { className: "pb-3 flex-row items-center justify-between", children: [
+              /* @__PURE__ */ jsxRuntimeExports.jsx(CardTitle, { className: "text-base font-display", children: "Generated Content" }),
+              result && /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-2", children: [
+                /* @__PURE__ */ jsxRuntimeExports.jsxs(
+                  Button,
+                  {
+                    variant: "outline",
+                    size: "sm",
+                    onClick: handleSaveNote,
+                    "data-ocid": "ai-content-save-note",
+                    children: [
+                      /* @__PURE__ */ jsxRuntimeExports.jsx(Save, { className: "w-3.5 h-3.5 mr-1.5" }),
+                      "Save as Note"
+                    ]
+                  }
+                ),
+                /* @__PURE__ */ jsxRuntimeExports.jsxs(
+                  Button,
+                  {
+                    variant: "outline",
+                    size: "sm",
+                    onClick: handleCopy,
+                    "data-ocid": "ai-content-copy",
+                    children: [
+                      copied ? /* @__PURE__ */ jsxRuntimeExports.jsx(CheckCheck, { className: "w-3.5 h-3.5 mr-1.5 text-green-500" }) : /* @__PURE__ */ jsxRuntimeExports.jsx(Copy, { className: "w-3.5 h-3.5 mr-1.5" }),
+                      copied ? "Copied!" : "Copy"
+                    ]
+                  }
+                )
+              ] })
+            ] }),
+            /* @__PURE__ */ jsxRuntimeExports.jsx(CardContent, { className: "flex-1", children: loading ? /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex flex-col items-center justify-center gap-3 py-16 text-muted-foreground", children: [
+              /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "w-12 h-12 rounded-full bg-violet-500/10 flex items-center justify-center", children: /* @__PURE__ */ jsxRuntimeExports.jsx(LoaderCircle, { className: "w-6 h-6 text-violet-500 animate-spin" }) }),
+              /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "text-sm", children: "Generating your content..." })
+            ] }) : result ? /* @__PURE__ */ jsxRuntimeExports.jsx(
+              "div",
+              {
+                className: "bg-muted/40 rounded-lg p-4 text-sm font-body leading-relaxed whitespace-pre-wrap text-foreground max-h-[480px] overflow-y-auto",
+                "data-ocid": "ai-content-output",
+                children: result
+              }
+            ) : /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex flex-col items-center justify-center gap-3 py-16 text-muted-foreground", children: [
+              /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "w-12 h-12 rounded-full bg-muted flex items-center justify-center", children: /* @__PURE__ */ jsxRuntimeExports.jsx(FileText, { className: "w-6 h-6" }) }),
+              /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "text-sm text-center", children: "Enter a prompt, select content type and tone, then click Generate." })
+            ] }) })
+          ] })
+        ] })
+      ]
+    }
+  );
+}
+export {
+  AIContentPage as default
+};
