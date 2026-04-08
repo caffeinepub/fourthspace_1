@@ -5,7 +5,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 import { useMutation } from "@tanstack/react-query";
 import { useNavigate, useParams } from "@tanstack/react-router";
-import { ArrowLeft, Calendar, Search, Users } from "lucide-react";
+import { ArrowLeft, Calendar, Search, Users, X } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 import { useBackend } from "../../hooks/useBackend";
@@ -46,24 +46,32 @@ export default function AvailabilityPage() {
   const [memberList, setMemberList] = useState<string[]>([]);
   const [timezone] = useState(getBrowserTz());
   const [slots, setSlots] = useState<AvailabilitySlot[]>([]);
+  const [hasSearched, setHasSearched] = useState(false);
 
   const addMember = () => {
     const trimmed = memberInput.trim();
-    if (trimmed && !memberList.includes(trimmed)) {
-      setMemberList((prev) => [...prev, trimmed]);
-      setMemberInput("");
+    if (!trimmed) return;
+    if (memberList.includes(trimmed)) {
+      toast.info("This member is already added");
+      return;
     }
+    setMemberList((prev) => [...prev, trimmed]);
+    setMemberInput("");
   };
 
   const removeMember = (id: string) => {
     setMemberList((prev) => prev.filter((m) => m !== id));
+    // Reset results if we remove a member after a search
+    setSlots([]);
+    setHasSearched(false);
   };
 
   const { mutate: checkAvailability, isPending } = useMutation({
     mutationFn: async () => {
-      if (!actor) throw new Error("Not connected");
+      if (!actor) throw new Error("Not connected to backend");
       if (memberList.length === 0)
         throw new Error("Add at least one team member");
+      if (!date) throw new Error("Please select a date");
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       return actor.getAvailability(
         tenantId,
@@ -75,13 +83,16 @@ export default function AvailabilityPage() {
     },
     onSuccess: (data) => {
       setSlots(data);
-      if (data.length === 0)
+      setHasSearched(true);
+      if (data.length === 0) {
         toast.info("No availability data found for the selected members.");
+      }
     },
-    onError: (err) =>
+    onError: (err) => {
       toast.error(
         err instanceof Error ? err.message : "Failed to check availability",
-      ),
+      );
+    },
   });
 
   const bestHours = HOURS.filter(
@@ -134,7 +145,12 @@ export default function AvailabilityPage() {
               type="date"
               value={date}
               min={today}
-              onChange={(e) => setDate(e.target.value)}
+              onChange={(e) => {
+                setDate(e.target.value);
+                // Reset results on date change
+                setSlots([]);
+                setHasSearched(false);
+              }}
               data-ocid="availability-date"
             />
           </div>
@@ -146,7 +162,12 @@ export default function AvailabilityPage() {
                 placeholder="Enter principal ID or username…"
                 value={memberInput}
                 onChange={(e) => setMemberInput(e.target.value)}
-                onKeyDown={(e) => e.key === "Enter" && addMember()}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    addMember();
+                  }
+                }}
                 data-ocid="availability-member-input"
               />
               <Button
@@ -154,6 +175,7 @@ export default function AvailabilityPage() {
                 onClick={addMember}
                 type="button"
                 data-ocid="availability-add-member"
+                disabled={!memberInput.trim()}
               >
                 Add
               </Button>
@@ -169,10 +191,10 @@ export default function AvailabilityPage() {
                     <button
                       type="button"
                       onClick={() => removeMember(m)}
-                      className="text-muted-foreground hover:text-foreground transition-colors"
-                      aria-label="Remove"
+                      className="text-muted-foreground hover:text-foreground transition-colors ml-0.5"
+                      aria-label={`Remove ${m}`}
                     >
-                      ×
+                      <X className="h-3 w-3" />
                     </button>
                   </div>
                 ))}
@@ -189,7 +211,7 @@ export default function AvailabilityPage() {
             </p>
             <Button
               onClick={() => checkAvailability()}
-              disabled={isPending || memberList.length === 0}
+              disabled={isPending || memberList.length === 0 || !date}
               className="w-full sm:w-auto"
               data-ocid="availability-check-btn"
             >
@@ -199,7 +221,7 @@ export default function AvailabilityPage() {
           </div>
         </div>
 
-        {/* Results grid */}
+        {/* Loading state */}
         {isPending && (
           <div className="space-y-2">
             {[1, 2, 3].map((n) => (
@@ -208,7 +230,8 @@ export default function AvailabilityPage() {
           </div>
         )}
 
-        {slots.length > 0 && (
+        {/* Results grid */}
+        {!isPending && slots.length > 0 && (
           <div className="space-y-4">
             {bestHours.length > 0 && (
               <div className="rounded-xl border border-green-200/50 dark:border-green-800/30 bg-green-50/40 dark:bg-green-900/10 p-4">
@@ -231,6 +254,15 @@ export default function AvailabilityPage() {
               </div>
             )}
 
+            {bestHours.length === 0 && (
+              <div className="rounded-xl border border-orange-200/50 dark:border-orange-800/30 bg-orange-50/40 dark:bg-orange-900/10 p-4">
+                <p className="text-sm font-medium text-orange-700 dark:text-orange-300">
+                  No common free slots found in the 8am–6pm window. Consider
+                  widening the search or checking a different date.
+                </p>
+              </div>
+            )}
+
             <div className="rounded-2xl border border-border bg-card overflow-hidden">
               <div className="overflow-x-auto">
                 <table className="w-full">
@@ -243,6 +275,7 @@ export default function AvailabilityPage() {
                         <th
                           key={slot.userId.toString()}
                           className="py-2 px-2 text-center text-xs font-semibold text-foreground min-w-[100px] truncate max-w-[120px]"
+                          title={slot.userId.toString()}
                         >
                           {slot.userId.toString().slice(0, 8)}…
                         </th>
@@ -305,22 +338,27 @@ export default function AvailabilityPage() {
           </div>
         )}
 
-        {!isPending && slots.length === 0 && memberList.length > 0 && (
-          <div
-            className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-border bg-muted/20 py-12 text-center"
-            data-ocid="availability-empty"
-          >
-            <Users className="h-10 w-10 text-muted-foreground mb-3" />
-            <p className="text-sm font-medium text-foreground">
-              No availability data yet
-            </p>
-            <p className="mt-1 text-xs text-muted-foreground">
-              Click "Check Availability" to see the grid.
-            </p>
-          </div>
-        )}
+        {/* Empty state: searched but no data */}
+        {!isPending &&
+          hasSearched &&
+          slots.length === 0 &&
+          memberList.length > 0 && (
+            <div
+              className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-border bg-muted/20 py-12 text-center"
+              data-ocid="availability-empty"
+            >
+              <Users className="h-10 w-10 text-muted-foreground mb-3" />
+              <p className="text-sm font-medium text-foreground">
+                No availability data found
+              </p>
+              <p className="mt-1 text-xs text-muted-foreground">
+                These members may not have any events on this date.
+              </p>
+            </div>
+          )}
 
-        {!isPending && slots.length === 0 && memberList.length === 0 && (
+        {/* Initial state: no search yet */}
+        {!isPending && !hasSearched && memberList.length === 0 && (
           <div
             className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-border bg-muted/20 py-14 text-center"
             data-ocid="availability-no-members"
@@ -334,6 +372,22 @@ export default function AvailabilityPage() {
             <p className="mt-2 text-sm text-muted-foreground max-w-xs">
               Enter principal IDs or usernames above, then click "Check
               Availability" to see who's free.
+            </p>
+          </div>
+        )}
+
+        {/* State: members added, but not yet searched */}
+        {!isPending && !hasSearched && memberList.length > 0 && (
+          <div
+            className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-border bg-muted/20 py-12 text-center"
+            data-ocid="availability-ready"
+          >
+            <Search className="h-10 w-10 text-muted-foreground mb-3" />
+            <p className="text-sm font-medium text-foreground">
+              Ready to check
+            </p>
+            <p className="mt-1 text-xs text-muted-foreground">
+              Click "Check Availability" to see the schedule grid.
             </p>
           </div>
         )}

@@ -43,6 +43,17 @@ module {
     Calendar.listEvents(events, tenantId, workspaceId, from, to)
   };
 
+  public func listEventsWithExceptions(
+    events : EventStore,
+    exceptions : ExceptionStore,
+    tenantId : Common.TenantId,
+    workspaceId : Common.WorkspaceId,
+    from : Common.Timestamp,
+    to : Common.Timestamp,
+  ) : [CalTypes.Event] {
+    Calendar.listEventsWithExceptions(events, exceptions, tenantId, workspaceId, from, to)
+  };
+
   public func updateEvent(
     events : EventStore,
     tenantId : Common.TenantId,

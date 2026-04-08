@@ -6,8 +6,6 @@ import Principal "mo:core/Principal";
 import Blob "mo:core/Blob";
 import Array "mo:core/Array";
 import Nat8 "mo:core/Nat8";
-import Nat32 "mo:core/Nat32";
-import Text "mo:core/Text";
 
 module {
 
@@ -23,17 +21,13 @@ module {
   // ── Account Management ───────────────────────────────────────────────────────
 
   /// Derive a 32-byte subaccount blob from a workspace ID text string.
-  /// Encodes the text as UTF-8 bytes, takes up to 32 bytes, and zero-pads to exactly 32 bytes.
+  /// Encodes the workspace ID as UTF-8 bytes, takes up to 32 bytes, zero-pads to exactly 32.
   /// This ensures every workspace treasury has a unique subaccount distinct from the
-  /// personal wallet default subaccount (all-zeros).
+  /// personal wallet default subaccount (all-zeros, null).
   public func workspaceSubaccount(workspaceId : Common.WorkspaceId) : Blob {
-    let textBytes = workspaceId.toArray();
+    let utf8Bytes = workspaceId.encodeUtf8().toArray();
     let subBytes = Array.tabulate(32, func(i : Nat) : Nat8 {
-      if (i < textBytes.size()) {
-        Nat8.fromNat(textBytes[i].toNat32().toNat() % 256)
-      } else {
-        0 : Nat8
-      }
+      if (i < utf8Bytes.size()) utf8Bytes[i] else (0 : Nat8)
     });
     Blob.fromArray(subBytes)
   };

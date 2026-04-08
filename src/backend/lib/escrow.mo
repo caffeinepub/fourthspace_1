@@ -312,6 +312,33 @@ module {
     } else { null };
   };
 
+  public func rejectMilestone(
+    milestones : [(Common.EntityId, Types.EscrowMilestone)],
+    tenantId : Common.TenantId,
+    workspaceId : Common.WorkspaceId,
+    milestoneId : Common.EntityId,
+  ) : ?(Types.EscrowMilestone, [(Common.EntityId, Types.EscrowMilestone)]) {
+    let now = Time.now();
+    var found = false;
+    var result : ?Types.EscrowMilestone = null;
+    let updated = milestones.map(
+      func((k, m)) {
+        if (k == milestoneId and m.tenantId == tenantId and m.workspaceId == workspaceId and (m.status == #Pending or m.status == #Approved)) {
+          found := true;
+          let newM : Types.EscrowMilestone = { m with status = #Pending; updatedAt = now };
+          result := ?newM;
+          (k, newM);
+        } else { (k, m) };
+      },
+    );
+    if (found) {
+      switch (result) {
+        case (?m) { ?(m, updated) };
+        case null { null };
+      };
+    } else { null };
+  };
+
   public func approveMilestone(
     milestones : [(Common.EntityId, Types.EscrowMilestone)],
     tenantId : Common.TenantId,

@@ -243,6 +243,77 @@ module {
     ).toArray()
   };
 
+  /// List events in date range, applying recurring event exceptions:
+  /// - #deleted exceptions are filtered out
+  /// - #modified exceptions replace the base event data for that occurrence
+  public func listEventsWithExceptions(
+    store : [(Common.EntityId, Types.Event)],
+    excStore : [(Common.EntityId, Types.EventException)],
+    tenantId : Common.TenantId,
+    workspaceId : Common.WorkspaceId,
+    from : Common.Timestamp,
+    to : Common.Timestamp,
+  ) : [Types.Event] {
+    let m = toEventMap(store);
+    let events = m.values().filter(
+      func(ev : Types.Event) : Bool {
+        ev.tenantId == tenantId and ev.workspaceId == workspaceId and ev.startTime >= from and ev.startTime <= to
+      }
+    ).toArray();
+
+    // Build a set of (eventId, originalDate) pairs that are deleted, and a map for modified overrides
+    let excMap = toExcMap(excStore);
+    let deletedExceptions = excMap.values().filter(
+      func(e : Types.EventException) : Bool {
+        e.tenantId == tenantId and e.workspaceId == workspaceId and e.exceptionType == #deleted
+      }
+    ).toArray();
+    let modifiedExceptions = excMap.values().filter(
+      func(e : Types.EventException) : Bool {
+        e.tenantId == tenantId and e.workspaceId == workspaceId and e.exceptionType == #modified
+      }
+    ).toArray();
+
+    events.filterMap<Types.Event, Types.Event>(
+      func(ev : Types.Event) : ?Types.Event {
+        let evDate = timestampToDate(ev.startTime);
+        // Check if this occurrence is deleted
+        let isDeleted = deletedExceptions.any(
+          func(exc : Types.EventException) : Bool {
+            exc.eventId == ev.id and exc.originalDate == evDate
+          }
+        );
+        if (isDeleted) { null } else {
+          // Check if this occurrence has a modified override
+          let maybeModified = modifiedExceptions.find(
+            func(exc : Types.EventException) : Bool {
+              exc.eventId == ev.id and exc.originalDate == evDate
+            }
+          );
+          switch (maybeModified) {
+            case null ?ev;
+            case (?exc) {
+              // Apply override data if present, otherwise return original
+              switch (exc.overrideData) {
+                case null ?ev;
+                case (?override) {
+                  ?{
+                    ev with
+                    title = override.title;
+                    description = override.description;
+                    startTime = override.startTime;
+                    endTime = override.endTime;
+                    attendeeIds = override.attendeeIds;
+                  }
+                };
+              }
+            };
+          }
+        }
+      }
+    )
+  };
+
   public func updateEvent(
     store : [(Common.EntityId, Types.Event)],
     tenantId : Common.TenantId,

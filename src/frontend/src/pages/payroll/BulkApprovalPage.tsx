@@ -6,11 +6,13 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import {
+  AlertTriangle,
   ArrowLeft,
   CheckCircle2,
   CheckSquare,
   Clock,
   DollarSign,
+  Wallet,
   XCircle,
 } from "lucide-react";
 import { useState } from "react";
@@ -18,13 +20,17 @@ import { toast } from "sonner";
 import { useBackend } from "../../hooks/useBackend";
 import { getTenantId, useWorkspace } from "../../hooks/useWorkspace";
 import { PayrollStatus } from "../../types";
-import type { Employee, PayrollRecord } from "../../types";
+import type { Employee, PayrollRecord, WalletAccount } from "../../types";
 
 function formatCurrency(amount: bigint | number, currency = "USD") {
   return new Intl.NumberFormat("en-US", {
     style: "currency",
     currency: currency || "USD",
   }).format(Number(amount) / 100);
+}
+
+function formatIcp(balance: bigint): string {
+  return (Number(balance) / 1_000_000_00).toFixed(4);
 }
 
 export default function BulkApprovalPage() {
@@ -36,6 +42,16 @@ export default function BulkApprovalPage() {
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [rejectId, setRejectId] = useState<string | null>(null);
   const [rejectReason, setRejectReason] = useState("");
+
+  const { data: treasury, isLoading: treasuryLoading } =
+    useQuery<WalletAccount | null>({
+      queryKey: ["workspaceTreasury", tenantId, workspaceId],
+      queryFn: async () => {
+        if (!actor) return null;
+        return actor.getWorkspaceTreasury(tenantId, workspaceId);
+      },
+      enabled: !!actor && !isFetching && !!workspaceId,
+    });
 
   const { data: records = [], isLoading: recLoading } = useQuery<
     PayrollRecord[]
@@ -52,6 +68,9 @@ export default function BulkApprovalPage() {
       actor ? actor.listEmployees(tenantId, workspaceId) : [],
     enabled: !!actor && !isFetching && !!workspaceId,
   });
+
+  const icpBalance = treasury?.icpBalance ?? BigInt(0);
+  const hasNoFunds = !treasuryLoading && icpBalance === BigInt(0);
 
   const pending = records.filter(
     (r) => r.status === PayrollStatus.PendingApproval,
@@ -72,7 +91,15 @@ export default function BulkApprovalPage() {
       queryClient.invalidateQueries({ queryKey: ["payrollRecords"] });
       setSelected(new Set());
     },
-    onError: (e: Error) => toast.error(e.message),
+    onError: (e: Error) => {
+      if (e.message.toLowerCase().includes("insufficient")) {
+        toast.error(
+          "Insufficient treasury balance — fund your workspace wallet before approving payroll.",
+        );
+      } else {
+        toast.error(e.message);
+      }
+    },
   });
 
   const rejectRecord = useMutation({
@@ -113,6 +140,9 @@ export default function BulkApprovalPage() {
     .filter((r) => selected.has(r.id))
     .reduce((sum, r) => sum + Number(r.netAmount ?? r.amount), 0);
 
+  const isApproveDisabled =
+    selected.size === 0 || bulkApprove.isPending || hasNoFunds;
+
   return (
     <div className="animate-fade-in-up p-6 space-y-6 max-w-5xl mx-auto">
       {/* Header */}
@@ -134,7 +164,51 @@ export default function BulkApprovalPage() {
             </p>
           </div>
         </div>
+        {/* Treasury balance chip */}
+        {!treasuryLoading && treasury && (
+          <div className="flex items-center gap-2 rounded-lg border border-border bg-card px-3 py-1.5">
+            <Wallet className="h-3.5 w-3.5 text-muted-foreground" />
+            <span className="text-xs text-muted-foreground">Treasury:</span>
+            <span
+              className={`text-xs font-semibold tabular-nums ${
+                hasNoFunds ? "text-destructive" : "text-foreground"
+              }`}
+              data-ocid="bulk-treasury-balance"
+            >
+              {formatIcp(icpBalance)} ICP
+            </span>
+          </div>
+        )}
       </div>
+
+      {/* No-funds warning banner */}
+      {hasNoFunds && (
+        <div
+          className="flex items-start gap-3 rounded-xl border border-amber-400/40 bg-amber-500/8 px-4 py-3"
+          data-ocid="bulk-no-funds-banner"
+          role="alert"
+        >
+          <AlertTriangle className="h-4 w-4 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-medium text-foreground">
+              Treasury wallet is empty — payroll approval is blocked until the
+              workspace wallet is funded.
+            </p>
+          </div>
+          <Button
+            asChild
+            size="sm"
+            variant="outline"
+            className="shrink-0 gap-1.5 border-amber-400/60 text-amber-700 dark:text-amber-400 hover:bg-amber-500/10"
+            data-ocid="bulk-fund-wallet-btn"
+          >
+            <Link to={`/app/${workspaceId}/wallet`}>
+              <Wallet className="h-3.5 w-3.5" />
+              Fund Wallet
+            </Link>
+          </Button>
+        </div>
+      )}
 
       {/* Summary stat cards */}
       <div className="grid gap-4 sm:grid-cols-3">
@@ -207,10 +281,17 @@ export default function BulkApprovalPage() {
               </Button>
               <Button
                 size="sm"
-                className="bg-emerald-600 hover:bg-emerald-700 text-white active-press"
-                disabled={selected.size === 0 || bulkApprove.isPending}
+                className="bg-emerald-600 hover:bg-emerald-700 text-white active-press disabled:opacity-60"
+                disabled={isApproveDisabled}
                 onClick={() => bulkApprove.mutate(Array.from(selected))}
                 data-ocid="bulk-approve-btn"
+                title={
+                  hasNoFunds
+                    ? "Fund your workspace wallet before approving payroll"
+                    : selected.size === 0
+                      ? "Select records to approve"
+                      : undefined
+                }
               >
                 {bulkApprove.isPending
                   ? "Approving…"
@@ -288,7 +369,8 @@ export default function BulkApprovalPage() {
                               type="checkbox"
                               checked={selected.has(record.id)}
                               onChange={() => toggleSelect(record.id)}
-                              className="h-4 w-4 rounded border-input"
+                              disabled={hasNoFunds}
+                              className="h-4 w-4 rounded border-input disabled:opacity-50 disabled:cursor-not-allowed"
                               aria-label={`Select record for ${emp?.firstName}`}
                               data-ocid={`approval-check-${record.id}`}
                             />

@@ -57,7 +57,7 @@ export default function AuditLogPage() {
   const [filterTo, setFilterTo] = useState("");
   const [showFilters, setShowFilters] = useState(false);
 
-  const { data: entries = [], isLoading } = useQuery<AuditLogEntry[]>({
+  const { data: rawEntries = [], isLoading } = useQuery<AuditLogEntry[]>({
     queryKey: ["payrollAuditLog", tenantId, workspaceId],
     queryFn: async () =>
       actor
@@ -65,6 +65,11 @@ export default function AuditLogPage() {
         : [],
     enabled: !!actor && !isFetching && !!workspaceId,
   });
+
+  // Sort all entries by timestamp descending (most recent first)
+  const entries = [...rawEntries].sort(
+    (a, b) => Number(b.timestamp) - Number(a.timestamp),
+  );
 
   const filtered = entries.filter((e) => {
     if (

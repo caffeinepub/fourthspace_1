@@ -4,6 +4,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
+import { useInternetIdentity } from "@caffeineai/core-infrastructure";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useNavigate, useParams } from "@tanstack/react-router";
 import {
@@ -60,8 +61,7 @@ function FormattedContent({ html }: { html: string }) {
 // ─── Helpers ───────────────────────────────────────────────────────────────
 
 function senderInitials(id: { toString(): string }): string {
-  const s = id.toString();
-  return s.slice(0, 2).toUpperCase();
+  return id.toString().slice(0, 2).toUpperCase();
 }
 
 const AVATAR_COLORS = [
@@ -79,7 +79,6 @@ function avatarColor(id: { toString(): string }): string {
   return AVATAR_COLORS[hash % AVATAR_COLORS.length];
 }
 
-/** Relative timestamp: "just now", "5m ago", today's time, or date for older */
 function formatRelativeTime(createdAt: bigint): string {
   const ms = Number(createdAt) / 1_000_000;
   const diffMs = Date.now() - ms;
@@ -102,7 +101,6 @@ function formatRelativeTime(createdAt: bigint): string {
 function FileAttachments({ content }: { content: string }) {
   const urls = extractUrls(content);
   if (urls.length === 0) return null;
-
   return (
     <div className="mt-2 space-y-1.5">
       {urls.map((url) => {
@@ -550,11 +548,14 @@ export default function ChannelPage() {
   const queryClient = useQueryClient();
   const tenantId = getTenantId();
   const navigate = useNavigate();
+  const { identity } = useInternetIdentity();
 
-  const [myPrincipal] = useState<string>(() => "");
+  // CRITICAL: derive myPrincipal from Internet Identity — never hardcode this
+  const myPrincipal = identity?.getPrincipal().toText() ?? "";
+
   const [messageText, setMessageText] = useState(() => getDraft(channelId));
   const [replyTo, setReplyTo] = useState<Message | null>(null);
-  const [hasDraft] = useState(() => getDraft(channelId).length > 0);
+  const hasDraft = getDraft(channelId).length > 0;
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
   const bottomRef = useRef<HTMLDivElement | null>(null);
   const scrollAreaRef = useRef<HTMLDivElement | null>(null);
@@ -575,7 +576,6 @@ export default function ChannelPage() {
     queryKey: ["messages", tenantId, workspaceId, channelId],
     queryFn: async () => {
       if (!actor) return [];
-      // getMessages returns messages ascending by timestamp (oldest first)
       return actor.getMessages(
         tenantId,
         workspaceId,
@@ -585,7 +585,7 @@ export default function ChannelPage() {
       );
     },
     enabled: !!actor && !isFetching && !!workspaceId,
-    refetchInterval: 2000,
+    refetchInterval: 3000,
   });
 
   // ── Mark read on mount and on channel change ──
@@ -601,13 +601,12 @@ export default function ChannelPage() {
       .catch(() => {});
   }, [actor, channelId, isFetching, tenantId, workspaceId, queryClient]);
 
-  // ── Auto-scroll to bottom on load and on new messages ──
+  // ── Auto-scroll to bottom on new messages ──
   const prevMsgCountRef = useRef(0);
   useEffect(() => {
     const msgCount = messages?.length ?? 0;
     if (msgCount !== prevMsgCountRef.current) {
       prevMsgCountRef.current = msgCount;
-      // Small timeout to let render complete before scrolling
       requestAnimationFrame(() => {
         bottomRef.current?.scrollIntoView({ behavior: "smooth" });
       });
@@ -631,12 +630,10 @@ export default function ChannelPage() {
     }
     const meta = e.metaKey || e.ctrlKey;
     if (!meta) return;
-
     const el = textareaRef.current;
     if (!el) return;
     const s = el.selectionStart;
     const end = el.selectionEnd;
-
     if (e.key === "b") {
       e.preventDefault();
       const [v, ns, ne] = applyBold(messageText, s, end);
@@ -688,11 +685,7 @@ export default function ChannelPage() {
       messageId,
       emoji,
       isOwn,
-    }: {
-      messageId: string;
-      emoji: string;
-      isOwn: boolean;
-    }) => {
+    }: { messageId: string; emoji: string; isOwn: boolean }) => {
       if (!actor) throw new Error("Not connected");
       if (isOwn) {
         const r = await actor.removeReaction(
@@ -757,14 +750,13 @@ export default function ChannelPage() {
   );
   const pinnedIds = new Set(channel?.pinnedMessageIds ?? []);
 
-  // Group consecutive messages from the same sender
   function isGrouped(idx: number): boolean {
     if (!messages || idx === 0) return false;
     const prev = messages[idx - 1];
     const curr = messages[idx];
     if (prev.senderId.toString() !== curr.senderId.toString()) return false;
-    const timeDiff = Number(curr.createdAt - prev.createdAt) / 1_000_000_000; // seconds
-    return timeDiff < 300; // group if within 5 minutes
+    const timeDiff = Number(curr.createdAt - prev.createdAt) / 1_000_000_000;
+    return timeDiff < 300;
   }
 
   const myUnreadEntry = channel?.unreadCounts?.find(
@@ -944,7 +936,6 @@ export default function ChannelPage() {
               </Button>
             </div>
           )}
-
           <div className="rounded-xl border border-input bg-background focus-within:ring-1 focus-within:ring-ring p-2">
             <FormattingToolbar
               textareaRef={textareaRef}
@@ -956,8 +947,8 @@ export default function ChannelPage() {
                 ref={textareaRef}
                 placeholder={
                   hasDraft && messageText
-                    ? "(draft) Continue message\u2026"
-                    : `Message #${channel?.name ?? "channel"}\u2026`
+                    ? "(draft) Continue message…"
+                    : `Message #${channel?.name ?? "channel"}…`
                 }
                 value={messageText}
                 onChange={(e) => handleTextChange(e.target.value)}

@@ -1,4 +1,3 @@
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -171,6 +170,7 @@ function ChannelCard({
   unreadCount?: number;
   hasMention?: boolean;
 }) {
+  const hasUnread = unreadCount != null && unreadCount > 0;
   return (
     <div className="flex items-center gap-2">
       <Link
@@ -184,7 +184,9 @@ function ChannelCard({
         </div>
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-1.5 flex-wrap">
-            <span className="font-semibold text-foreground truncate group-hover:text-teal-600 dark:group-hover:text-teal-400 transition-colors text-sm">
+            <span
+              className={`font-semibold truncate group-hover:text-teal-600 dark:group-hover:text-teal-400 transition-colors text-sm ${hasUnread ? "text-foreground" : "text-foreground"}`}
+            >
               #{channel.name}
             </span>
             {channel.isPublic ? (
@@ -217,13 +219,13 @@ function ChannelCard({
             <Users className="h-3 w-3" />
             {channel.memberIds.length}
           </span>
-          {unreadCount != null && unreadCount > 0 && (
+          {hasUnread && (
             <span
               className="inline-flex items-center justify-center min-w-[1.25rem] h-5 px-1.5 rounded-full bg-destructive text-destructive-foreground text-[10px] font-bold"
               aria-label={`${unreadCount} unread`}
               data-ocid={`channel-unread-${channel.id}`}
             >
-              {unreadCount > 99 ? "99+" : unreadCount}
+              {(unreadCount ?? 0) > 99 ? "99+" : unreadCount}
             </span>
           )}
         </div>
@@ -302,10 +304,7 @@ function DMRow({
 function CreateChannelForm({
   workspaceId,
   onClose,
-}: {
-  workspaceId: string;
-  onClose: () => void;
-}) {
+}: { workspaceId: string; onClose: () => void }) {
   const { actor } = useBackend();
   const tenantId = getTenantId();
   const queryClient = useQueryClient();
@@ -442,7 +441,8 @@ function CreateChannelForm({
 const IDLE_TIMEOUT_MS = 5 * 60 * 1000;
 const PRESENCE_PING_MS = 30_000;
 const STATUS_POLL_MS = 10_000;
-const UNREAD_POLL_MS = 10_000;
+const UNREAD_POLL_MS = 5_000;
+const CHANNEL_POLL_MS = 5_000;
 
 export default function ChatPage() {
   const { workspaceId } = useParams({ from: "/app/$workspaceId/chat" });
@@ -457,15 +457,15 @@ export default function ChatPage() {
   const idleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const presencePingRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
+  // Derive current user's principal from Internet Identity
+  const myPrincipalText = identity?.getPrincipal().toText() ?? "";
+
   // ---- Set status mutation ----
   const statusMutation = useMutation({
     mutationFn: async ({
       status,
       custom,
-    }: {
-      status: StatusKind;
-      custom: string;
-    }) => {
+    }: { status: StatusKind; custom: string }) => {
       if (!actor) throw new Error("Not connected");
       const result = await actor.setUserStatus(
         tenantId,
@@ -491,7 +491,6 @@ export default function ChatPage() {
     const mutate = statusMutation.mutate;
     mutate({ status: "online", custom: "" });
 
-    // Presence ping - updatePresence keeps us marked as online in the backend
     const pingInterval = setInterval(() => {
       if (!actor) return;
       actor.updatePresence(tenantId, workspaceId).catch(() => {});
@@ -501,7 +500,6 @@ export default function ChatPage() {
     return () => {
       clearInterval(pingInterval);
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [actor, isFetching, tenantId, workspaceId, statusMutation.mutate]);
 
   // ---- Idle detection (5 min -> away) ----
@@ -518,19 +516,16 @@ export default function ChatPage() {
 
   useEffect(() => {
     const events = ["mousemove", "keydown", "pointerdown", "scroll"] as const;
-    for (const ev of events) {
+    for (const ev of events)
       window.addEventListener(ev, resetIdleTimer, { passive: true });
-    }
     resetIdleTimer();
     return () => {
-      for (const ev of events) {
-        window.removeEventListener(ev, resetIdleTimer);
-      }
+      for (const ev of events) window.removeEventListener(ev, resetIdleTimer);
       if (idleTimerRef.current) clearTimeout(idleTimerRef.current);
     };
   }, [resetIdleTimer]);
 
-  // ---- Channels query ----
+  // ---- Channels query (poll every 5s) ----
   const { data: channels, isLoading } = useQuery<Channel[]>({
     queryKey: ["channels", tenantId, workspaceId],
     queryFn: async () => {
@@ -538,6 +533,7 @@ export default function ChatPage() {
       return actor.listChannels(tenantId, workspaceId);
     },
     enabled: !!actor && !isFetching,
+    refetchInterval: CHANNEL_POLL_MS,
   });
 
   // ---- Workspace members (for DMs) ----
@@ -550,7 +546,7 @@ export default function ChatPage() {
     enabled: !!actor && !isFetching,
   });
 
-  // ---- Workspace statuses (online presence) ----
+  // ---- Workspace statuses ----
   const { data: statusList } = useQuery({
     queryKey: ["workspaceStatuses", tenantId, workspaceId],
     queryFn: async () => {
@@ -568,7 +564,7 @@ export default function ChatPage() {
     }
   }
 
-  // ---- Unread counts query ----
+  // ---- Unread counts query (poll every 5s) ----
   const { data: unreadRaw } = useQuery<Array<[string, bigint]>>({
     queryKey: ["unreadCounts", tenantId, workspaceId],
     queryFn: async () => {
@@ -595,20 +591,15 @@ export default function ChatPage() {
     }
   }
 
-  // Build a map from member userId -> DM channel id so DMRow can look up unread counts.
-  // DM channels have deterministic names: "dm:<principalA>:<principalB>" (sorted).
-  const myPrincipalText = identity?.getPrincipal().toText() ?? "";
+  // Build DM channel lookup: other userId -> channel id
   const dmChannelByUserId = new Map<string, string>();
   if (channels && myPrincipalText) {
     for (const ch of channels) {
       if (ch.name.startsWith("dm:")) {
-        // Channel name format: "dm:principalA:principalB"
         const parts = ch.name.split(":");
-        // parts[0] = "dm", parts[1] = principalA, parts[2] = principalB
         const pA = parts[1];
         const pB = parts[2];
         if (pA && pB) {
-          // The other participant is whichever is not our principal
           const other = pA === myPrincipalText ? pB : pA;
           dmChannelByUserId.set(other, ch.id);
         }
@@ -637,7 +628,6 @@ export default function ChatPage() {
   const openDMMutation = useMutation({
     mutationFn: async (targetUserId: string) => {
       if (!actor) throw new Error("Not connected");
-      // Import Principal lazily — userId is already a string principal
       const { Principal } = await import("@icp-sdk/core/principal");
       const result = await actor.createOrGetDMChannel(
         tenantId,
@@ -661,10 +651,16 @@ export default function ChatPage() {
 
   const publicChannels = channels?.filter((c) => c.isPublic) ?? [];
   const privateChannels = channels?.filter((c) => !c.isPublic) ?? [];
-
   const totalUnread = unreadRaw
     ? unreadRaw.reduce((sum, [, n]) => sum + Number(n), 0)
     : 0;
+
+  // Filter DM members — exclude self
+  const dmMembers =
+    members?.filter((m) => {
+      const uid = m.userId.toString();
+      return myPrincipalText === "" || uid !== myPrincipalText;
+    }) ?? [];
 
   return (
     <div className="animate-fade-in-up p-4 sm:p-6 max-w-3xl mx-auto space-y-4 sm:space-y-5 pb-20 md:pb-6">
@@ -828,8 +824,8 @@ export default function ChatPage() {
         </div>
       )}
 
-      {/* Direct Messages section */}
-      {members && members.length > 1 && (
+      {/* Direct Messages section — only show if there are other members */}
+      {dmMembers.length > 0 && (
         <section data-ocid="dm-section">
           <div className="flex items-center gap-2 mb-2.5">
             <MessageCircle className="h-3 w-3 text-primary" />
@@ -837,11 +833,11 @@ export default function ChatPage() {
               Direct Messages
             </span>
             <span className="ml-auto text-xs text-muted-foreground">
-              {members.length - 1}
+              {dmMembers.length}
             </span>
           </div>
           <div className="space-y-1.5">
-            {members.map((member) => {
+            {dmMembers.map((member) => {
               const uid = member.userId.toString();
               const dmChannelId = dmChannelByUserId.get(uid);
               return (

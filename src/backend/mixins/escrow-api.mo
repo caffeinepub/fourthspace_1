@@ -134,6 +134,38 @@ module {
     };
   };
 
+  public func rejectMilestone(
+    contracts : [(Common.EntityId, EscTypes.EscrowContract)],
+    milestones : [(Common.EntityId, EscTypes.EscrowMilestone)],
+    tenantId : Common.TenantId,
+    workspaceId : Common.WorkspaceId,
+    milestoneId : Common.EntityId,
+    caller : Common.UserId,
+  ) : { #ok : (EscTypes.EscrowMilestone, [(Common.EntityId, EscTypes.EscrowMilestone)]); #err : Text } {
+    // Only the payer can reject a milestone
+    let maybeMilestone = EscLib.getMilestone(milestones, tenantId, workspaceId, milestoneId);
+    switch (maybeMilestone) {
+      case null { #err("Milestone not found") };
+      case (?m) {
+        let maybeContract = contracts.find(func((k, c)) {
+          k == m.escrowId and c.tenantId == tenantId and c.workspaceId == workspaceId
+        });
+        switch (maybeContract) {
+          case null { #err("Parent escrow contract not found") };
+          case (?(_, contract)) {
+            if (contract.payerId != caller) {
+              return #err("Only the payer can reject a milestone.");
+            };
+            switch (EscLib.rejectMilestone(milestones, tenantId, workspaceId, milestoneId)) {
+              case (?(m2, updated)) { #ok((m2, updated)) };
+              case null { #err("Milestone not found or cannot be rejected in current status") };
+            };
+          };
+        };
+      };
+    };
+  };
+
   public func approveMilestone(
     contracts : [(Common.EntityId, EscTypes.EscrowContract)],
     milestones : [(Common.EntityId, EscTypes.EscrowMilestone)],

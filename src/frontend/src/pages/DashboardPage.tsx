@@ -205,18 +205,6 @@ function categoryBadgeClass(category: string): string {
 
 /* ─── sub-components ─────────────────────────────────── */
 
-function StatCardSkeleton() {
-  return (
-    <Card className="border-border bg-card">
-      <CardContent className="p-4 sm:p-5">
-        <Skeleton className="h-3 w-20 mb-3" />
-        <Skeleton className="h-8 w-16 mb-2" />
-        <Skeleton className="h-2.5 w-28" />
-      </CardContent>
-    </Card>
-  );
-}
-
 interface StatDisplayCard {
   label: string;
   value: string;
@@ -224,40 +212,6 @@ interface StatDisplayCard {
   icon: React.ElementType;
   iconBg: string;
   iconColor: string;
-}
-
-function StatCardItem({
-  stat,
-  index,
-}: { stat: StatDisplayCard; index: number }) {
-  return (
-    <motion.div
-      initial={{ opacity: 0, y: 12 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ delay: index * 0.05, duration: 0.25 }}
-    >
-      <Card className="border-border bg-card hover:shadow-card-hover transition-smooth card-interactive h-full">
-        <CardContent className="p-4 sm:p-5">
-          <div className="flex items-start justify-between mb-3">
-            <p className="text-xs font-medium text-muted-foreground tracking-tight">
-              {stat.label}
-            </p>
-            <div
-              className={`flex h-7 w-7 items-center justify-center rounded-lg ${stat.iconBg}`}
-            >
-              <stat.icon className={`h-3.5 w-3.5 ${stat.iconColor}`} />
-            </div>
-          </div>
-          <p className="font-display text-2xl font-bold text-foreground tracking-tight leading-none mb-1.5">
-            {stat.value}
-          </p>
-          <p className="text-[10px] text-muted-foreground tracking-tight">
-            {stat.sub}
-          </p>
-        </CardContent>
-      </Card>
-    </motion.div>
-  );
 }
 
 /* ─── main component ─────────────────────────────────── */
@@ -370,13 +324,18 @@ export default function DashboardPage() {
   const payrollList = payrollQuery.data ?? [];
   const latestPayroll = payrollList[payrollList.length - 1] ?? null;
 
+  function pl(n: number | bigint, singular: string, plural: string): string {
+    const num = typeof n === "bigint" ? Number(n) : n;
+    return num === 1 ? `1 ${singular}` : `${num} ${plural}`;
+  }
+
   const statCards: StatDisplayCard[] = [
     {
       label: "Total Notes",
       value: stats ? String(stats.noteCount) : "0",
       sub:
         stats && stats.noteCount > 0
-          ? `${stats.noteCount} note entries`
+          ? pl(stats.noteCount, "note", "notes")
           : "No notes yet",
       icon: FileText,
       iconBg: "bg-indigo-500/10",
@@ -387,7 +346,7 @@ export default function DashboardPage() {
       value: stats ? String(stats.projectCount) : "0",
       sub:
         stats && stats.projectCount > 0
-          ? `${stats.projectCount} projects`
+          ? pl(stats.projectCount, "active project", "active projects")
           : "No active projects",
       icon: FolderKanban,
       iconBg: "bg-orange-500/10",
@@ -398,7 +357,7 @@ export default function DashboardPage() {
       value: stats ? String(stats.memberCount) : "0",
       sub:
         stats && stats.memberCount > 0
-          ? `${stats.memberCount} members`
+          ? pl(stats.memberCount, "team member", "team members")
           : "No members yet",
       icon: Users,
       iconBg: "bg-teal-500/10",
@@ -409,7 +368,7 @@ export default function DashboardPage() {
       value: stats ? String(stats.goalCount) : "0",
       sub:
         stats && stats.goalCount > 0
-          ? `${stats.goalCount} goals tracked`
+          ? pl(stats.goalCount, "goal tracked", "goals tracked")
           : "No goals set",
       icon: Target,
       iconBg: "bg-primary/10",
@@ -459,7 +418,7 @@ export default function DashboardPage() {
               )}
               <p className="text-sm text-white/70 font-medium">
                 {stats
-                  ? `${stats.memberCount} Member${stats.memberCount !== BigInt(1) ? "s" : ""}`
+                  ? pl(stats.memberCount, "Member", "Members")
                   : "Workspace"}
               </p>
               <div className="flex flex-wrap items-center gap-2 pt-1">
@@ -537,40 +496,6 @@ export default function DashboardPage() {
           </Link>
         ))}
       </motion.div>
-
-      {/* ── Metrics grid ── */}
-      <div>
-        <div className="flex items-center justify-between mb-3">
-          <h2 className="font-display text-sm font-semibold text-foreground tracking-tight">
-            Workspace Overview
-          </h2>
-          <div className="flex items-center gap-1.5">
-            <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
-            <Badge
-              variant="outline"
-              className="text-[10px] h-4 px-1.5 border-emerald-500/30 text-emerald-600 dark:text-emerald-400 font-medium"
-            >
-              Live
-            </Badge>
-          </div>
-        </div>
-        {statsLoading ? (
-          <div className="grid gap-3 grid-cols-2 md:grid-cols-4">
-            {[1, 2, 3, 4].map((k) => (
-              <StatCardSkeleton key={k} />
-            ))}
-          </div>
-        ) : (
-          <div
-            className="grid gap-3 grid-cols-2 md:grid-cols-4"
-            data-ocid="stats-grid"
-          >
-            {statCards.map((stat, i) => (
-              <StatCardItem key={stat.label} stat={stat} index={i} />
-            ))}
-          </div>
-        )}
-      </div>
 
       {/* ── Financial summary ── */}
       <div>
@@ -710,82 +635,6 @@ export default function DashboardPage() {
             </Link>
           </motion.div>
         </div>
-
-        {/* Wallet action row */}
-        <motion.div
-          initial={{ opacity: 0, y: 8 }}
-          whileInView={{ opacity: 1, y: 0 }}
-          viewport={{ once: true }}
-          transition={{ delay: 0.15 }}
-          className="mt-3"
-        >
-          <Card className="border-border bg-card">
-            <CardContent className="p-4 flex flex-col sm:flex-row sm:items-center gap-4">
-              <div className="flex-1 min-w-0">
-                <p className="text-xs text-muted-foreground mb-0.5">
-                  Wallet Balance
-                </p>
-                {treasuryQuery.isLoading ? (
-                  <Skeleton className="h-8 w-32" />
-                ) : (
-                  <p className="font-display text-2xl font-bold text-foreground tracking-tight">
-                    {icpBalance !== null ? (
-                      <>
-                        {icpBalance}
-                        <span className="text-sm text-muted-foreground ml-1.5">
-                          ICP
-                        </span>
-                      </>
-                    ) : (
-                      <span className="text-muted-foreground text-lg">
-                        No wallet
-                      </span>
-                    )}
-                  </p>
-                )}
-              </div>
-              <div className="flex-1 min-w-0">
-                <p className="text-xs text-muted-foreground mb-0.5">
-                  Escrow Status
-                </p>
-                {escrowQuery.isLoading ? (
-                  <Skeleton className="h-6 w-28" />
-                ) : (
-                  <p className="font-display text-lg font-semibold text-foreground">
-                    {pendingEscrow > 0
-                      ? `${pendingEscrow} pending payment${pendingEscrow !== 1 ? "s" : ""}`
-                      : "No pending payments"}
-                  </p>
-                )}
-              </div>
-              <div className="flex gap-2 shrink-0">
-                <Link
-                  to={`/app/${workspaceId}/wallet/send` as "/"}
-                  data-ocid="wallet-deposit-btn"
-                >
-                  <Button
-                    size="sm"
-                    className="h-8 text-xs font-semibold active-press"
-                  >
-                    Deposit Funds
-                  </Button>
-                </Link>
-                <Link
-                  to={`/app/${workspaceId}/wallet` as "/"}
-                  data-ocid="wallet-withdraw-btn"
-                >
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    className="h-8 text-xs border-border hover:border-primary/40 transition-smooth"
-                  >
-                    Withdraw
-                  </Button>
-                </Link>
-              </div>
-            </CardContent>
-          </Card>
-        </motion.div>
       </div>
 
       {/* ── Main content grid ── */}

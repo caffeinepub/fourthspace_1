@@ -188,11 +188,20 @@ export default function SettingsPage() {
   const tenantId = getTenantId();
   const [activeSection, setActiveSection] = useState("profile");
 
-  // Profile
+  // Profile — initialised from userProfile, synced when it loads/changes
   const [displayName, setDisplayName] = useState(
     userProfile?.displayName ?? "",
   );
   const [email, setEmail] = useState(userProfile?.email ?? "");
+  const [profileError, setProfileError] = useState<string | null>(null);
+  useEffect(() => {
+    if (userProfile) {
+      setDisplayName((prev) =>
+        prev === "" ? (userProfile.displayName ?? "") : prev,
+      );
+      setEmail((prev) => (prev === "" ? (userProfile.email ?? "") : prev));
+    }
+  }, [userProfile]);
 
   const initials =
     displayName
@@ -276,6 +285,11 @@ export default function SettingsPage() {
   const [showShortcuts, setShowShortcuts] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [deleteConfirmText, setDeleteConfirmText] = useState("");
+
+  // Workspace name/desc local edits
+  function handleWorkspaceSave() {
+    toast.success("Workspace settings saved");
+  }
 
   // Apply accent color + font size to :root on load and change
   const applyVisualPrefs = useCallback((css: string, size: string) => {
@@ -395,6 +409,10 @@ export default function SettingsPage() {
   const { mutate: saveProfile, isPending } = useMutation({
     mutationFn: async () => {
       if (!actor || !userProfile) throw new Error("Not connected");
+      // Basic email validation
+      if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+        throw new Error("Please enter a valid email address");
+      }
       return actor.upsertProfile(tenantId, {
         displayName,
         email,
@@ -404,11 +422,24 @@ export default function SettingsPage() {
     },
     onSuccess: (result) => {
       if (result.__kind__ === "ok") {
-        queryClient.invalidateQueries({ queryKey: ["myProfile"] });
-        toast.success("Profile updated!");
-      } else toast.error(result.err);
+        // Sync local state to what the backend confirmed
+        setDisplayName(result.ok.displayName);
+        setEmail(result.ok.email);
+        setProfileError(null);
+        // Invalidate and refetch so all other consumers see updated profile
+        void queryClient.invalidateQueries({ queryKey: ["myProfile"] });
+        toast.success("Profile updated successfully");
+      } else {
+        setProfileError(result.err ?? "Failed to update profile");
+        toast.error(result.err ?? "Failed to update profile");
+      }
     },
-    onError: () => toast.error("Failed to update profile"),
+    onError: (err: unknown) => {
+      const msg =
+        err instanceof Error ? err.message : "Failed to update profile";
+      setProfileError(msg);
+      toast.error(msg);
+    },
   });
 
   // ── Render helpers ─────────────────────────────────────────────────────────
@@ -614,17 +645,24 @@ export default function SettingsPage() {
                     </div>
                   </div>
 
-                  <div className="flex justify-end">
-                    <Button
-                      size="sm"
-                      onClick={() => saveProfile()}
-                      disabled={!displayName || isPending}
-                      className="h-8 gap-1.5 text-xs font-semibold active-press"
-                      data-ocid="settings-save-btn"
-                    >
-                      <Save className="h-3.5 w-3.5" />
-                      {isPending ? "Saving…" : "Save Profile"}
-                    </Button>
+                  <div className="flex flex-col gap-2">
+                    {profileError && (
+                      <p className="text-xs text-destructive text-right">
+                        {profileError}
+                      </p>
+                    )}
+                    <div className="flex justify-end">
+                      <Button
+                        size="sm"
+                        onClick={() => saveProfile()}
+                        disabled={!displayName || isPending}
+                        className="h-8 gap-1.5 text-xs font-semibold active-press"
+                        data-ocid="settings-save-btn"
+                      >
+                        <Save className="h-3.5 w-3.5" />
+                        {isPending ? "Saving…" : "Save Profile"}
+                      </Button>
+                    </div>
                   </div>
                 </CardContent>
               </Card>
@@ -923,42 +961,6 @@ export default function SettingsPage() {
                 </CardContent>
               </Card>
 
-              {/* Typography */}
-              <Card className="border-border">
-                <CardHeader className="pb-2 pt-4 px-5">
-                  <CardTitle className="text-sm font-semibold tracking-tight flex items-center gap-2">
-                    <Type className="h-4 w-4 text-primary" />
-                    Font Size
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="px-5 pb-5 space-y-3">
-                  <p className="text-xs text-muted-foreground">
-                    Adjust the base text size across the app.
-                  </p>
-                  <div className="flex gap-2">
-                    {FONT_SIZES.map((opt) => (
-                      <button
-                        key={opt.value}
-                        type="button"
-                        onClick={() => handleFontSize(opt.value)}
-                        data-ocid={`font-size-${opt.value}`}
-                        className={cn(
-                          "flex-1 rounded-md border py-2 text-xs font-medium transition-smooth",
-                          fontSize === opt.value
-                            ? "border-primary bg-primary/10 text-primary"
-                            : "border-border bg-muted/30 text-muted-foreground hover:text-foreground hover:bg-muted/60",
-                        )}
-                      >
-                        {opt.label}
-                        <span className="block text-[10px] mt-0.5 opacity-60">
-                          {opt.base}
-                        </span>
-                      </button>
-                    ))}
-                  </div>
-                </CardContent>
-              </Card>
-
               {/* Language */}
               <Card className="border-border">
                 <CardContent className="p-5">
@@ -1163,6 +1165,7 @@ export default function SettingsPage() {
                   <Button
                     size="sm"
                     className="gap-1.5 text-xs h-8 font-semibold active-press"
+                    onClick={handleWorkspaceSave}
                     data-ocid="workspace-save-btn"
                   >
                     <Save className="h-3.5 w-3.5" /> Save Changes

@@ -3,6 +3,7 @@ import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
+import { useInternetIdentity } from "@caffeineai/core-infrastructure";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useParams } from "@tanstack/react-router";
 import {
@@ -45,7 +46,6 @@ function senderInitials(id: { toString(): string }): string {
   return id.toString().slice(0, 2).toUpperCase();
 }
 
-/** Relative timestamp */
 function formatRelativeTime(createdAt: bigint): string {
   const ms = Number(createdAt) / 1_000_000;
   const diffMs = Date.now() - ms;
@@ -73,19 +73,22 @@ interface ThreadMessageProps {
   msg: Message;
   isParent?: boolean;
   onReact: (messageId: string, emoji: string) => void;
+  myPrincipal: string;
 }
 
-function ThreadMessage({ msg, isParent, onReact }: ThreadMessageProps) {
+function ThreadMessage({
+  msg,
+  isParent,
+  onReact,
+  myPrincipal,
+}: ThreadMessageProps) {
   const [showPicker, setShowPicker] = useState(false);
-
   const reactions: Reaction[] =
     (msg as Message & { reactions?: Reaction[] }).reactions ?? [];
 
   return (
     <div
-      className={`group relative flex items-start gap-3 px-4 py-3 rounded-xl transition-colors ${
-        isParent ? "bg-muted/30 border border-border" : "hover:bg-muted/20"
-      }`}
+      className={`group relative flex items-start gap-3 px-4 py-3 rounded-xl transition-colors ${isParent ? "bg-muted/30 border border-border" : "hover:bg-muted/20"}`}
       data-ocid={`thread-msg-${msg.id}`}
     >
       <div
@@ -130,20 +133,27 @@ function ThreadMessage({ msg, isParent, onReact }: ThreadMessageProps) {
 
         {reactions.length > 0 && (
           <div className="flex flex-wrap gap-1 pt-0.5">
-            {reactions.map((r) => (
-              <button
-                key={r.emoji}
-                type="button"
-                onClick={() => onReact(msg.id, r.emoji)}
-                className="inline-flex items-center gap-1 rounded-full border border-border bg-muted/40 px-2 py-0.5 text-xs hover:bg-muted/70 transition-colors"
-                data-ocid={`reaction-${msg.id}-${r.emoji}`}
-              >
-                <span>{r.emoji}</span>
-                <span className="font-medium text-muted-foreground">
-                  {r.userIds.length}
-                </span>
-              </button>
-            ))}
+            {reactions.map((r) => {
+              const isOwn = r.userIds.some((u) => u.toString() === myPrincipal);
+              return (
+                <button
+                  key={r.emoji}
+                  type="button"
+                  onClick={() => onReact(msg.id, r.emoji)}
+                  className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs transition-colors ${
+                    isOwn
+                      ? "border-teal-500/60 bg-teal-500/10 text-teal-700 dark:text-teal-300"
+                      : "border-border bg-muted/40 hover:bg-muted/70"
+                  }`}
+                  data-ocid={`reaction-${msg.id}-${r.emoji}`}
+                >
+                  <span>{r.emoji}</span>
+                  <span className="font-medium text-muted-foreground">
+                    {r.userIds.length}
+                  </span>
+                </button>
+              );
+            })}
           </div>
         )}
       </div>
@@ -193,54 +203,54 @@ interface FormatToolbarProps {
 function FormatToolbar({ onFormat }: FormatToolbarProps) {
   return (
     <div className="flex items-center gap-0.5 px-1">
-      <Button
-        variant="ghost"
-        size="icon"
-        className="h-6 w-6"
-        title="Bold (Ctrl+B)"
-        onClick={() => onFormat("**", "**")}
-        data-ocid="fmt-bold"
-        type="button"
-        aria-label="Bold"
-      >
-        <Bold className="h-3 w-3" />
-      </Button>
-      <Button
-        variant="ghost"
-        size="icon"
-        className="h-6 w-6"
-        title="Italic (Ctrl+I)"
-        onClick={() => onFormat("_", "_")}
-        data-ocid="fmt-italic"
-        type="button"
-        aria-label="Italic"
-      >
-        <Italic className="h-3 w-3" />
-      </Button>
-      <Button
-        variant="ghost"
-        size="icon"
-        className="h-6 w-6"
-        title="Inline code"
-        onClick={() => onFormat("`", "`")}
-        data-ocid="fmt-code"
-        type="button"
-        aria-label="Code"
-      >
-        <Code className="h-3 w-3" />
-      </Button>
-      <Button
-        variant="ghost"
-        size="icon"
-        className="h-6 w-6"
-        title="Bullet list"
-        onClick={() => onFormat("• ")}
-        data-ocid="fmt-list"
-        type="button"
-        aria-label="Bullet list"
-      >
-        <List className="h-3 w-3" />
-      </Button>
+      {[
+        {
+          icon: <Bold className="h-3 w-3" />,
+          title: "Bold (Ctrl+B)",
+          prefix: "**",
+          suffix: "**",
+          ocid: "fmt-bold",
+          label: "Bold",
+        },
+        {
+          icon: <Italic className="h-3 w-3" />,
+          title: "Italic (Ctrl+I)",
+          prefix: "_",
+          suffix: "_",
+          ocid: "fmt-italic",
+          label: "Italic",
+        },
+        {
+          icon: <Code className="h-3 w-3" />,
+          title: "Inline code",
+          prefix: "`",
+          suffix: "`",
+          ocid: "fmt-code",
+          label: "Code",
+        },
+        {
+          icon: <List className="h-3 w-3" />,
+          title: "Bullet list",
+          prefix: "• ",
+          suffix: undefined,
+          ocid: "fmt-list",
+          label: "Bullet list",
+        },
+      ].map((t) => (
+        <Button
+          key={t.ocid}
+          variant="ghost"
+          size="icon"
+          className="h-6 w-6"
+          title={t.title}
+          onClick={() => onFormat(t.prefix, t.suffix)}
+          data-ocid={t.ocid}
+          type="button"
+          aria-label={t.label}
+        >
+          {t.icon}
+        </Button>
+      ))}
     </div>
   );
 }
@@ -250,10 +260,19 @@ function FormatToolbar({ onFormat }: FormatToolbarProps) {
 export default function ThreadPage() {
   const { workspaceId, channelId, messageId } = useParams({
     strict: false,
-  }) as { workspaceId: string; channelId: string; messageId: string };
+  }) as {
+    workspaceId: string;
+    channelId: string;
+    messageId: string;
+  };
   const { actor, isFetching } = useBackend();
   const queryClient = useQueryClient();
   const tenantId = getTenantId();
+  const { identity } = useInternetIdentity();
+
+  // Derive myPrincipal from Internet Identity
+  const myPrincipal = identity?.getPrincipal().toText() ?? "";
+
   const [replyText, setReplyText] = useState("");
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
@@ -263,7 +282,6 @@ export default function ThreadPage() {
     queryKey: ["message-parent", tenantId, workspaceId, channelId, messageId],
     queryFn: async () => {
       if (!actor) return null;
-      // Load from channel messages — find parent by id
       const msgs = await actor.getMessages(
         tenantId,
         workspaceId,
@@ -277,7 +295,7 @@ export default function ThreadPage() {
     staleTime: 10_000,
   });
 
-  // ── Fetch thread replies ──────────────────────────────────────────────────
+  // ── Fetch thread replies (poll every 3s) ──────────────────────────────────
   const { data: threadMessages, isLoading } = useQuery<Message[]>({
     queryKey: ["thread-messages", tenantId, workspaceId, messageId],
     queryFn: async () => {
@@ -285,10 +303,10 @@ export default function ThreadPage() {
       return actor.getThreadMessages(tenantId, workspaceId, messageId);
     },
     enabled: !!actor && !isFetching && !!workspaceId,
-    refetchInterval: 2000,
+    refetchInterval: 3000,
   });
 
-  // ── Auto-scroll to bottom when new replies arrive ──────────────────────────
+  // ── Auto-scroll on new replies ──────────────────────────────────────────────
   const prevCountRef = useRef(0);
   useEffect(() => {
     const count = threadMessages?.length ?? 0;
@@ -330,13 +348,7 @@ export default function ThreadPage() {
 
   // ── Add reaction ──────────────────────────────────────────────────────────
   const reactMutation = useMutation({
-    mutationFn: async ({
-      msgId,
-      emoji,
-    }: {
-      msgId: string;
-      emoji: string;
-    }) => {
+    mutationFn: async ({ msgId, emoji }: { msgId: string; emoji: string }) => {
       if (!actor) throw new Error("Not connected");
       const result = await actor.addReaction(
         tenantId,
@@ -347,17 +359,32 @@ export default function ThreadPage() {
       if (result.__kind__ === "err") throw new Error(result.err);
       return result.ok;
     },
-    onSuccess: () => {
+    onSuccess: () =>
       queryClient.invalidateQueries({
         queryKey: ["thread-messages", tenantId, workspaceId, messageId],
-      });
-    },
+      }),
     onError: (err: Error) => toast.error(err.message),
   });
 
   // ── Keyboard handlers ─────────────────────────────────────────────────────
+  const applyFormat = useCallback(
+    (prefix: string, suffix = "") => {
+      const el = textareaRef.current;
+      if (!el) return;
+      const start = el.selectionStart;
+      const end = el.selectionEnd;
+      const selected = replyText.slice(start, end);
+      const newText = `${replyText.slice(0, start)}${prefix}${selected}${suffix}${replyText.slice(end)}`;
+      setReplyText(newText);
+      requestAnimationFrame(() => {
+        el.setSelectionRange(start + prefix.length, end + prefix.length);
+        el.focus();
+      });
+    },
+    [replyText],
+  );
+
   function handleKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
-    // Enter to send, Shift+Enter for newline
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
       if (replyText.trim()) sendMutation.mutate();
@@ -372,28 +399,6 @@ export default function ThreadPage() {
       applyFormat("_", "_");
     }
   }
-
-  const applyFormat = useCallback(
-    (prefix: string, suffix = "") => {
-      const el = textareaRef.current;
-      if (!el) return;
-      const start = el.selectionStart;
-      const end = el.selectionEnd;
-      const selected = replyText.slice(start, end);
-      const newText =
-        replyText.slice(0, start) +
-        prefix +
-        selected +
-        suffix +
-        replyText.slice(end);
-      setReplyText(newText);
-      requestAnimationFrame(() => {
-        el.setSelectionRange(start + prefix.length, end + prefix.length);
-        el.focus();
-      });
-    },
-    [replyText],
-  );
 
   const replyCount = threadMessages?.length ?? 0;
 
@@ -437,6 +442,7 @@ export default function ThreadPage() {
               msg={parentMessage}
               isParent
               onReact={(msgId, emoji) => reactMutation.mutate({ msgId, emoji })}
+              myPrincipal={myPrincipal}
             />
           ) : (
             <div className="flex items-start gap-3 rounded-xl bg-muted/30 border border-border px-4 py-3">
@@ -487,6 +493,7 @@ export default function ThreadPage() {
                   onReact={(msgId, emoji) =>
                     reactMutation.mutate({ msgId, emoji })
                   }
+                  myPrincipal={myPrincipal}
                 />
               ))}
             </div>
@@ -519,7 +526,6 @@ export default function ThreadPage() {
         <div className="flex items-center gap-1 border border-border rounded-t-lg bg-muted/30 px-2 py-1">
           <FormatToolbar onFormat={applyFormat} />
         </div>
-
         <div className="flex gap-2 items-end">
           <Textarea
             ref={textareaRef}

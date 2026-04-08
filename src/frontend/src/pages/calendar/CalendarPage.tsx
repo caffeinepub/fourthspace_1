@@ -731,8 +731,10 @@ export default function CalendarPage() {
 
   const today = new Date();
   const [viewMode, setViewMode] = useState<ViewMode>("month");
+  // viewDate: for month → first day of visible month; for week → any day in the visible week;
+  // for day → the exact day being viewed
   const [viewDate, setViewDate] = useState(
-    new Date(today.getFullYear(), today.getMonth(), 1),
+    new Date(today.getFullYear(), today.getMonth(), today.getDate()),
   );
   const [hiddenCalendars, setHiddenCalendars] = useState<Set<string>>(
     new Set(),
@@ -741,8 +743,10 @@ export default function CalendarPage() {
   // Derived date info
   const year = viewDate.getFullYear();
   const month = viewDate.getMonth();
-  const weekStart = startOfWeek(viewMode === "week" ? viewDate : today);
+  // weekStart is always computed from viewDate for consistency across views
+  const weekStart = startOfWeek(viewDate);
 
+  // Fetch a wide window so switching views never misses events
   const fromTs = BigInt(new Date(year, month - 1, 1).getTime());
   const toTs = BigInt(new Date(year, month + 2, 0).getTime());
 
@@ -788,19 +792,37 @@ export default function CalendarPage() {
     });
   };
 
-  // Navigation
-  const navigate_ = (dir: -1 | 1) => {
+  // Navigation — moves viewDate correctly for every view mode
+  const navigateView = (dir: -1 | 1) => {
     setViewDate((prev) => {
       const d = new Date(prev);
-      if (viewMode === "month") d.setMonth(d.getMonth() + dir);
-      else if (viewMode === "week") d.setDate(d.getDate() + dir * 7);
-      else d.setDate(d.getDate() + dir);
+      if (viewMode === "month") {
+        d.setMonth(d.getMonth() + dir);
+        d.setDate(1);
+      } else if (viewMode === "week") {
+        d.setDate(d.getDate() + dir * 7);
+      } else {
+        // day and agenda — step one day at a time
+        d.setDate(d.getDate() + dir);
+      }
       return d;
     });
   };
 
-  const goToday_ = () =>
-    setViewDate(new Date(today.getFullYear(), today.getMonth(), 1));
+  // Go-today resets to today's date in every view
+  const goToday = () =>
+    setViewDate(
+      new Date(today.getFullYear(), today.getMonth(), today.getDate()),
+    );
+
+  // Switch view mode and keep viewDate pointing at today's area
+  const switchView = (mode: ViewMode) => {
+    setViewMode(mode);
+    // When switching to month, normalise viewDate to first-of-month
+    if (mode === "month") {
+      setViewDate((prev) => new Date(prev.getFullYear(), prev.getMonth(), 1));
+    }
+  };
 
   const headerLabel = () => {
     if (viewMode === "month") return `${MONTH_NAMES[month]} ${year}`;
@@ -848,9 +870,14 @@ export default function CalendarPage() {
       if (result.__kind__ === "ok") {
         queryClient.invalidateQueries({ queryKey: ["events"] });
         toast.success("Event rescheduled");
-      } else toast.error(result.err);
+      } else {
+        toast.error(result.err);
+      }
     },
-    onError: () => toast.error("Failed to reschedule event"),
+    onError: (err) =>
+      toast.error(
+        err instanceof Error ? err.message : "Failed to reschedule event",
+      ),
   });
 
   const onSelectEvent = (ev: Event) =>
@@ -896,7 +923,7 @@ export default function CalendarPage() {
                 <button
                   key={v.id}
                   type="button"
-                  onClick={() => setViewMode(v.id)}
+                  onClick={() => switchView(v.id)}
                   className={cn(
                     "flex items-center gap-1.5 rounded-md px-2 sm:px-2.5 py-1.5 text-xs font-medium transition-smooth min-h-[36px]",
                     viewMode === v.id
@@ -1003,7 +1030,7 @@ export default function CalendarPage() {
               <div className="flex items-center gap-2">
                 <button
                   type="button"
-                  onClick={() => navigate_(-1)}
+                  onClick={() => navigateView(-1)}
                   className="flex h-8 w-8 items-center justify-center rounded-lg border border-border bg-card text-muted-foreground hover:text-foreground hover:bg-muted/40 transition-smooth"
                   aria-label="Previous"
                   data-ocid="cal-prev"
@@ -1015,7 +1042,7 @@ export default function CalendarPage() {
                 </h2>
                 <button
                   type="button"
-                  onClick={() => navigate_(1)}
+                  onClick={() => navigateView(1)}
                   className="flex h-8 w-8 items-center justify-center rounded-lg border border-border bg-card text-muted-foreground hover:text-foreground hover:bg-muted/40 transition-smooth"
                   aria-label="Next"
                   data-ocid="cal-next"
@@ -1025,7 +1052,7 @@ export default function CalendarPage() {
               </div>
               <button
                 type="button"
-                onClick={goToday_}
+                onClick={goToday}
                 className="flex items-center gap-1.5 rounded-lg border border-border bg-card px-3 py-1.5 text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-muted/40 transition-smooth"
                 data-ocid="cal-today-btn"
               >

@@ -116,8 +116,10 @@ module {
     caller : Common.UserId,
     targetUserId : Common.UserId,
   ) : ({ #ok : CTypes.Channel; #err : Text }, ChannelStore) {
-    let (ch, store) = Chat.createOrGetDMChannel(channels, tenantId, workspaceId, caller, targetUserId);
-    (#ok ch, store)
+    switch (Chat.createOrGetDMChannel(channels, tenantId, workspaceId, caller, targetUserId)) {
+      case (?ch, store) (#ok ch, store);
+      case (null, store) (#err "Cannot create DM channel with yourself", store);
+    }
   };
 
   // ── Message API ───────────────────────────────────────────────────────────────

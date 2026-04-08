@@ -11,6 +11,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import { Link, useNavigate } from "@tanstack/react-router";
 import {
   ArrowLeft,
@@ -18,30 +19,25 @@ import {
   ChevronDown,
   ChevronUp,
   Lightbulb,
+  Loader2,
   Plus,
   Target,
   X,
 } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
-import { useWorkspace } from "../../hooks/useWorkspace";
-import type { GoalStatus, OKRTemplate } from "./goalData";
+import type { GoalInput, KeyResultInput, WorkspaceMember } from "../../backend";
+import { GoalStatus } from "../../backend";
+import { useBackend } from "../../hooks/useBackend";
+import { getTenantId, useWorkspace } from "../../hooks/useWorkspace";
+import type { OKRTemplate } from "./goalData";
 import { OKR_TEMPLATES } from "./goalData";
 
-const MOCK_USERS = [
-  { id: "u1", name: "Alex Martinez" },
-  { id: "u2", name: "Sam Kim" },
-  { id: "u3", name: "Jordan Lee" },
-  { id: "u4", name: "Morgan Chen" },
-  { id: "u5", name: "Riley Okafor" },
-];
-
-const GOAL_STATUSES: GoalStatus[] = [
-  "Active",
-  "OnTrack",
-  "AtRisk",
-  "Behind",
-  "Completed",
+const GOAL_STATUSES: { value: GoalStatus; label: string }[] = [
+  { value: GoalStatus.Active, label: "Active" },
+  { value: GoalStatus.OnHold, label: "On Hold" },
+  { value: GoalStatus.Completed, label: "Completed" },
+  { value: GoalStatus.Cancelled, label: "Cancelled" },
 ];
 
 interface LocalKR {
@@ -176,20 +172,72 @@ function TemplateCard({
 export default function GoalNewPage() {
   const { activeWorkspaceId } = useWorkspace();
   const wsId = activeWorkspaceId ?? "";
+  const tenantId = getTenantId();
+  const { actor, isFetching } = useBackend();
   const navigate = useNavigate();
 
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
-  const [owner, setOwner] = useState(MOCK_USERS[0].id);
-  const [contributors, setContributors] = useState<string[]>([]);
+  const [contributorIds, setContributorIds] = useState<string[]>([]);
   const [period, setPeriod] = useState("Q2 2026");
   const [startDate, setStartDate] = useState("2026-04-01");
   const [endDate, setEndDate] = useState("2026-06-30");
-  const [status, setStatus] = useState<GoalStatus>("Active");
+  const [goalStatus, setGoalStatus] = useState<GoalStatus>(GoalStatus.Active);
   const [keyResults, setKeyResults] = useState<LocalKR[]>([]);
-  const [isSubmitting, setIsSubmitting] = useState(false);
   const [showTemplates, setShowTemplates] = useState(true);
   const [appliedTemplate, setAppliedTemplate] = useState<string | null>(null);
+
+  // Load workspace members for owner/contributor picker
+  const { data: members = [] } = useQuery<WorkspaceMember[]>({
+    queryKey: ["workspaceMembers", tenantId, wsId],
+    queryFn: async () => {
+      if (!actor) return [];
+      return actor.listWorkspaceMembers(tenantId, wsId);
+    },
+    enabled: !!actor && !isFetching && !!wsId,
+  });
+
+  const createGoalMutation = useMutation({
+    mutationFn: async () => {
+      if (!actor) throw new Error("Not connected");
+      if (!title.trim()) throw new Error("Goal title is required");
+      const startTs = BigInt(new Date(startDate).getTime() * 1_000_000);
+      const endTs = BigInt(new Date(endDate).getTime() * 1_000_000);
+      const input: GoalInput = {
+        title: title.trim(),
+        description: description.trim() || undefined,
+        period,
+        startDate: startTs,
+        endDate: endTs,
+        contributorIds: contributorIds as unknown as Array<
+          import("../../backend").UserId
+        >,
+      };
+      const goalRes = await actor.createGoal(tenantId, wsId, input);
+      if (goalRes.__kind__ === "err") throw new Error(goalRes.err);
+      const goal = goalRes.ok;
+
+      // Add key results sequentially
+      for (const kr of keyResults) {
+        if (!kr.title.trim()) continue;
+        const krInput: KeyResultInput = {
+          goalId: goal.id,
+          title: kr.title.trim(),
+          targetValue: Number(kr.targetValue) || 0,
+          unit: kr.unit,
+          description: kr.description.trim() || undefined,
+        };
+        await actor.addKeyResult(tenantId, wsId, krInput);
+      }
+      return goal;
+    },
+    onSuccess: (goal) => {
+      toast.success("Goal created successfully");
+      void navigate({ to: `/app/${wsId}/goals/${goal.id}` as "/" });
+    },
+    onError: (err: Error) =>
+      toast.error(err.message || "Failed to create goal"),
+  });
 
   function addKR() {
     setKeyResults((prev) => [
@@ -227,15 +275,14 @@ export default function GoalNewPage() {
       toast.error("Please enter a goal title");
       return;
     }
-    setIsSubmitting(true);
-    setTimeout(() => {
-      toast.success("Goal created successfully");
-      void navigate({ to: `/app/${wsId}/goals` as "/" });
-    }, 600);
+    createGoalMutation.mutate();
   }
 
   return (
-    <div className="animate-fade-in-up p-6 space-y-6" data-ocid="goal-new-page">
+    <div
+      className="animate-fade-in-up p-4 sm:p-6 space-y-6 pb-20 md:pb-6"
+      data-ocid="goal-new-page"
+    >
       {/* Header */}
       <div className="flex items-center gap-3">
         <Button variant="ghost" size="icon" asChild>
@@ -391,53 +438,41 @@ export default function GoalNewPage() {
             </CardHeader>
             <CardContent className="space-y-4 pt-4">
               <div className="space-y-1.5">
-                <Label
-                  htmlFor="goal-owner"
-                  className="text-xs font-semibold text-muted-foreground uppercase tracking-wider"
-                >
-                  Owner
-                </Label>
-                <Select value={owner} onValueChange={setOwner}>
-                  <SelectTrigger id="goal-owner" data-ocid="goal-owner-select">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {MOCK_USERS.map((u) => (
-                      <SelectItem key={u.id} value={u.id}>
-                        {u.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-1.5">
                 <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
                   Contributors
                 </Label>
-                <div
-                  className="flex flex-wrap gap-1.5"
-                  data-ocid="contributors-picker"
-                >
-                  {MOCK_USERS.filter((u) => u.id !== owner).map((u) => {
-                    const isSelected = contributors.includes(u.id);
-                    return (
-                      <button
-                        key={u.id}
-                        type="button"
-                        onClick={() =>
-                          setContributors((prev) =>
-                            prev.includes(u.id)
-                              ? prev.filter((id) => id !== u.id)
-                              : [...prev, u.id],
-                          )
-                        }
-                        className={`rounded-full px-2.5 py-1 text-xs font-medium border transition-colors ${isSelected ? "bg-primary text-primary-foreground border-primary" : "bg-muted text-muted-foreground border-border hover:border-primary/50"}`}
-                      >
-                        {u.name.split(" ")[0]}
-                      </button>
-                    );
-                  })}
-                </div>
+                {members.length > 0 ? (
+                  <div
+                    className="flex flex-wrap gap-1.5"
+                    data-ocid="contributors-picker"
+                  >
+                    {members.map((m) => {
+                      const id = m.userId.toString();
+                      const isSelected = contributorIds.includes(id);
+                      const firstName = m.displayName.split(" ")[0];
+                      return (
+                        <button
+                          key={id}
+                          type="button"
+                          onClick={() =>
+                            setContributorIds((prev) =>
+                              prev.includes(id)
+                                ? prev.filter((x) => x !== id)
+                                : [...prev, id],
+                            )
+                          }
+                          className={`rounded-full px-2.5 py-1 text-xs font-medium border transition-colors ${isSelected ? "bg-primary text-primary-foreground border-primary" : "bg-muted text-muted-foreground border-border hover:border-primary/50"}`}
+                        >
+                          {firstName}
+                        </button>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <p className="text-xs text-muted-foreground">
+                    No members found
+                  </p>
+                )}
               </div>
               <div className="space-y-1.5">
                 <Label
@@ -494,8 +529,8 @@ export default function GoalNewPage() {
                   Status
                 </Label>
                 <Select
-                  value={status}
-                  onValueChange={(v) => setStatus(v as GoalStatus)}
+                  value={goalStatus}
+                  onValueChange={(v) => setGoalStatus(v as GoalStatus)}
                 >
                   <SelectTrigger
                     id="goal-status"
@@ -505,8 +540,8 @@ export default function GoalNewPage() {
                   </SelectTrigger>
                   <SelectContent>
                     {GOAL_STATUSES.map((s) => (
-                      <SelectItem key={s} value={s}>
-                        {s}
+                      <SelectItem key={s.value} value={s.value}>
+                        {s.label}
                       </SelectItem>
                     ))}
                   </SelectContent>
@@ -519,10 +554,13 @@ export default function GoalNewPage() {
             <Button
               className="w-full active-press"
               onClick={handleSubmit}
-              disabled={isSubmitting}
+              disabled={createGoalMutation.isPending}
               data-ocid="create-goal-btn"
             >
-              {isSubmitting ? "Creating…" : "Create Goal"}
+              {createGoalMutation.isPending ? (
+                <Loader2 className="h-4 w-4 animate-spin mr-2" />
+              ) : null}
+              {createGoalMutation.isPending ? "Creating…" : "Create Goal"}
             </Button>
             <Button variant="ghost" className="w-full" asChild>
               <Link to={`/app/${wsId}/goals` as "/"}>Cancel</Link>

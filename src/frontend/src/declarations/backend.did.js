@@ -1339,7 +1339,9 @@ export const DashboardStats = IDL.Record({
   'goalCount' : IDL.Nat,
   'noteCount' : IDL.Nat,
   'taskCount' : IDL.Nat,
+  'payrollTotal' : IDL.Float64,
   'projectCount' : IDL.Nat,
+  'walletBalance' : IDL.Nat,
 });
 export const ActivityEntry = IDL.Record({
   'action' : IDL.Text,
@@ -2359,6 +2361,11 @@ export const idlService = IDL.Service({
       [IDL.Vec(Event)],
       ['query'],
     ),
+  'listEventsWithExceptions' : IDL.Func(
+      [TenantId, WorkspaceId, Timestamp, Timestamp],
+      [IDL.Vec(Event)],
+      ['query'],
+    ),
   'listFormSubmissions' : IDL.Func(
       [TenantId, WorkspaceId, EntityId],
       [IDL.Vec(FormSubmission)],
@@ -2549,6 +2556,11 @@ export const idlService = IDL.Service({
   'regenerateWorkspaceShareToken' : IDL.Func(
       [WorkspaceId, TenantId],
       [IDL.Text],
+      [],
+    ),
+  'rejectMilestone' : IDL.Func(
+      [TenantId, WorkspaceId, EntityId],
+      [IDL.Variant({ 'ok' : EscrowMilestone, 'err' : IDL.Text })],
       [],
     ),
   'rejectPayrollRecord' : IDL.Func(
@@ -4194,7 +4206,9 @@ export const idlFactory = ({ IDL }) => {
     'goalCount' : IDL.Nat,
     'noteCount' : IDL.Nat,
     'taskCount' : IDL.Nat,
+    'payrollTotal' : IDL.Float64,
     'projectCount' : IDL.Nat,
+    'walletBalance' : IDL.Nat,
   });
   const ActivityEntry = IDL.Record({
     'action' : IDL.Text,
@@ -5214,6 +5228,11 @@ export const idlFactory = ({ IDL }) => {
         [IDL.Vec(Event)],
         ['query'],
       ),
+    'listEventsWithExceptions' : IDL.Func(
+        [TenantId, WorkspaceId, Timestamp, Timestamp],
+        [IDL.Vec(Event)],
+        ['query'],
+      ),
     'listFormSubmissions' : IDL.Func(
         [TenantId, WorkspaceId, EntityId],
         [IDL.Vec(FormSubmission)],
@@ -5404,6 +5423,11 @@ export const idlFactory = ({ IDL }) => {
     'regenerateWorkspaceShareToken' : IDL.Func(
         [WorkspaceId, TenantId],
         [IDL.Text],
+        [],
+      ),
+    'rejectMilestone' : IDL.Func(
+        [TenantId, WorkspaceId, EntityId],
+        [IDL.Variant({ 'ok' : EscrowMilestone, 'err' : IDL.Text })],
         [],
       ),
     'rejectPayrollRecord' : IDL.Func(

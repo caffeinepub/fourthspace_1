@@ -8,11 +8,13 @@ import { Textarea } from "@/components/ui/textarea";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import {
+  AlertTriangle,
   ArrowLeft,
   CalendarClock,
   DollarSign,
   Plus,
   RefreshCw,
+  Wallet,
   X,
 } from "lucide-react";
 import { useState } from "react";
@@ -24,6 +26,7 @@ import type {
   Employee,
   OffCyclePayment,
   OffCyclePaymentInput,
+  WalletAccount,
 } from "../../types";
 
 function formatCurrency(amount: number, currency = "USD") {
@@ -31,6 +34,10 @@ function formatCurrency(amount: number, currency = "USD") {
     style: "currency",
     currency: currency || "USD",
   }).format(amount / 100);
+}
+
+function formatIcp(balance: bigint): string {
+  return (Number(balance) / 1_000_000_00).toFixed(4);
 }
 
 const REASON_LABELS: Record<OffCycleReason, string> = {
@@ -62,6 +69,20 @@ export default function OffCyclePaymentPage() {
     processImmediately: false,
     notes: "",
   });
+
+  // Treasury balance gate
+  const { data: treasury, isLoading: treasuryLoading } =
+    useQuery<WalletAccount | null>({
+      queryKey: ["workspaceTreasury", tenantId, workspaceId],
+      queryFn: async () => {
+        if (!actor) return null;
+        return actor.getWorkspaceTreasury(tenantId, workspaceId);
+      },
+      enabled: !!actor && !isFetching && !!workspaceId,
+    });
+
+  const icpBalance = treasury?.icpBalance ?? BigInt(0);
+  const hasNoFunds = !treasuryLoading && icpBalance === BigInt(0);
 
   const { data: employees = [], isLoading: empLoading } = useQuery<Employee[]>({
     queryKey: ["employees", tenantId, workspaceId],
@@ -107,10 +128,21 @@ export default function OffCyclePaymentPage() {
         notes: "",
       });
     },
-    onError: (e: Error) => toast.error(e.message),
+    onError: (e: Error) => {
+      if (e.message.toLowerCase().includes("insufficient")) {
+        toast.error(
+          "Insufficient treasury balance — fund your workspace wallet first.",
+        );
+      } else {
+        toast.error(e.message);
+      }
+    },
   });
 
   const employeeMap = new Map(employees.map((e) => [e.id, e]));
+
+  const isSubmitDisabled =
+    addPayment.isPending || !form.employeeId || hasNoFunds;
 
   return (
     <div className="animate-fade-in-up p-6 space-y-6 max-w-4xl mx-auto">
@@ -131,27 +163,79 @@ export default function OffCyclePaymentPage() {
             </p>
           </div>
         </div>
-        <Button
-          onClick={() => setShowForm((v) => !v)}
-          className="bg-emerald-600 hover:bg-emerald-700 text-white active-press"
-          data-ocid="add-off-cycle-btn"
-        >
-          {showForm ? (
-            <>
-              <X className="mr-2 h-4 w-4" />
-              Cancel
-            </>
-          ) : (
-            <>
-              <Plus className="mr-2 h-4 w-4" />
-              New Payment
-            </>
+        <div className="flex items-center gap-2">
+          {/* Treasury balance chip */}
+          {!treasuryLoading && treasury && (
+            <div className="flex items-center gap-2 rounded-lg border border-border bg-card px-3 py-1.5">
+              <Wallet className="h-3.5 w-3.5 text-muted-foreground" />
+              <span className="text-xs text-muted-foreground">Treasury:</span>
+              <span
+                className={`text-xs font-semibold tabular-nums ${
+                  hasNoFunds ? "text-destructive" : "text-foreground"
+                }`}
+                data-ocid="off-cycle-treasury-balance"
+              >
+                {formatIcp(icpBalance)} ICP
+              </span>
+            </div>
           )}
-        </Button>
+          <Button
+            onClick={() => setShowForm((v) => !v)}
+            disabled={hasNoFunds}
+            className="bg-emerald-600 hover:bg-emerald-700 text-white active-press disabled:opacity-60"
+            data-ocid="add-off-cycle-btn"
+            title={
+              hasNoFunds
+                ? "Fund your workspace wallet before adding off-cycle payments"
+                : undefined
+            }
+          >
+            {showForm ? (
+              <>
+                <X className="mr-2 h-4 w-4" />
+                Cancel
+              </>
+            ) : (
+              <>
+                <Plus className="mr-2 h-4 w-4" />
+                New Payment
+              </>
+            )}
+          </Button>
+        </div>
       </div>
 
+      {/* No-funds warning banner */}
+      {hasNoFunds && (
+        <div
+          className="flex items-start gap-3 rounded-xl border border-amber-400/40 bg-amber-500/8 px-4 py-3"
+          data-ocid="off-cycle-no-funds-banner"
+          role="alert"
+        >
+          <AlertTriangle className="h-4 w-4 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-medium text-foreground">
+              Treasury wallet is empty — off-cycle payments cannot be processed
+              until the workspace wallet is funded.
+            </p>
+          </div>
+          <Button
+            asChild
+            size="sm"
+            variant="outline"
+            className="shrink-0 gap-1.5 border-amber-400/60 text-amber-700 dark:text-amber-400 hover:bg-amber-500/10"
+            data-ocid="off-cycle-fund-wallet-btn"
+          >
+            <Link to={`/app/${workspaceId}/wallet`}>
+              <Wallet className="h-3.5 w-3.5" />
+              Fund Wallet
+            </Link>
+          </Button>
+        </div>
+      )}
+
       {/* Form */}
-      {showForm && (
+      {showForm && !hasNoFunds && (
         <Card
           className="shadow-card rounded-xl border border-emerald-500/20 bg-emerald-500/[0.02]"
           data-ocid="off-cycle-form"
@@ -277,8 +361,8 @@ export default function OffCyclePaymentPage() {
                 </Button>
                 <Button
                   type="submit"
-                  disabled={addPayment.isPending || !form.employeeId}
-                  className="bg-emerald-600 hover:bg-emerald-700 text-white active-press"
+                  disabled={isSubmitDisabled}
+                  className="bg-emerald-600 hover:bg-emerald-700 text-white active-press disabled:opacity-60"
                   data-ocid="oc-submit-btn"
                 >
                   {addPayment.isPending ? "Submitting…" : "Submit Payment"}
@@ -318,7 +402,9 @@ export default function OffCyclePaymentPage() {
                 No off-cycle payments yet
               </p>
               <p className="text-xs text-muted-foreground mt-1">
-                Click "New Payment" to add a bonus or reimbursement.
+                {hasNoFunds
+                  ? "Fund your workspace wallet to enable payments."
+                  : `Click "New Payment" to add a bonus or reimbursement.`}
               </p>
             </div>
           ) : (

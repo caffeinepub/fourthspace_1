@@ -307,7 +307,9 @@ export interface DashboardStats {
     goalCount: bigint;
     noteCount: bigint;
     taskCount: bigint;
+    payrollTotal: number;
     projectCount: bigint;
+    walletBalance: bigint;
 }
 export interface AIConfig {
     id: EntityId;
@@ -1675,7 +1677,7 @@ export interface backendInterface {
         err: string;
     }>;
     /**
-     * / Add an off-cycle payment — requires sufficient treasury balance if processImmediately.
+     * / Add an off-cycle payment — requires non-zero treasury balance before processing.
      */
     addOffCyclePayment(tenantId: TenantId, workspaceId: WorkspaceId, input: OffCyclePaymentInput): Promise<{
         __kind__: "ok";
@@ -1815,8 +1817,9 @@ export interface backendInterface {
         err: string;
     }>;
     /**
-     * / Create an escrow — requires the caller (payer) to have sufficient treasury balance.
-     * / Queries the live ICP/ckBTC ledger balance BEFORE creating the record.
+     * / Create an escrow — requires the caller (payer) to have a non-zero wallet balance (personal or treasury).
+     * / Checks the caller's personal ICP/ckBTC balance > 0 BEFORE creating the record.
+     * / The actual funding is done via depositEscrow (ICRC-2) or fundEscrow (direct transfer).
      */
     createEscrow(tenantId: TenantId, workspaceId: WorkspaceId, input: EscrowInput): Promise<{
         __kind__: "ok";
@@ -2170,6 +2173,12 @@ export interface backendInterface {
     }>;
     exportTimeEntries(workspaceId: WorkspaceId, tenantId: TenantId, filter: TimeReportFilter): Promise<string>;
     exportTransactions(tenantId: TenantId, workspaceId: WorkspaceId, accountId: EntityId, filter: TxFilter | null): Promise<string>;
+    /**
+     * / Fund an escrow from the caller's personal wallet via direct ledger transfer.
+     * / State-before-transfer: transitions escrow to #Funded in state BEFORE the async ledger call.
+     * / On ledger failure, the contract remains #Funded in state — the admin can refund or resolve.
+     * / For ICRC-2 approve/transfer_from flow, use depositEscrow instead.
+     */
     fundEscrow(tenantId: TenantId, workspaceId: WorkspaceId, id: EntityId): Promise<{
         __kind__: "ok";
         ok: EscrowContract;
@@ -2438,6 +2447,11 @@ export interface backendInterface {
     listEventExceptions(tenantId: TenantId, workspaceId: WorkspaceId, eventId: string): Promise<Array<EventException>>;
     listEventRsvps(tenantId: TenantId, workspaceId: WorkspaceId, userId: UserId): Promise<Array<EventRsvp>>;
     listEvents(tenantId: TenantId, workspaceId: WorkspaceId, from: Timestamp, to: Timestamp): Promise<Array<Event>>;
+    /**
+     * / List events in a date range with recurring event exceptions applied.
+     * / Deleted exception occurrences are omitted; modified occurrences use override data.
+     */
+    listEventsWithExceptions(tenantId: TenantId, workspaceId: WorkspaceId, from: Timestamp, to: Timestamp): Promise<Array<Event>>;
     listFormSubmissions(tenantId: TenantId, workspaceId: WorkspaceId, formId: EntityId): Promise<Array<FormSubmission>>;
     listForms(tenantId: TenantId, workspaceId: WorkspaceId): Promise<Array<Form>>;
     listGoals(tenantId: TenantId, workspaceId: WorkspaceId): Promise<Array<Goal>>;
@@ -2529,6 +2543,13 @@ export interface backendInterface {
         err: string;
     }>;
     regenerateWorkspaceShareToken(workspaceId: WorkspaceId, tenantId: TenantId): Promise<string>;
+    rejectMilestone(tenantId: TenantId, workspaceId: WorkspaceId, milestoneId: EntityId): Promise<{
+        __kind__: "ok";
+        ok: EscrowMilestone;
+    } | {
+        __kind__: "err";
+        err: string;
+    }>;
     rejectPayrollRecord(tenantId: TenantId, workspaceId: WorkspaceId, recordId: EntityId, reason: string): Promise<{
         __kind__: "ok";
         ok: PayrollRecord;
@@ -2536,6 +2557,11 @@ export interface backendInterface {
         __kind__: "err";
         err: string;
     }>;
+    /**
+     * / Release a funded escrow — transfers funds from workspace treasury to the payee via real ledger.
+     * / State-before-transfer: transitions escrow to #Released in state BEFORE the async ledger call.
+     * / On ledger failure, escrow remains #Released in state — admin must resolve manually.
+     */
     releaseEscrow(tenantId: TenantId, workspaceId: WorkspaceId, id: EntityId): Promise<{
         __kind__: "ok";
         ok: EscrowContract;
@@ -2592,6 +2618,10 @@ export interface backendInterface {
         __kind__: "err";
         err: string;
     }>;
+    /**
+     * / Resolve a dispute — updates dispute status and also marks the parent escrow as #Cancelled.
+     * / All workspace members can see the updated escrow status after resolution.
+     */
     resolveDispute(tenantId: TenantId, workspaceId: WorkspaceId, disputeId: EntityId, resolution: string): Promise<{
         __kind__: "ok";
         ok: EscrowDispute;
@@ -5851,6 +5881,20 @@ export class Backend implements backendInterface {
             return from_candid_vec_n419(this._uploadFile, this._downloadFile, result);
         }
     }
+    async listEventsWithExceptions(arg0: TenantId, arg1: WorkspaceId, arg2: Timestamp, arg3: Timestamp): Promise<Array<Event>> {
+        if (this.processError) {
+            try {
+                const result = await this.actor.listEventsWithExceptions(arg0, arg1, arg2, arg3);
+                return from_candid_vec_n419(this._uploadFile, this._downloadFile, result);
+            } catch (e) {
+                this.processError(e);
+                throw new Error("unreachable");
+            }
+        } else {
+            const result = await this.actor.listEventsWithExceptions(arg0, arg1, arg2, arg3);
+            return from_candid_vec_n419(this._uploadFile, this._downloadFile, result);
+        }
+    }
     async listFormSubmissions(arg0: TenantId, arg1: WorkspaceId, arg2: EntityId): Promise<Array<FormSubmission>> {
         if (this.processError) {
             try {
@@ -6465,6 +6509,26 @@ export class Backend implements backendInterface {
         } else {
             const result = await this.actor.regenerateWorkspaceShareToken(arg0, arg1);
             return result;
+        }
+    }
+    async rejectMilestone(arg0: TenantId, arg1: WorkspaceId, arg2: EntityId): Promise<{
+        __kind__: "ok";
+        ok: EscrowMilestone;
+    } | {
+        __kind__: "err";
+        err: string;
+    }> {
+        if (this.processError) {
+            try {
+                const result = await this.actor.rejectMilestone(arg0, arg1, arg2);
+                return from_candid_variant_n52(this._uploadFile, this._downloadFile, result);
+            } catch (e) {
+                this.processError(e);
+                throw new Error("unreachable");
+            }
+        } else {
+            const result = await this.actor.rejectMilestone(arg0, arg1, arg2);
+            return from_candid_variant_n52(this._uploadFile, this._downloadFile, result);
         }
     }
     async rejectPayrollRecord(arg0: TenantId, arg1: WorkspaceId, arg2: EntityId, arg3: string): Promise<{

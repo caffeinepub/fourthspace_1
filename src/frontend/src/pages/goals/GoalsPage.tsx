@@ -1,6 +1,4 @@
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import {
   Select,
   SelectContent,
@@ -8,20 +6,40 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Skeleton } from "@/components/ui/skeleton";
+import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { BarChart3, Plus, Target, TrendingUp } from "lucide-react";
 import { useState } from "react";
-import { useWorkspace } from "../../hooks/useWorkspace";
-import type { GoalStatus, MockGoal } from "./goalData";
-import { MOCK_GOALS, STATUS_COLORS, STATUS_LABELS } from "./goalData";
+import type { Goal } from "../../backend";
+import { GoalStatus } from "../../backend";
+import { useBackend } from "../../hooks/useBackend";
+import { getTenantId, useWorkspace } from "../../hooks/useWorkspace";
 
-const ALL_STATUSES: Array<GoalStatus | "all"> = [
+// Map backend GoalStatus to display style (goalData has more states for UI)
+const BACKEND_STATUS_COLORS: Record<GoalStatus, string> = {
+  [GoalStatus.Active]:
+    "bg-blue-500/10 text-blue-600 border-blue-200 dark:border-blue-800 dark:text-blue-400",
+  [GoalStatus.OnHold]:
+    "bg-yellow-500/10 text-yellow-600 border-yellow-200 dark:border-yellow-800",
+  [GoalStatus.Completed]: "bg-muted text-muted-foreground border-border",
+  [GoalStatus.Cancelled]:
+    "bg-destructive/10 text-destructive border-destructive/20",
+};
+const BACKEND_STATUS_LABELS: Record<GoalStatus, string> = {
+  [GoalStatus.Active]: "Active",
+  [GoalStatus.OnHold]: "On Hold",
+  [GoalStatus.Completed]: "Completed",
+  [GoalStatus.Cancelled]: "Cancelled",
+};
+
+type FilterStatus = GoalStatus | "all";
+const ALL_FILTER_STATUSES: FilterStatus[] = [
   "all",
-  "Active",
-  "OnTrack",
-  "AtRisk",
-  "Behind",
-  "Completed",
+  GoalStatus.Active,
+  GoalStatus.OnHold,
+  GoalStatus.Completed,
+  GoalStatus.Cancelled,
 ];
 
 function ProgressRing({ value }: { value: number }) {
@@ -73,7 +91,17 @@ function ProgressRing({ value }: { value: number }) {
   );
 }
 
-function GoalCard({ goal, wsId }: { goal: MockGoal; wsId: string }) {
+function GoalCard({ goal, wsId }: { goal: Goal; wsId: string }) {
+  const colorClass =
+    BACKEND_STATUS_COLORS[goal.status] ??
+    BACKEND_STATUS_COLORS[GoalStatus.Active];
+  const statusLabel =
+    BACKEND_STATUS_LABELS[goal.status] ??
+    BACKEND_STATUS_LABELS[GoalStatus.Active];
+  const progress = Math.round(Math.min(100, Math.max(0, goal.progress)));
+  const endMs = Number(goal.endDate) / 1_000_000;
+  const periodLabel = goal.period || new Date(endMs).getFullYear().toString();
+
   return (
     <Link
       to={`/app/${wsId}/goals/${goal.id}` as "/"}
@@ -81,7 +109,6 @@ function GoalCard({ goal, wsId }: { goal: MockGoal; wsId: string }) {
     >
       <div className="rounded-xl border border-border/50 bg-card shadow-card hover:shadow-card-hover hover:border-primary/30 transition-all group">
         <div className="p-5 space-y-4">
-          {/* Top row */}
           <div className="flex items-start justify-between gap-3">
             <div className="flex items-center gap-2.5 min-w-0">
               <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary/10">
@@ -91,13 +118,13 @@ function GoalCard({ goal, wsId }: { goal: MockGoal; wsId: string }) {
                 <h3 className="text-sm font-semibold text-foreground truncate group-hover:text-primary transition-colors">
                   {goal.title}
                 </h3>
-                <p className="text-xs text-muted-foreground">{goal.period}</p>
+                <p className="text-xs text-muted-foreground">{periodLabel}</p>
               </div>
             </div>
             <span
-              className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium border shrink-0 ${STATUS_COLORS[goal.status]}`}
+              className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium border shrink-0 ${colorClass}`}
             >
-              {STATUS_LABELS[goal.status]}
+              {statusLabel}
             </span>
           </div>
           {goal.description && (
@@ -105,31 +132,33 @@ function GoalCard({ goal, wsId }: { goal: MockGoal; wsId: string }) {
               {goal.description}
             </p>
           )}
-          {/* Progress row */}
           <div className="flex items-center justify-between gap-4">
             <div className="flex-1 space-y-1.5">
               <div className="flex items-center justify-between text-xs">
                 <span className="text-muted-foreground">Progress</span>
                 <span className="font-mono font-semibold tabular-nums text-foreground">
-                  {goal.progress}%
+                  {progress}%
                 </span>
               </div>
               <div className="h-1.5 w-full rounded-full bg-muted overflow-hidden">
                 <div
                   className="h-full rounded-full bg-primary transition-all duration-500"
-                  style={{ width: `${Math.min(100, goal.progress)}%` }}
+                  style={{ width: `${progress}%` }}
                 />
               </div>
             </div>
-            <ProgressRing value={goal.progress} />
+            <ProgressRing value={progress} />
           </div>
-          {/* Footer */}
           <div className="flex items-center justify-between text-xs text-muted-foreground pt-1 border-t border-border/40">
             <span className="flex items-center gap-1">
               <TrendingUp className="h-3 w-3" />
-              {goal.owner}
+              {goal.keyResults.length} key result
+              {goal.keyResults.length !== 1 ? "s" : ""}
             </span>
-            <span className="font-medium">{goal.keyResults} key results</span>
+            <span className="font-medium">
+              {goal.contributorIds.length} contributor
+              {goal.contributorIds.length !== 1 ? "s" : ""}
+            </span>
           </div>
         </div>
       </div>
@@ -140,21 +169,32 @@ function GoalCard({ goal, wsId }: { goal: MockGoal; wsId: string }) {
 export default function GoalsPage() {
   const { activeWorkspaceId } = useWorkspace();
   const wsId = activeWorkspaceId ?? "";
-  const [statusFilter, setStatusFilter] = useState<GoalStatus | "all">("all");
+  const tenantId = getTenantId();
+  const { actor, isFetching } = useBackend();
+  const [statusFilter, setStatusFilter] = useState<FilterStatus>("all");
 
-  const filtered = MOCK_GOALS.filter(
-    (g) => statusFilter === "all" || g.status === statusFilter,
-  );
+  const { data: goals = [], isLoading } = useQuery<Goal[]>({
+    queryKey: ["goals", tenantId, wsId],
+    queryFn: async () => {
+      if (!actor) return [];
+      return actor.listGoals(tenantId, wsId);
+    },
+    enabled: !!actor && !isFetching && !!wsId,
+  });
+
+  const filtered =
+    statusFilter === "all"
+      ? goals
+      : goals.filter((g) => g.status === statusFilter);
 
   const stats = {
-    total: MOCK_GOALS.length,
-    onTrack: MOCK_GOALS.filter((g) => g.status === "OnTrack").length,
-    atRisk: MOCK_GOALS.filter(
-      (g) => g.status === "AtRisk" || g.status === "Behind",
-    ).length,
-    avgProgress: Math.round(
-      MOCK_GOALS.reduce((a, g) => a + g.progress, 0) / (MOCK_GOALS.length || 1),
-    ),
+    total: goals.length,
+    active: goals.filter((g) => g.status === GoalStatus.Active).length,
+    completed: goals.filter((g) => g.status === GoalStatus.Completed).length,
+    avgProgress:
+      goals.length > 0
+        ? Math.round(goals.reduce((a, g) => a + g.progress, 0) / goals.length)
+        : 0,
   };
 
   return (
@@ -188,15 +228,14 @@ export default function GoalsPage() {
             </Link>
           </Button>
           <Button
-            size="sm"
             asChild
             data-ocid="new-goal-btn"
-            className="active-press min-h-[44px]"
+            className="active-press min-h-[44px] gap-2 font-semibold shadow-sm"
+            size="default"
           >
             <Link to={`/app/${wsId}/goals/new` as "/"}>
-              <Plus className="h-4 w-4 mr-2" />
-              <span className="hidden sm:inline">New Goal</span>
-              <span className="sm:hidden">New</span>
+              <Plus className="h-4 w-4" />
+              Create Goal
             </Link>
           </Button>
         </div>
@@ -211,14 +250,14 @@ export default function GoalsPage() {
             color: "text-primary bg-primary/10 border-primary/20",
           },
           {
-            label: "On Track",
-            value: String(stats.onTrack),
+            label: "Active",
+            value: String(stats.active),
             color: "text-accent bg-accent/10 border-accent/20",
           },
           {
-            label: "At Risk / Behind",
-            value: String(stats.atRisk),
-            color: "text-destructive bg-destructive/10 border-destructive/20",
+            label: "Completed",
+            value: String(stats.completed),
+            color: "text-emerald-600 bg-emerald-500/10 border-emerald-200",
           },
           {
             label: "Avg. Progress",
@@ -250,7 +289,7 @@ export default function GoalsPage() {
         </span>
         <Select
           value={statusFilter}
-          onValueChange={(v) => setStatusFilter(v as GoalStatus | "all")}
+          onValueChange={(v) => setStatusFilter(v as FilterStatus)}
         >
           <SelectTrigger
             className="h-8 w-44 text-xs"
@@ -259,9 +298,9 @@ export default function GoalsPage() {
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
-            {ALL_STATUSES.map((s) => (
+            {ALL_FILTER_STATUSES.map((s) => (
               <SelectItem key={s} value={s}>
-                {s === "all" ? "All statuses" : STATUS_LABELS[s]}
+                {s === "all" ? "All statuses" : (BACKEND_STATUS_LABELS[s] ?? s)}
               </SelectItem>
             ))}
           </SelectContent>
@@ -272,7 +311,13 @@ export default function GoalsPage() {
       </div>
 
       {/* Goals grid */}
-      {filtered.length === 0 ? (
+      {isLoading ? (
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          {[1, 2, 3].map((n) => (
+            <Skeleton key={n} className="h-52 rounded-xl" />
+          ))}
+        </div>
+      ) : filtered.length === 0 ? (
         <div
           className="flex flex-col items-center justify-center py-16 gap-4"
           data-ocid="goals-empty"
@@ -282,18 +327,24 @@ export default function GoalsPage() {
           </div>
           <div className="text-center">
             <p className="text-base font-semibold text-foreground">
-              No goals yet
+              {statusFilter === "all"
+                ? "No goals yet"
+                : "No goals with this status"}
             </p>
             <p className="text-sm text-muted-foreground mt-1">
-              Create your first goal to start tracking objectives
+              {statusFilter === "all"
+                ? "Create your first goal to start tracking objectives"
+                : "Try a different filter or create a new goal"}
             </p>
           </div>
-          <Button asChild className="active-press">
-            <Link to={`/app/${wsId}/goals/new` as "/"}>
-              <Plus className="h-4 w-4 mr-2" />
-              Create First Goal
-            </Link>
-          </Button>
+          {statusFilter === "all" && (
+            <Button asChild className="active-press">
+              <Link to={`/app/${wsId}/goals/new` as "/"}>
+                <Plus className="h-4 w-4 mr-2" />
+                Create First Goal
+              </Link>
+            </Button>
+          )}
         </div>
       ) : (
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">

@@ -91,6 +91,7 @@ function formatDateTimeTz(ts: bigint): string {
 }
 function formatDuration(start: bigint, end: bigint): string {
   const diffMs = Number(end - start);
+  if (diffMs <= 0) return "—";
   const hours = Math.floor(diffMs / 3600000);
   const mins = Math.floor((diffMs % 3600000) / 60000);
   if (hours === 0) return `${mins}m`;
@@ -168,7 +169,7 @@ export default function EventDetailPage() {
   const { workspaceId, eventId } = useParams({
     from: "/app/$workspaceId/calendar/events/$eventId",
   });
-  const { actor } = useBackend();
+  const { actor, isFetching } = useBackend();
   const queryClient = useQueryClient();
   const tenantId = getTenantId();
 
@@ -182,15 +183,17 @@ export default function EventDetailPage() {
   );
   const [editCrossLinks, setEditCrossLinks] = useState<CrossLink[]>([]);
 
-  // Load event
+  // Load event — wait for actor to be ready
   const { data: event, isLoading } = useQuery<Event | null>({
     queryKey: ["event", tenantId, workspaceId, eventId],
     queryFn: async () => {
       if (!actor) return null;
       const res = await actor.getEvent(tenantId, workspaceId, eventId);
-      return res.__kind__ === "ok" ? res.ok : null;
+      if (res.__kind__ === "ok") return res.ok;
+      throw new Error(res.err);
     },
-    enabled: !!actor,
+    enabled: !!actor && !isFetching,
+    retry: 1,
   });
 
   // Load RSVPs
@@ -200,7 +203,7 @@ export default function EventDetailPage() {
       if (!actor) return [];
       return actor.getEventRsvps(tenantId, workspaceId, eventId);
     },
-    enabled: !!actor && !!event,
+    enabled: !!actor && !isFetching && !!event,
   });
 
   function startEditMode(ev: Event) {
@@ -216,11 +219,14 @@ export default function EventDetailPage() {
   const { mutate: updateEvent, isPending: isUpdating } = useMutation({
     mutationFn: async () => {
       if (!actor || !event) throw new Error("Not connected");
+      const start = localToTs(editStartTime);
+      const end = localToTs(editEndTime);
+      if (end <= start) throw new Error("End time must be after start time");
       const input: EventInput = {
         title: editTitle.trim(),
         description: editDescription.trim(),
-        startTime: localToTs(editStartTime),
-        endTime: localToTs(editEndTime),
+        startTime: start,
+        endTime: end,
         recurrence: editRecurrence,
         attendeeIds: event.attendeeIds,
         crossLinks: editCrossLinks,
@@ -239,9 +245,14 @@ export default function EventDetailPage() {
         queryClient.invalidateQueries({ queryKey: ["events"] });
         toast.success("Event updated!");
         setIsEditing(false);
-      } else toast.error(result.err);
+      } else {
+        toast.error(result.err);
+      }
     },
-    onError: () => toast.error("Failed to update event"),
+    onError: (err) =>
+      toast.error(
+        err instanceof Error ? err.message : "Failed to update event",
+      ),
   });
 
   const { mutate: deleteEvent, isPending: isDeleting } = useMutation({
@@ -257,9 +268,14 @@ export default function EventDetailPage() {
           to: "/app/$workspaceId/calendar",
           params: { workspaceId },
         });
-      } else toast.error(result.err);
+      } else {
+        toast.error(result.err);
+      }
     },
-    onError: () => toast.error("Failed to delete event"),
+    onError: (err) =>
+      toast.error(
+        err instanceof Error ? err.message : "Failed to delete event",
+      ),
   });
 
   const { mutate: respondToEvent, isPending: isResponding } = useMutation({
@@ -273,9 +289,12 @@ export default function EventDetailPage() {
           queryKey: ["eventRsvps", tenantId, workspaceId, eventId],
         });
         toast.success("Response recorded");
-      } else toast.error(result.err);
+      } else {
+        toast.error(result.err);
+      }
     },
-    onError: () => toast.error("Failed to respond"),
+    onError: (err) =>
+      toast.error(err instanceof Error ? err.message : "Failed to respond"),
   });
 
   const { mutate: createException, isPending: isCreatingException } =
@@ -309,9 +328,14 @@ export default function EventDetailPage() {
           toast.success(
             "Exception created — you can now edit this occurrence.",
           );
-        } else toast.error(result.err);
+        } else {
+          toast.error(result.err);
+        }
       },
-      onError: () => toast.error("Failed to create exception"),
+      onError: (err) =>
+        toast.error(
+          err instanceof Error ? err.message : "Failed to create exception",
+        ),
     });
 
   const isEditValid =
@@ -458,6 +482,7 @@ export default function EventDetailPage() {
                 id="edit-title"
                 value={editTitle}
                 onChange={(e) => setEditTitle(e.target.value)}
+                autoFocus
                 data-ocid="event-edit-title"
               />
             </div>
@@ -480,7 +505,21 @@ export default function EventDetailPage() {
                   id="edit-start"
                   type="datetime-local"
                   value={editStartTime}
-                  onChange={(e) => setEditStartTime(e.target.value)}
+                  onChange={(e) => {
+                    setEditStartTime(e.target.value);
+                    // Auto-advance end if it would be before new start
+                    if (
+                      e.target.value &&
+                      new Date(editEndTime) <= new Date(e.target.value)
+                    ) {
+                      const d = new Date(e.target.value);
+                      d.setHours(d.getHours() + 1);
+                      const pad2 = (n: number) => n.toString().padStart(2, "0");
+                      setEditEndTime(
+                        `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}T${pad2(d.getHours())}:${pad2(d.getMinutes())}`,
+                      );
+                    }
+                  }}
                   data-ocid="event-edit-start"
                 />
               </div>
@@ -496,6 +535,13 @@ export default function EventDetailPage() {
                   onChange={(e) => setEditEndTime(e.target.value)}
                   data-ocid="event-edit-end"
                 />
+                {editEndTime &&
+                  editStartTime &&
+                  new Date(editEndTime) <= new Date(editStartTime) && (
+                    <p className="text-xs text-red-500">
+                      End time must be after start time
+                    </p>
+                  )}
               </div>
             </div>
             <div className="space-y-2">

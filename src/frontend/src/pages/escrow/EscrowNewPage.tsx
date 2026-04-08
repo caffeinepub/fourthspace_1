@@ -108,7 +108,7 @@ function InsufficientFundsBanner({
 }
 
 export default function EscrowNewPage() {
-  const { actor } = useBackend();
+  const { actor, isFetching } = useBackend();
   const tenantId = getTenantId();
   const { activeWorkspaceId } = useWorkspace();
   const workspaceId = activeWorkspaceId ?? "";
@@ -136,7 +136,7 @@ export default function EscrowNewPage() {
         if (!actor) return null;
         return actor.getWorkspaceTreasury(tenantId, workspaceId);
       },
-      enabled: !!actor && !!workspaceId,
+      enabled: !!actor && !isFetching && !!workspaceId,
     });
 
   const icpBalance = treasury?.icpBalance ?? BigInt(0);

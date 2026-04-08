@@ -103,7 +103,7 @@ export default function EventNewPage() {
   const [category, setCategory] = useState<EventCategory>(
     EventCategory.meeting,
   );
-  const [calendarId, setCalendarId] = useState<string>("personal");
+  const [calendarId, setCalendarId] = useState<string>("");
   const [timezone, setTimezone] = useState(getBrowserTz());
   const [rsvpRequired, setRsvpRequired] = useState(false);
   const [recurrence, setRecurrence] = useState<RecurrenceRule>(
@@ -120,19 +120,32 @@ export default function EventNewPage() {
     queryKey: ["calendars", tenantId, workspaceId],
     queryFn: async () => {
       if (!actor) return [];
-      return actor.listCalendars(tenantId, workspaceId, null);
+      const result = await actor.listCalendars(tenantId, workspaceId, null);
+      return result;
     },
     enabled: !!actor && !isFetching,
+    // Pre-select the first calendar once loaded
+    select: (data) => {
+      if (data.length > 0 && calendarId === "") {
+        // schedule state update outside render
+        setTimeout(() => setCalendarId(data[0].id), 0);
+      }
+      return data;
+    },
   });
 
   const { mutate, isPending } = useMutation({
     mutationFn: async () => {
       if (!actor) throw new Error("Not connected");
+      // Validate dates before submitting
+      const start = localToTs(startTime);
+      const end = localToTs(endTime);
+      if (end <= start) throw new Error("End time must be after start time");
       const input: EventInput = {
         title: title.trim(),
         description: description.trim(),
-        startTime: localToTs(startTime),
-        endTime: localToTs(endTime),
+        startTime: start,
+        endTime: end,
         recurrence,
         attendeeIds: [],
         crossLinks,
@@ -155,7 +168,10 @@ export default function EventNewPage() {
         toast.error(result.err);
       }
     },
-    onError: () => toast.error("Failed to create event"),
+    onError: (err) =>
+      toast.error(
+        err instanceof Error ? err.message : "Failed to create event",
+      ),
   });
 
   const isValid =
@@ -163,6 +179,12 @@ export default function EventNewPage() {
     startTime.length > 0 &&
     endTime.length > 0 &&
     new Date(endTime) > new Date(startTime);
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!isValid) return;
+    mutate();
+  };
 
   return (
     <div className="min-h-screen bg-background animate-fade-in-up">
@@ -196,7 +218,11 @@ export default function EventNewPage() {
       </div>
 
       {/* Form */}
-      <div className="mx-auto max-w-2xl px-6 py-6">
+      <form
+        onSubmit={handleSubmit}
+        className="mx-auto max-w-2xl px-6 py-6"
+        noValidate
+      >
         <div className="rounded-xl border border-border/50 bg-card p-6 space-y-5 shadow-card">
           {/* Title */}
           <div className="space-y-1.5">
@@ -213,6 +239,8 @@ export default function EventNewPage() {
               onChange={(e) => setTitle(e.target.value)}
               data-ocid="event-title-input"
               className="border-border/60 focus:border-primary focus:ring-1 focus:ring-primary/30"
+              required
+              autoFocus
             />
           </div>
 
@@ -250,7 +278,7 @@ export default function EventNewPage() {
                 </SelectTrigger>
                 <SelectContent>
                   {calendars.length === 0 ? (
-                    <SelectItem value="personal">Personal</SelectItem>
+                    <SelectItem value="default">Default Calendar</SelectItem>
                   ) : (
                     calendars.map((cal) => (
                       <SelectItem key={cal.id} value={cal.id}>
@@ -303,6 +331,7 @@ export default function EventNewPage() {
                 value={startTime}
                 onChange={(e) => {
                   setStartTime(e.target.value);
+                  // Auto-advance end time if it would become before start
                   if (
                     e.target.value &&
                     new Date(endTime) <= new Date(e.target.value)
@@ -311,6 +340,7 @@ export default function EventNewPage() {
                 }}
                 data-ocid="event-start-input"
                 className="border-border/60 focus:border-primary focus:ring-1 focus:ring-primary/30"
+                required
               />
             </div>
             <div className="space-y-1.5">
@@ -328,7 +358,15 @@ export default function EventNewPage() {
                 onChange={(e) => setEndTime(e.target.value)}
                 data-ocid="event-end-input"
                 className="border-border/60 focus:border-primary focus:ring-1 focus:ring-primary/30"
+                required
               />
+              {endTime &&
+                startTime &&
+                new Date(endTime) <= new Date(startTime) && (
+                  <p className="text-xs text-red-500 mt-1">
+                    End time must be after start time
+                  </p>
+                )}
             </div>
           </div>
 
@@ -413,6 +451,7 @@ export default function EventNewPage() {
                 <Input
                   type="date"
                   value={endDate}
+                  min={startTime.slice(0, 10)}
                   onChange={(e) => setEndDate(e.target.value)}
                   data-ocid="event-end-date"
                   className="border-border/60"
@@ -469,6 +508,7 @@ export default function EventNewPage() {
 
         <div className="mt-5 flex items-center justify-end gap-3">
           <Button
+            type="button"
             variant="outline"
             onClick={() =>
               navigate({
@@ -481,7 +521,7 @@ export default function EventNewPage() {
             Cancel
           </Button>
           <Button
-            onClick={() => mutate()}
+            type="submit"
             disabled={!isValid || isPending}
             className="bg-red-500 text-white hover:bg-red-600 active-press gap-1.5"
             data-ocid="event-new-save"
@@ -490,7 +530,7 @@ export default function EventNewPage() {
             {isPending ? "Saving..." : "Save Event"}
           </Button>
         </div>
-      </div>
+      </form>
     </div>
   );
 }

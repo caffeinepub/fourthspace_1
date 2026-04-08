@@ -6,6 +6,7 @@ import {
   AlertCircle,
   ArrowLeft,
   BarChart3,
+  CalendarCheck,
   CalendarRange,
   CheckCircle2,
   Circle,
@@ -32,6 +33,8 @@ import WorkloadView from "../../components/views/WorkloadView";
 import { useBackend } from "../../hooks/useBackend";
 import { useWorkspace } from "../../hooks/useWorkspace";
 import {
+  type Milestone,
+  MilestoneStatus,
   type Project,
   ProjectStatus,
   type Task,
@@ -39,16 +42,6 @@ import {
   TaskStatus,
   type WorkspaceMember,
 } from "../../types";
-
-// Extended actor interface to include updateTaskStatus (added after bindgen was last run)
-interface ActorWithTaskStatus {
-  updateTaskStatus(
-    tenantId: string,
-    workspaceId: string,
-    id: string,
-    status: TaskStatus,
-  ): Promise<{ __kind__: "ok"; ok: Task } | { __kind__: "err"; err: string }>;
-}
 
 type ViewMode = "kanban" | "gantt" | "timeline" | "table" | "workload";
 
@@ -565,15 +558,27 @@ export default function ProjectDetailPage() {
     enabled: !!actor && !isFetching && !!projectId,
   });
 
+  const { data: milestones = [] } = useQuery<Milestone[]>({
+    queryKey: ["milestones", tenantId, workspaceId, projectId],
+    queryFn: async () => {
+      if (!actor) return [];
+      return actor.listMilestones(tenantId, workspaceId, projectId);
+    },
+    enabled: !!actor && !isFetching && !!projectId,
+  });
+
   const updateTaskStatusMutation = useMutation({
     mutationFn: async ({
       taskId,
       newStatus,
     }: { taskId: string; newStatus: TaskStatus }) => {
       if (!actor) throw new Error("Not connected");
-      const result = await (
-        actor as unknown as ActorWithTaskStatus
-      ).updateTaskStatus(tenantId, workspaceId, taskId, newStatus);
+      const result = await actor.updateTaskStatus(
+        tenantId,
+        workspaceId,
+        taskId,
+        newStatus,
+      );
       if (result.__kind__ === "err") throw new Error(result.err);
       return { taskId, newStatus };
     },
@@ -887,6 +892,115 @@ export default function ProjectDetailPage() {
           <WorkloadView tasks={tasksWithStatus} projectId={projectId} />
         )}
       </div>
+
+      {/* Milestones Section */}
+      {milestones.length > 0 && (
+        <div className="px-4 sm:px-6 md:px-8 pb-5 border-t border-border bg-muted/10 pt-5">
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-2">
+              <Flag className="h-4 w-4 text-orange-500" />
+              <h2 className="font-display text-base font-bold text-foreground">
+                Milestones
+              </h2>
+              <span className="text-xs text-muted-foreground bg-muted px-1.5 py-0.5 rounded-full">
+                {milestones.length}
+              </span>
+            </div>
+            <Link
+              to="/app/$workspaceId/projects/$projectId/milestones"
+              params={{ workspaceId, projectId }}
+              className="text-xs text-primary hover:underline font-medium"
+              data-ocid="view-all-milestones"
+            >
+              View all
+            </Link>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+            {milestones.slice(0, 6).map((ms) => {
+              const dueMs = Number(ms.dueDate) / 1_000_000;
+              const isOverdue =
+                dueMs < Date.now() && ms.status !== MilestoneStatus.reached;
+              const linkedDone = tasksWithStatus.filter(
+                (t) =>
+                  ms.linkedTaskIds.includes(t.id) &&
+                  t.status === TaskStatus.Done,
+              ).length;
+              const linkedTotal = ms.linkedTaskIds.length;
+              const pct =
+                linkedTotal > 0
+                  ? Math.round((linkedDone / linkedTotal) * 100)
+                  : 0;
+              const statusColors: Record<MilestoneStatus, string> = {
+                [MilestoneStatus.reached]:
+                  "text-emerald-500 bg-emerald-500/10 border-emerald-200",
+                [MilestoneStatus.upcoming]:
+                  "text-blue-500 bg-blue-500/10 border-blue-200",
+                [MilestoneStatus.missed]:
+                  "text-destructive bg-destructive/10 border-destructive/20",
+              };
+              const statusLabels: Record<MilestoneStatus, string> = {
+                [MilestoneStatus.reached]: "Reached",
+                [MilestoneStatus.upcoming]: "Upcoming",
+                [MilestoneStatus.missed]: "Missed",
+              };
+              return (
+                <div
+                  key={ms.id}
+                  className="rounded-xl border border-border/50 bg-card p-4 space-y-3 hover:border-primary/30 transition-colors"
+                  data-ocid={`milestone-card-${ms.id}`}
+                >
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="flex items-start gap-2 min-w-0">
+                      <Diamond className="h-3.5 w-3.5 text-orange-500 shrink-0 mt-0.5" />
+                      <p className="text-xs font-semibold text-foreground line-clamp-2">
+                        {ms.title}
+                      </p>
+                    </div>
+                    <span
+                      className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-medium border ${statusColors[ms.status] ?? statusColors[MilestoneStatus.upcoming]}`}
+                    >
+                      {statusLabels[ms.status] ?? "Upcoming"}
+                    </span>
+                  </div>
+                  {linkedTotal > 0 && (
+                    <div className="space-y-1">
+                      <div className="flex items-center justify-between text-[11px] text-muted-foreground">
+                        <span>
+                          {linkedDone}/{linkedTotal} tasks
+                        </span>
+                        <span className="font-mono font-semibold text-foreground">
+                          {pct}%
+                        </span>
+                      </div>
+                      <div className="h-1 w-full rounded-full bg-muted overflow-hidden">
+                        <div
+                          className="h-full bg-primary rounded-full transition-all"
+                          style={{ width: `${pct}%` }}
+                        />
+                      </div>
+                    </div>
+                  )}
+                  <div
+                    className={`flex items-center gap-1 text-[11px] ${isOverdue ? "text-destructive" : "text-muted-foreground"}`}
+                  >
+                    <CalendarCheck className="h-3 w-3 shrink-0" />
+                    <span>
+                      {new Date(dueMs).toLocaleDateString("en-US", {
+                        month: "short",
+                        day: "numeric",
+                        year: "numeric",
+                      })}
+                    </span>
+                    {isOverdue && (
+                      <span className="font-medium">· Overdue</span>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       {/* Whiteboards Section */}
       <div className="px-4 sm:px-6 md:px-8 pb-8 border-t border-border bg-muted/20 pt-5">

@@ -371,16 +371,43 @@ export default function TaskDetailPage() {
     saveMutation.mutate(buildInput());
   }
 
+  // ─── Status mutation (dedicated endpoint) ─────────────────────────────────
+
+  const updateStatusMutation = useMutation({
+    mutationFn: async (newStatus: TaskStatus) => {
+      if (!actor) throw new Error("Not connected");
+      const result = await actor.updateTaskStatus(
+        tenantId,
+        workspaceId,
+        taskId,
+        newStatus,
+      );
+      if (result.__kind__ === "err") throw new Error(result.err);
+      return result.ok;
+    },
+    onSuccess: (updated) => {
+      queryClient.invalidateQueries({
+        queryKey: ["tasks", tenantId, workspaceId, projectId],
+      });
+      queryClient.setQueryData(
+        ["task", tenantId, workspaceId, taskId],
+        updated,
+      );
+    },
+    onError: (err: Error) => {
+      // Revert optimistic update on failure
+      setStatus(task?.status ?? TaskStatus.Todo);
+      toast.error(err.message || "Failed to update status");
+    },
+  });
+
   // ─── Field change handlers ─────────────────────────────────────────────────
 
   function handleStatusChange(v: TaskStatus) {
-    setStatus(v);
+    setStatus(v); // optimistic update
     setIsDirty(true);
     if (!isNew) {
-      // Status isn't persisted by backend updateTask (TaskInput has no status field),
-      // but we still call updateTask to persist other field changes and trigger query sync.
-      // The local status state is the source of truth for this session.
-      triggerSave();
+      updateStatusMutation.mutate(v);
       toast.success(
         `Status set to ${STATUS_OPTIONS.find((o) => o.value === v)?.label ?? v}`,
       );

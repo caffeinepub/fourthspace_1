@@ -6,6 +6,8 @@ import NTypes "../types/notes";
 import PTypes "../types/projects";
 import GTypes "../types/goals";
 import WTypes "../types/workspace";
+import WalTypes "../types/wallet";
+import PayTypes "../types/payroll";
 import Int "mo:core/Int";
 
 module {
@@ -16,6 +18,8 @@ module {
     memberCount : Nat;
     goalCount : Nat;
     taskCount : Nat;
+    walletBalance : Nat;       // treasury ICP balance in e8s (bigint-compatible Nat)
+    payrollTotal : Float;      // sum of approved/processed payroll record gross amounts
   };
 
   public type ActivityEntry = {
@@ -35,6 +39,8 @@ module {
     tasks : [(Common.EntityId, PTypes.Task)],
     goals : [(Common.EntityId, GTypes.Goal)],
     workspaces : [(Common.EntityId, WTypes.Workspace)],
+    walletAccounts : [(Common.EntityId, WalTypes.WalletAccount)],
+    payrollRecords : [(Common.EntityId, PayTypes.PayrollRecord)],
   ) : DashboardStats {
     let noteCount = notes.filter(
       func((_, n)) { n.tenantId == tenantId and n.workspaceId == workspaceId },
@@ -52,7 +58,25 @@ module {
       case null 0;
       case (?(_, ws)) ws.members.size();
     };
-    { noteCount; projectCount; memberCount; goalCount; taskCount }
+    // Treasury ICP balance from stored wallet account (updated live by getWorkspaceTreasury)
+    let walletBalance = switch (walletAccounts.find(
+      func((_, a)) { a.tenantId == tenantId and a.workspaceId == workspaceId and a.accountType == #treasury }
+    )) {
+      case null 0;
+      case (?(_, a)) a.icpBalance;
+    };
+    // Sum approved/processed payroll records gross amounts
+    let payrollFiltered = payrollRecords.filter(
+      func((_, r)) {
+        r.tenantId == tenantId and r.workspaceId == workspaceId and
+        (r.status == #Approved or r.status == #Processed)
+      }
+    );
+    var payrollTotal : Float = 0.0;
+    for ((_, r) in payrollFiltered.values()) {
+      payrollTotal += r.grossAmount;
+    };
+    { noteCount; projectCount; memberCount; goalCount; taskCount; walletBalance; payrollTotal }
   };
 
   /// Build a recent activity feed from notes, tasks, and projects (most recent first, up to limit).
@@ -69,7 +93,7 @@ module {
 
     // Notes — creation events
     let wsNotes = notes.filter(func((_, n)) { n.tenantId == tenantId and n.workspaceId == workspaceId });
-    for ((_, n) in wsNotes.vals()) {
+    for ((_, n) in wsNotes.values()) {
       entries := entries.concat([{
         actorId = n.authorId.toText();
         action = "created note";
@@ -81,7 +105,7 @@ module {
 
     // Projects — creation events
     let wsProjects = projects.filter(func((_, p)) { p.tenantId == tenantId and p.workspaceId == workspaceId });
-    for ((_, p) in wsProjects.vals()) {
+    for ((_, p) in wsProjects.values()) {
       entries := entries.concat([{
         actorId = p.ownerId.toText();
         action = "created project";
@@ -93,7 +117,7 @@ module {
 
     // Tasks — update events
     let wsTasks = tasks.filter(func((_, t)) { t.tenantId == tenantId and t.workspaceId == workspaceId });
-    for ((_, t) in wsTasks.vals()) {
+    for ((_, t) in wsTasks.values()) {
       entries := entries.concat([{
         actorId = switch (t.assigneeId) { case null ""; case (?a) a.toText() };
         action = "updated task";
@@ -105,7 +129,7 @@ module {
 
     // Goals — creation events
     let wsGoals = goals.filter(func((_, g)) { g.tenantId == tenantId and g.workspaceId == workspaceId });
-    for ((_, g) in wsGoals.vals()) {
+    for ((_, g) in wsGoals.values()) {
       entries := entries.concat([{
         actorId = g.ownerId.toText();
         action = "created goal";

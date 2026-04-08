@@ -330,7 +330,9 @@ export interface DashboardStats {
   'goalCount' : bigint,
   'noteCount' : bigint,
   'taskCount' : bigint,
+  'payrollTotal' : number,
   'projectCount' : bigint,
+  'walletBalance' : bigint,
 }
 export interface Deduction {
   'id' : EntityId,
@@ -1472,7 +1474,7 @@ export interface _SERVICE {
       { 'err' : string }
   >,
   /**
-   * / Add an off-cycle payment — requires sufficient treasury balance if processImmediately.
+   * / Add an off-cycle payment — requires non-zero treasury balance before processing.
    */
   'addOffCyclePayment' : ActorMethod<
     [TenantId, WorkspaceId, OffCyclePaymentInput],
@@ -1584,8 +1586,9 @@ export interface _SERVICE {
       { 'err' : string }
   >,
   /**
-   * / Create an escrow — requires the caller (payer) to have sufficient treasury balance.
-   * / Queries the live ICP/ckBTC ledger balance BEFORE creating the record.
+   * / Create an escrow — requires the caller (payer) to have a non-zero wallet balance (personal or treasury).
+   * / Checks the caller's personal ICP/ckBTC balance > 0 BEFORE creating the record.
+   * / The actual funding is done via depositEscrow (ICRC-2) or fundEscrow (direct transfer).
    */
   'createEscrow' : ActorMethod<
     [TenantId, WorkspaceId, EscrowInput],
@@ -1847,6 +1850,12 @@ export interface _SERVICE {
     [TenantId, WorkspaceId, EntityId, [] | [TxFilter]],
     string
   >,
+  /**
+   * / Fund an escrow from the caller's personal wallet via direct ledger transfer.
+   * / State-before-transfer: transitions escrow to #Funded in state BEFORE the async ledger call.
+   * / On ledger failure, the contract remains #Funded in state — the admin can refund or resolve.
+   * / For ICRC-2 approve/transfer_from flow, use depositEscrow instead.
+   */
   'fundEscrow' : ActorMethod<
     [TenantId, WorkspaceId, EntityId],
     { 'ok' : EscrowContract } |
@@ -2209,6 +2218,14 @@ export interface _SERVICE {
     [TenantId, WorkspaceId, Timestamp, Timestamp],
     Array<Event>
   >,
+  /**
+   * / List events in a date range with recurring event exceptions applied.
+   * / Deleted exception occurrences are omitted; modified occurrences use override data.
+   */
+  'listEventsWithExceptions' : ActorMethod<
+    [TenantId, WorkspaceId, Timestamp, Timestamp],
+    Array<Event>
+  >,
   'listFormSubmissions' : ActorMethod<
     [TenantId, WorkspaceId, EntityId],
     Array<FormSubmission>
@@ -2346,11 +2363,21 @@ export interface _SERVICE {
     [WorkspaceId, TenantId],
     string
   >,
+  'rejectMilestone' : ActorMethod<
+    [TenantId, WorkspaceId, EntityId],
+    { 'ok' : EscrowMilestone } |
+      { 'err' : string }
+  >,
   'rejectPayrollRecord' : ActorMethod<
     [TenantId, WorkspaceId, EntityId, string],
     { 'ok' : PayrollRecord } |
       { 'err' : string }
   >,
+  /**
+   * / Release a funded escrow — transfers funds from workspace treasury to the payee via real ledger.
+   * / State-before-transfer: transitions escrow to #Released in state BEFORE the async ledger call.
+   * / On ledger failure, escrow remains #Released in state — admin must resolve manually.
+   */
   'releaseEscrow' : ActorMethod<
     [TenantId, WorkspaceId, EntityId],
     { 'ok' : EscrowContract } |
@@ -2393,6 +2420,10 @@ export interface _SERVICE {
     { 'ok' : null } |
       { 'err' : string }
   >,
+  /**
+   * / Resolve a dispute — updates dispute status and also marks the parent escrow as #Cancelled.
+   * / All workspace members can see the updated escrow status after resolution.
+   */
   'resolveDispute' : ActorMethod<
     [TenantId, WorkspaceId, EntityId, string],
     { 'ok' : EscrowDispute } |

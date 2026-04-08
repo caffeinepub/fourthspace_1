@@ -101,4 +101,37 @@ module {
       case null (false, store);
     }
   };
+
+  /// When a task transitions to Done, check all milestones that link this task.
+  /// If all linked tasks in a milestone are Done or Blocked, auto-advance the milestone to #reached.
+  public func onTaskStatusChanged(
+    milestoneStore : [(Common.EntityId, Types.Milestone)],
+    taskStore : [(Common.EntityId, Types.Task)],
+    tenantId : Common.TenantId,
+    workspaceId : Common.WorkspaceId,
+    changedTaskId : Common.EntityId,
+    newTaskStatus : Types.TaskStatus,
+  ) : [(Common.EntityId, Types.Milestone)] {
+    // Only act when a task is completed
+    if (newTaskStatus != #Done) return milestoneStore;
+    let mMap = toMap(milestoneStore);
+    let taskMap = Map.fromArray<Common.EntityId, Types.Task>(taskStore);
+    // Check each milestone in this workspace that links the changed task
+    mMap.forEach(func(msId : Common.EntityId, ms : Types.Milestone) {
+      if (ms.tenantId != tenantId or ms.workspaceId != workspaceId) return;
+      if (not ms.linkedTaskIds.any(func(tid : Common.EntityId) : Bool { tid == changedTaskId })) return;
+      // Check if all linked tasks are now done
+      let allDone = ms.linkedTaskIds.all(func(tid : Common.EntityId) : Bool {
+        switch (taskMap.get(tid)) {
+          case (?t) t.status == #Done;
+          case null true; // treat missing/deleted tasks as done
+        }
+      });
+      if (allDone and ms.status == #upcoming) {
+        let updated : Types.Milestone = { ms with status = #reached; updatedAt = Time.now() };
+        mMap.add(msId, updated);
+      };
+    });
+    mMap.toArray()
+  };
 };

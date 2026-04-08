@@ -125,16 +125,25 @@ module {
   };
 
   public func updateTaskStatus(
-    store : [(Common.EntityId, PTypes.Task)],
+    taskStore : [(Common.EntityId, PTypes.Task)],
+    milestoneStore : [(Common.EntityId, PTypes.Milestone)],
     tenantId : Common.TenantId,
     workspaceId : Common.WorkspaceId,
     id : Common.EntityId,
     status : PTypes.TaskStatus,
-  ) : { result : { #ok : PTypes.Task; #err : Text }; store : [(Common.EntityId, PTypes.Task)] } {
-    let (maybeTask, updated) = Projects.updateTaskStatus(store, tenantId, workspaceId, id, status);
+  ) : {
+    result : { #ok : PTypes.Task; #err : Text };
+    taskStore : [(Common.EntityId, PTypes.Task)];
+    milestoneStore : [(Common.EntityId, PTypes.Milestone)];
+  } {
+    let (maybeTask, updatedTasks) = Projects.updateTaskStatus(taskStore, tenantId, workspaceId, id, status);
     switch (maybeTask) {
-      case (?t) ({ result = #ok(t); store = updated });
-      case null ({ result = #err("Task not found or access denied"); store = store });
+      case (?t) {
+        // Auto-advance milestones that link this task when status changes
+        let updatedMilestones = Milestones.onTaskStatusChanged(milestoneStore, updatedTasks, tenantId, workspaceId, id, status);
+        { result = #ok t; taskStore = updatedTasks; milestoneStore = updatedMilestones }
+      };
+      case null ({ result = #err("Task not found or access denied"); taskStore = taskStore; milestoneStore = milestoneStore });
     }
   };
 

@@ -243,13 +243,18 @@ module {
   /// Create or find an existing DM channel between two users.
   /// DM channels are private (isPublic=false) with exactly 2 members.
   /// The name is derived deterministically from the two principals (sorted).
+  /// A user cannot create a DM channel with themselves.
   public func createOrGetDMChannel(
     channelStore : [(Common.EntityId, Types.Channel)],
     tenantId : Common.TenantId,
     workspaceId : Common.WorkspaceId,
     caller : Common.UserId,
     targetUserId : Common.UserId,
-  ) : (Types.Channel, [(Common.EntityId, Types.Channel)]) {
+  ) : (?Types.Channel, [(Common.EntityId, Types.Channel)]) {
+    // Prevent self-DM
+    if (Principal.equal(caller, targetUserId)) {
+      return (null, channelStore);
+    };
     let callerText = caller.toText();
     let targetText = targetUserId.toText();
     // Deterministic DM name so both participants find the same channel
@@ -263,7 +268,7 @@ module {
     switch (m.values().find(func(ch : Types.Channel) : Bool {
       ch.tenantId == tenantId and ch.workspaceId == workspaceId and ch.name == dmName
     })) {
-      case (?existing) (existing, channelStore);
+      case (?existing) (?existing, channelStore);
       case null {
         let now = Time.now();
         let id = genId(dmName);
@@ -283,7 +288,7 @@ module {
           mentionFlags = ?[];
         };
         m.add(id, channel);
-        (channel, channelToStore(m))
+        (?channel, channelToStore(m))
       };
     }
   };
