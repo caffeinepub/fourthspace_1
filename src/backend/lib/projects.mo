@@ -26,6 +26,7 @@ module {
   public func createProject(
     store : [(Common.EntityId, Types.Project)],
     tenantId : Common.TenantId,
+    workspaceId : Common.WorkspaceId,
     caller : Common.UserId,
     input : Types.ProjectInput,
   ) : (Types.Project, [(Common.EntityId, Types.Project)]) {
@@ -34,6 +35,7 @@ module {
     let project : Types.Project = {
       id;
       tenantId;
+      workspaceId;
       name = input.name;
       description = input.description;
       status = #Active;
@@ -51,11 +53,12 @@ module {
   public func getProject(
     store : [(Common.EntityId, Types.Project)],
     tenantId : Common.TenantId,
+    workspaceId : Common.WorkspaceId,
     id : Common.EntityId,
   ) : ?Types.Project {
     let m = toProjectMap(store);
     switch (m.get(id)) {
-      case (?p) { if (p.tenantId == tenantId) ?p else null };
+      case (?p) { if (p.tenantId == tenantId and p.workspaceId == workspaceId) ?p else null };
       case null null;
     }
   };
@@ -63,16 +66,18 @@ module {
   public func listProjects(
     store : [(Common.EntityId, Types.Project)],
     tenantId : Common.TenantId,
+    workspaceId : Common.WorkspaceId,
   ) : [Types.Project] {
     let m = toProjectMap(store);
-    m.values().filter(func(p : Types.Project) : Bool { p.tenantId == tenantId }).toArray(
-      
-    )
+    m.values().filter(func(p : Types.Project) : Bool {
+      p.tenantId == tenantId and p.workspaceId == workspaceId
+    }).toArray()
   };
 
   public func updateProject(
     store : [(Common.EntityId, Types.Project)],
     tenantId : Common.TenantId,
+    workspaceId : Common.WorkspaceId,
     id : Common.EntityId,
     caller : Common.UserId,
     input : Types.ProjectInput,
@@ -80,7 +85,7 @@ module {
     let m = toProjectMap(store);
     switch (m.get(id)) {
       case (?existing) {
-        if (existing.tenantId != tenantId) return (null, store);
+        if (existing.tenantId != tenantId or existing.workspaceId != workspaceId) return (null, store);
         let updated : Types.Project = {
           existing with
           name = input.name;
@@ -98,13 +103,14 @@ module {
   public func archiveProject(
     store : [(Common.EntityId, Types.Project)],
     tenantId : Common.TenantId,
+    workspaceId : Common.WorkspaceId,
     id : Common.EntityId,
     caller : Common.UserId,
   ) : (?Types.Project, [(Common.EntityId, Types.Project)]) {
     let m = toProjectMap(store);
     switch (m.get(id)) {
       case (?existing) {
-        if (existing.tenantId != tenantId) return (null, store);
+        if (existing.tenantId != tenantId or existing.workspaceId != workspaceId) return (null, store);
         let archived : Types.Project = {
           existing with
           status = #Archived;
@@ -122,6 +128,7 @@ module {
   public func createTask(
     store : [(Common.EntityId, Types.Task)],
     tenantId : Common.TenantId,
+    workspaceId : Common.WorkspaceId,
     caller : Common.UserId,
     input : Types.TaskInput,
   ) : (Types.Task, [(Common.EntityId, Types.Task)]) {
@@ -130,6 +137,7 @@ module {
     let task : Types.Task = {
       id;
       tenantId;
+      workspaceId;
       projectId = input.projectId;
       title = input.title;
       description = input.description;
@@ -149,11 +157,12 @@ module {
   public func getTask(
     store : [(Common.EntityId, Types.Task)],
     tenantId : Common.TenantId,
+    workspaceId : Common.WorkspaceId,
     id : Common.EntityId,
   ) : ?Types.Task {
     let m = toTaskMap(store);
     switch (m.get(id)) {
-      case (?t) { if (t.tenantId == tenantId) ?t else null };
+      case (?t) { if (t.tenantId == tenantId and t.workspaceId == workspaceId) ?t else null };
       case null null;
     }
   };
@@ -161,12 +170,13 @@ module {
   public func listTasks(
     store : [(Common.EntityId, Types.Task)],
     tenantId : Common.TenantId,
+    workspaceId : Common.WorkspaceId,
     projectId : Common.EntityId,
   ) : [Types.Task] {
     let m = toTaskMap(store);
     m.values().filter(
         func(t : Types.Task) : Bool {
-          t.tenantId == tenantId and t.projectId == projectId
+          t.tenantId == tenantId and t.workspaceId == workspaceId and t.projectId == projectId
         },
       ).toArray()
   };
@@ -174,6 +184,7 @@ module {
   public func updateTask(
     store : [(Common.EntityId, Types.Task)],
     tenantId : Common.TenantId,
+    workspaceId : Common.WorkspaceId,
     id : Common.EntityId,
     caller : Common.UserId,
     input : Types.TaskInput,
@@ -181,7 +192,7 @@ module {
     let m = toTaskMap(store);
     switch (m.get(id)) {
       case (?existing) {
-        if (existing.tenantId != tenantId) return (null, store);
+        if (existing.tenantId != tenantId or existing.workspaceId != workspaceId) return (null, store);
         let updated : Types.Task = {
           existing with
           title = input.title;
@@ -202,13 +213,14 @@ module {
   public func deleteTask(
     store : [(Common.EntityId, Types.Task)],
     tenantId : Common.TenantId,
+    workspaceId : Common.WorkspaceId,
     id : Common.EntityId,
     caller : Common.UserId,
   ) : (Bool, [(Common.EntityId, Types.Task)]) {
     let m = toTaskMap(store);
     switch (m.get(id)) {
       case (?t) {
-        if (t.tenantId != tenantId) return (false, store);
+        if (t.tenantId != tenantId or t.workspaceId != workspaceId) return (false, store);
         m.remove(id);
         (true, m.toArray())
       };

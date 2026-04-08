@@ -1,4 +1,3 @@
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -9,17 +8,17 @@ import { format } from "date-fns";
 import {
   ArrowLeft,
   ChevronDown,
+  Pause,
   Plus,
   RefreshCw,
-  ToggleLeft,
-  ToggleRight,
+  Trash2,
   Wallet,
   X,
 } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 import { useBackend } from "../../hooks/useBackend";
-import { getTenantId } from "../../hooks/useWorkspace";
+import { getTenantId, useWorkspace } from "../../hooks/useWorkspace";
 import { AssetType, PayFrequency } from "../../types";
 import type { RecurringPayment, WalletAccount } from "../../types";
 
@@ -45,8 +44,22 @@ function truncateAddress(addr: string, len = 10): string {
 const FREQ_LABELS: Record<PayFrequency, string> = {
   [PayFrequency.Weekly]: "Weekly",
   [PayFrequency.BiWeekly]: "Bi-Weekly",
+  [PayFrequency.SemiMonthly]: "Semi-Monthly",
   [PayFrequency.Monthly]: "Monthly",
   [PayFrequency.Quarterly]: "Quarterly",
+};
+
+const FREQ_COLORS: Record<string, string> = {
+  [PayFrequency.Weekly]:
+    "bg-cyan-500/15 text-cyan-700 dark:text-cyan-400 border-cyan-500/20",
+  [PayFrequency.BiWeekly]:
+    "bg-blue-500/15 text-blue-700 dark:text-blue-400 border-blue-500/20",
+  [PayFrequency.SemiMonthly]:
+    "bg-purple-500/15 text-purple-700 dark:text-purple-400 border-purple-500/20",
+  [PayFrequency.Monthly]:
+    "bg-violet-500/15 text-violet-700 dark:text-violet-400 border-violet-500/20",
+  [PayFrequency.Quarterly]:
+    "bg-amber-500/15 text-amber-700 dark:text-amber-400 border-amber-500/20",
 };
 
 function RecurringRow({
@@ -60,28 +73,26 @@ function RecurringRow({
 }) {
   return (
     <div
-      className="flex items-center gap-4 rounded-xl border border-border bg-card p-4 transition-smooth hover:border-violet-500/30"
+      className="flex items-center gap-4 rounded-xl border border-border/50 bg-card shadow-card p-4 hover:border-violet-400/40 transition-all"
       data-ocid={`recurring-row-${payment.id}`}
     >
       <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-violet-500/10">
         <RefreshCw className="h-5 w-5 text-violet-500" />
       </div>
-
       <div className="flex-1 min-w-0">
         <p className="text-sm font-semibold text-foreground truncate font-mono">
           {truncateAddress(payment.toAddress)}
         </p>
         <div className="flex items-center gap-2 mt-0.5 flex-wrap">
-          <span className="text-xs text-muted-foreground">
+          <span className="text-xs font-mono text-muted-foreground">
             {formatAmount(payment.amount, payment.asset)}
           </span>
           <span className="text-muted-foreground text-xs">·</span>
-          <Badge
-            variant="secondary"
-            className="text-xs bg-violet-500/10 text-violet-600 dark:text-violet-400"
+          <span
+            className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium border ${FREQ_COLORS[payment.frequency] ?? "bg-muted text-muted-foreground border-border"}`}
           >
             {FREQ_LABELS[payment.frequency]}
-          </Badge>
+          </span>
         </div>
         <p className="text-xs text-muted-foreground mt-0.5">
           Next:{" "}
@@ -91,20 +102,22 @@ function RecurringRow({
           )}
         </p>
       </div>
-
       <div className="flex items-center gap-2 shrink-0">
-        <div className="flex items-center gap-1.5">
+        <span
+          className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium border ${payment.isActive ? "bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 border-emerald-500/20" : "bg-muted text-muted-foreground border-border"}`}
+        >
           {payment.isActive ? (
-            <ToggleRight className="h-5 w-5 text-emerald-500" />
+            <>
+              <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+              Active
+            </>
           ) : (
-            <ToggleLeft className="h-5 w-5 text-muted-foreground" />
+            <>
+              <Pause className="h-3 w-3" />
+              Inactive
+            </>
           )}
-          <span
-            className={`text-xs font-medium ${payment.isActive ? "text-emerald-600 dark:text-emerald-400" : "text-muted-foreground"}`}
-          >
-            {payment.isActive ? "Active" : "Inactive"}
-          </span>
-        </div>
+        </span>
         {payment.isActive && (
           <Button
             variant="ghost"
@@ -115,7 +128,7 @@ function RecurringRow({
             disabled={isCancelling}
             data-ocid={`cancel-recurring-${payment.id}`}
           >
-            <X className="h-4 w-4" />
+            <Trash2 className="h-4 w-4" />
           </Button>
         )}
       </div>
@@ -126,17 +139,18 @@ function RecurringRow({
 function NewPaymentForm({
   accountId,
   tenantId,
+  workspaceId,
   onSuccess,
   onCancel,
 }: {
   accountId: string;
   tenantId: string;
+  workspaceId: string;
   onSuccess: () => void;
   onCancel: () => void;
 }) {
   const { actor } = useBackend();
   const queryClient = useQueryClient();
-
   const [toAddress, setToAddress] = useState("");
   const [amount, setAmount] = useState("");
   const [asset, setAsset] = useState<AssetType>(AssetType.ICP);
@@ -152,6 +166,7 @@ function NewPaymentForm({
       if (!actor) throw new Error("No actor");
       const res = await actor.createRecurringPayment(
         tenantId,
+        workspaceId,
         accountId,
         toAddress.trim(),
         amountToBigInt(amount),
@@ -163,7 +178,7 @@ function NewPaymentForm({
     },
     onSuccess: () => {
       queryClient.invalidateQueries({
-        queryKey: ["recurringPayments", tenantId],
+        queryKey: ["recurringPayments", tenantId, workspaceId],
       });
       toast.success("Recurring payment created");
       onSuccess();
@@ -179,13 +194,13 @@ function NewPaymentForm({
       <h3 className="font-display font-semibold text-foreground">
         New Recurring Payment
       </h3>
-
       <div className="grid grid-cols-2 gap-3">
         <div className="space-y-1.5">
-          <Label htmlFor="rec-asset">Asset</Label>
+          <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+            Asset
+          </Label>
           <div className="relative">
             <select
-              id="rec-asset"
               value={asset}
               onChange={(e) => setAsset(e.target.value as AssetType)}
               className="w-full appearance-none rounded-lg border border-input bg-background px-3 py-2.5 pr-8 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
@@ -198,10 +213,11 @@ function NewPaymentForm({
           </div>
         </div>
         <div className="space-y-1.5">
-          <Label htmlFor="rec-freq">Frequency</Label>
+          <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+            Frequency
+          </Label>
           <div className="relative">
             <select
-              id="rec-freq"
               value={frequency}
               onChange={(e) => setFrequency(e.target.value as PayFrequency)}
               className="w-full appearance-none rounded-lg border border-input bg-background px-3 py-2.5 pr-8 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
@@ -219,25 +235,26 @@ function NewPaymentForm({
           </div>
         </div>
       </div>
-
       <div className="space-y-1.5">
-        <Label htmlFor="rec-amount">Amount</Label>
+        <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+          Amount
+        </Label>
         <Input
-          id="rec-amount"
           type="number"
           min="0"
           step="0.0001"
           placeholder="0.0000"
           value={amount}
           onChange={(e) => setAmount(e.target.value)}
+          className="font-mono text-lg tabular-nums h-12"
           data-ocid="rec-amount-input"
         />
       </div>
-
       <div className="space-y-1.5">
-        <Label htmlFor="rec-to">To Address</Label>
+        <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+          To Address
+        </Label>
         <Input
-          id="rec-to"
           type="text"
           placeholder="Principal or account ID"
           value={toAddress}
@@ -246,7 +263,6 @@ function NewPaymentForm({
           data-ocid="rec-to-input"
         />
       </div>
-
       <div className="flex gap-3 pt-1">
         <Button
           variant="outline"
@@ -257,7 +273,7 @@ function NewPaymentForm({
           Cancel
         </Button>
         <Button
-          className="flex-1 bg-violet-600 hover:bg-violet-700 text-white"
+          className="flex-1 bg-violet-600 hover:bg-violet-700 text-white active-press"
           disabled={!canSubmit || createMutation.isPending}
           onClick={() => createMutation.mutate()}
           data-ocid="rec-submit-btn"
@@ -273,42 +289,43 @@ function NewPaymentForm({
 export default function WalletRecurringPage() {
   const { actor, isFetching } = useBackend();
   const tenantId = getTenantId();
+  const { activeWorkspaceId } = useWorkspace();
+  const workspaceId = activeWorkspaceId ?? "";
   const navigate = useNavigate();
   const queryClient = useQueryClient();
-
   const [showForm, setShowForm] = useState(false);
 
   const { data: account, isLoading: accountLoading } =
     useQuery<WalletAccount | null>({
-      queryKey: ["walletAccount", tenantId],
+      queryKey: ["walletAccount", tenantId, workspaceId],
       queryFn: async () => {
         if (!actor) return null;
-        return actor.getMyWalletAccount(tenantId);
+        return actor.getMyWalletAccount(tenantId, workspaceId);
       },
-      enabled: !!actor && !isFetching,
+      enabled: !!actor && !isFetching && !!workspaceId,
     });
 
   const { data: payments, isLoading: paymentsLoading } = useQuery<
     RecurringPayment[]
   >({
-    queryKey: ["recurringPayments", tenantId, account?.id],
+    queryKey: ["recurringPayments", tenantId, workspaceId, account?.id],
     queryFn: async () => {
       if (!actor || !account) return [];
-      return actor.listRecurringPayments(tenantId, account.id);
+      return actor.listRecurringPayments(tenantId, workspaceId, account.id);
     },
-    enabled: !!actor && !isFetching && !!account,
+    enabled: !!actor && !isFetching && !!account && !!workspaceId,
   });
 
   const cancelMutation = useMutation({
     mutationFn: async (id: string) => {
       if (!actor) throw new Error("No actor");
-      const res = await actor.cancelRecurringPayment(tenantId, id);
+      const res = await actor.cancelRecurringPayment(tenantId, workspaceId, id);
       if (res.__kind__ === "err") throw new Error(res.err);
       return res.ok;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({
-        queryKey: ["recurringPayments", tenantId],
+        queryKey: ["recurringPayments", tenantId, workspaceId],
       });
       toast.success("Recurring payment cancelled");
     },
@@ -318,19 +335,19 @@ export default function WalletRecurringPage() {
   const isLoading = accountLoading || paymentsLoading;
 
   return (
-    <div className="p-6 md:p-8 max-w-2xl mx-auto space-y-6">
+    <div className="animate-fade-in-up p-6 space-y-6 max-w-2xl mx-auto">
       <div className="flex items-center gap-3">
         <Button
           variant="ghost"
           size="icon"
-          onClick={() => navigate({ to: "/app/wallet" })}
+          onClick={() => navigate({ to: `/app/${workspaceId}/wallet` })}
           aria-label="Back to wallet"
           data-ocid="recurring-back-btn"
         >
           <ArrowLeft className="h-5 w-5" />
         </Button>
         <div className="flex-1 min-w-0">
-          <h1 className="font-display text-2xl font-bold text-foreground flex items-center gap-2">
+          <h1 className="font-display text-2xl font-bold tracking-tight text-foreground flex items-center gap-2">
             <RefreshCw className="h-6 w-6 text-violet-500" />
             Recurring Payments
           </h1>
@@ -340,7 +357,7 @@ export default function WalletRecurringPage() {
         </div>
         {account && !showForm && (
           <Button
-            className="bg-violet-600 hover:bg-violet-700 text-white shrink-0"
+            className="bg-violet-600 hover:bg-violet-700 text-white shrink-0 active-press"
             size="sm"
             onClick={() => setShowForm(true)}
             data-ocid="recurring-new-btn"
@@ -369,7 +386,7 @@ export default function WalletRecurringPage() {
             Create a wallet first to set up recurring payments.
           </p>
           <Button asChild className="mt-6" variant="outline">
-            <Link to="/app/wallet">Go to Wallet</Link>
+            <Link to={`/app/${workspaceId}/wallet`}>Go to Wallet</Link>
           </Button>
         </div>
       ) : (
@@ -378,11 +395,11 @@ export default function WalletRecurringPage() {
             <NewPaymentForm
               accountId={account.id}
               tenantId={tenantId}
+              workspaceId={workspaceId}
               onSuccess={() => setShowForm(false)}
               onCancel={() => setShowForm(false)}
             />
           )}
-
           {payments && payments.length > 0 ? (
             <div className="space-y-3">
               {payments.map((payment) => (
@@ -410,7 +427,7 @@ export default function WalletRecurringPage() {
                   Set up automatic scheduled transfers for regular payments.
                 </p>
                 <Button
-                  className="mt-6 bg-violet-600 hover:bg-violet-700 text-white"
+                  className="mt-6 bg-violet-600 hover:bg-violet-700 text-white active-press"
                   onClick={() => setShowForm(true)}
                   data-ocid="recurring-empty-cta"
                 >

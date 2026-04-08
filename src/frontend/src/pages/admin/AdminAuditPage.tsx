@@ -11,11 +11,18 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { useQuery } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
 import { format, formatDistanceToNow } from "date-fns";
-import { ArrowLeft, ClipboardList, RefreshCw } from "lucide-react";
+import { ArrowLeft, Circle, ClipboardList, RefreshCw } from "lucide-react";
 import { useState } from "react";
 import { useBackend } from "../../hooks/useBackend";
-import { getTenantId } from "../../hooks/useWorkspace";
+import { getTenantId, useWorkspace } from "../../hooks/useWorkspace";
 import type { AuditLog } from "../../types";
+
+const ACTION_COLOR: Record<string, string> = {
+  create: "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400",
+  update: "bg-blue-500/10 text-blue-600 dark:text-blue-400",
+  delete: "bg-destructive/10 text-destructive",
+  read: "bg-muted text-muted-foreground",
+};
 
 const ENTITY_COLORS: Record<string, string> = {
   note: "bg-indigo-500/10 text-indigo-600",
@@ -24,8 +31,8 @@ const ENTITY_COLORS: Record<string, string> = {
   channel: "bg-teal-500/10 text-teal-600",
   message: "bg-teal-400/10 text-teal-500",
   event: "bg-red-500/10 text-red-600",
-  employee: "bg-green-500/10 text-green-600",
-  payroll: "bg-green-400/10 text-green-500",
+  employee: "bg-emerald-500/10 text-emerald-600",
+  payroll: "bg-emerald-400/10 text-emerald-500",
   escrow: "bg-yellow-500/10 text-yellow-600",
   wallet: "bg-pink-500/10 text-pink-600",
   backup: "bg-blue-500/10 text-blue-600",
@@ -34,14 +41,22 @@ const ENTITY_COLORS: Record<string, string> = {
 };
 
 function getEntityColor(entityType: string): string {
-  const key = entityType.toLowerCase();
-  return ENTITY_COLORS[key] ?? "bg-muted text-muted-foreground";
+  return (
+    ENTITY_COLORS[entityType.toLowerCase()] ?? "bg-muted text-muted-foreground"
+  );
+}
+
+function getActionColor(action: string): string {
+  const key = action.toLowerCase().split("_")[0];
+  return ACTION_COLOR[key] ?? "bg-muted text-muted-foreground";
 }
 
 export default function AdminAuditPage() {
   const navigate = useNavigate();
   const { actor, isFetching } = useBackend();
+  const { activeWorkspaceId } = useWorkspace();
   const tenantId = getTenantId();
+  const workspaceId = activeWorkspaceId ?? "";
   const [entityFilter, setEntityFilter] = useState<string>("All");
 
   const {
@@ -50,10 +65,10 @@ export default function AdminAuditPage() {
     refetch,
     isFetching: isRefetching,
   } = useQuery<AuditLog[]>({
-    queryKey: ["auditLogs", tenantId],
+    queryKey: ["auditLogs", tenantId, workspaceId],
     queryFn: async () =>
-      actor ? actor.listAuditLogs(tenantId, BigInt(100)) : [],
-    enabled: !!actor && !isFetching,
+      actor ? actor.listAuditLogs(tenantId, workspaceId, BigInt(100)) : [],
+    enabled: !!actor && !isFetching && !!workspaceId,
   });
 
   const entityTypes = logs
@@ -65,22 +80,23 @@ export default function AdminAuditPage() {
     .sort((a, b) => Number(b.timestamp) - Number(a.timestamp));
 
   return (
-    <div className="p-6 md:p-8 max-w-5xl mx-auto space-y-6">
+    <div className="p-6 md:p-8 max-w-5xl mx-auto space-y-6 animate-fade-in-up">
       {/* Header */}
       <div className="flex items-center gap-3">
         <Button
           variant="ghost"
           size="icon"
-          onClick={() => navigate({ to: "/app/admin" })}
-          aria-label="Back to admin"
+          onClick={() => navigate({ to: `/app/${workspaceId}/admin` as "/" })}
+          aria-label="Back"
+          className="hover:bg-muted"
         >
           <ArrowLeft className="h-4 w-4" />
         </Button>
-        <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-orange-500/10">
+        <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-orange-500/10">
           <ClipboardList className="h-4 w-4 text-orange-500" />
         </div>
         <div className="flex-1 min-w-0">
-          <h1 className="font-display text-2xl font-bold text-foreground">
+          <h1 className="font-display text-2xl font-bold tracking-tight text-foreground">
             Audit Logs
           </h1>
           <p className="text-sm text-muted-foreground">
@@ -93,7 +109,7 @@ export default function AdminAuditPage() {
           onClick={() => refetch()}
           disabled={isRefetching}
           data-ocid="audit-refresh-btn"
-          className="gap-1.5"
+          className="gap-1.5 active-press"
         >
           <RefreshCw
             className={`h-3.5 w-3.5 ${isRefetching ? "animate-spin" : ""}`}
@@ -102,31 +118,45 @@ export default function AdminAuditPage() {
         </Button>
       </div>
 
-      {/* Filters */}
+      {/* Legend */}
       <div className="flex items-center gap-3 flex-wrap">
-        <span className="text-sm font-medium text-muted-foreground">
-          Filter by entity:
-        </span>
-        <Select value={entityFilter} onValueChange={setEntityFilter}>
-          <SelectTrigger
-            className="h-8 w-[160px] text-sm"
-            data-ocid="audit-entity-filter"
+        {[
+          { label: "Create", color: "bg-emerald-500" },
+          { label: "Update", color: "bg-blue-500" },
+          { label: "Delete", color: "bg-destructive" },
+        ].map((l) => (
+          <div
+            key={l.label}
+            className="flex items-center gap-1.5 text-xs text-muted-foreground"
           >
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            {entityTypes.map((type) => (
-              <SelectItem key={type} value={type}>
-                {type}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-        {!isLoading && (
-          <span className="text-xs text-muted-foreground ml-auto">
-            {filtered.length} entries
-          </span>
-        )}
+            <Circle
+              className={`h-2 w-2 fill-current ${l.color.replace("bg-", "text-")}`}
+            />
+            {l.label}
+          </div>
+        ))}
+        <div className="ml-auto flex items-center gap-3">
+          <Select value={entityFilter} onValueChange={setEntityFilter}>
+            <SelectTrigger
+              className="h-8 w-[160px] text-sm"
+              data-ocid="audit-entity-filter"
+            >
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {entityTypes.map((type) => (
+                <SelectItem key={type} value={type}>
+                  {type}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          {!isLoading && (
+            <span className="text-xs text-muted-foreground">
+              {filtered.length} entries
+            </span>
+          )}
+        </div>
       </div>
 
       {/* Logs Table */}
@@ -137,8 +167,8 @@ export default function AdminAuditPage() {
           ))}
         </div>
       ) : filtered.length > 0 ? (
-        <div className="rounded-2xl border border-border overflow-hidden">
-          <div className="hidden md:grid grid-cols-[1.5fr_1fr_1fr_1fr_1fr] gap-4 bg-muted/40 px-5 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+        <div className="rounded-xl border border-border/50 overflow-hidden shadow-card">
+          <div className="hidden md:grid grid-cols-[1.5fr_1fr_1fr_1fr_1fr] gap-4 bg-muted/40 px-5 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wider border-b border-border/40">
             <span>Action</span>
             <span>Entity Type</span>
             <span>Entity ID</span>
@@ -148,12 +178,13 @@ export default function AdminAuditPage() {
           {filtered.map((log) => (
             <div
               key={log.id}
-              className="grid grid-cols-1 md:grid-cols-[1.5fr_1fr_1fr_1fr_1fr] gap-3 md:gap-4 items-start md:items-center border-t border-border bg-card px-5 py-3.5 hover:bg-muted/20 transition-smooth"
+              className="grid grid-cols-1 md:grid-cols-[1.5fr_1fr_1fr_1fr_1fr] gap-3 md:gap-4 items-start md:items-center border-t border-border/40 bg-card px-5 py-3.5 hover:bg-muted/30 transition-colors duration-150"
               data-ocid={`audit-log-${log.id}`}
             >
-              {/* Action */}
               <div className="flex flex-col gap-1">
-                <Badge variant="outline" className="w-fit text-xs font-mono">
+                <Badge
+                  className={`w-fit text-xs rounded-full px-2.5 py-0.5 font-mono ${getActionColor(log.action)}`}
+                >
                   {log.action}
                 </Badge>
                 {log.details && (
@@ -162,21 +193,17 @@ export default function AdminAuditPage() {
                   </p>
                 )}
               </div>
-              {/* Entity Type */}
               <Badge
-                className={`w-fit text-xs ${getEntityColor(log.entityType)}`}
+                className={`w-fit text-xs rounded-full px-2.5 py-0.5 ${getEntityColor(log.entityType)}`}
               >
                 {log.entityType}
               </Badge>
-              {/* Entity ID */}
               <p className="text-xs text-muted-foreground font-mono truncate">
                 {log.entityId.slice(0, 12)}...
               </p>
-              {/* User */}
               <p className="text-xs text-muted-foreground font-mono truncate">
                 {log.userId.toString().slice(0, 12)}...
               </p>
-              {/* Timestamp */}
               <div>
                 <p className="text-xs text-muted-foreground">
                   {formatDistanceToNow(Number(log.timestamp) / 1_000_000)} ago
@@ -193,10 +220,10 @@ export default function AdminAuditPage() {
         </div>
       ) : (
         <div
-          className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-border bg-muted/20 py-16 text-center"
+          className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-border bg-muted/10 py-16 text-center"
           data-ocid="audit-empty"
         >
-          <ClipboardList className="h-10 w-10 text-muted-foreground mb-3" />
+          <ClipboardList className="h-10 w-10 text-muted-foreground/40 mb-3" />
           <p className="font-semibold text-foreground">No audit logs yet</p>
           <p className="text-sm text-muted-foreground mt-1">
             {entityFilter !== "All"

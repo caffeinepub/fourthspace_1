@@ -18,7 +18,7 @@ import { ArrowLeft, ArrowRight, Plus, Zap } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 import { useBackend } from "../../hooks/useBackend";
-import { getTenantId } from "../../hooks/useWorkspace";
+import { getTenantId, useWorkspace } from "../../hooks/useWorkspace";
 import { AutomationAction, AutomationTrigger } from "../../types";
 import type { AutomationRule } from "../../types";
 
@@ -41,8 +41,10 @@ const ACTION_LABELS: Record<AutomationAction, string> = {
 export default function AdminAutomationPage() {
   const navigate = useNavigate();
   const { actor, isFetching } = useBackend();
+  const { activeWorkspaceId } = useWorkspace();
   const queryClient = useQueryClient();
   const tenantId = getTenantId();
+  const workspaceId = activeWorkspaceId ?? "";
   const [showForm, setShowForm] = useState(false);
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
@@ -54,9 +56,10 @@ export default function AdminAutomationPage() {
   );
 
   const { data: rules, isLoading } = useQuery<AutomationRule[]>({
-    queryKey: ["automationRules", tenantId],
-    queryFn: async () => (actor ? actor.listAutomationRules(tenantId) : []),
-    enabled: !!actor && !isFetching,
+    queryKey: ["automationRules", tenantId, workspaceId],
+    queryFn: async () =>
+      actor ? actor.listAutomationRules(tenantId, workspaceId) : [],
+    enabled: !!actor && !isFetching && !!workspaceId,
   });
 
   const { mutate: create, isPending } = useMutation({
@@ -64,6 +67,7 @@ export default function AdminAutomationPage() {
       if (!actor) throw new Error("Not connected");
       return actor.createAutomationRule(
         tenantId,
+        workspaceId,
         name.trim(),
         description.trim(),
         trigger,
@@ -87,7 +91,7 @@ export default function AdminAutomationPage() {
   const { mutate: toggle } = useMutation({
     mutationFn: async (id: string) => {
       if (!actor) throw new Error("Not connected");
-      return actor.toggleAutomationRule(tenantId, id);
+      return actor.toggleAutomationRule(tenantId, workspaceId, id);
     },
     onSuccess: (result) => {
       if (result.__kind__ === "ok") {
@@ -104,22 +108,23 @@ export default function AdminAutomationPage() {
   const totalCount = rules?.length ?? 0;
 
   return (
-    <div className="p-6 md:p-8 max-w-4xl mx-auto space-y-6">
+    <div className="p-6 md:p-8 max-w-4xl mx-auto space-y-6 animate-fade-in-up">
       {/* Header */}
       <div className="flex items-center gap-3">
         <Button
           variant="ghost"
           size="icon"
-          onClick={() => navigate({ to: "/app/admin" })}
-          aria-label="Back to admin"
+          onClick={() => navigate({ to: `/app/${workspaceId}/admin` as "/" })}
+          aria-label="Back"
+          className="hover:bg-muted"
         >
           <ArrowLeft className="h-4 w-4" />
         </Button>
-        <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-yellow-500/10">
-          <Zap className="h-4 w-4 text-yellow-500" />
+        <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-amber-500/10">
+          <Zap className="h-4 w-4 text-amber-500" />
         </div>
         <div className="flex-1 min-w-0">
-          <h1 className="font-display text-2xl font-bold text-foreground">
+          <h1 className="font-display text-2xl font-bold tracking-tight text-foreground">
             Automation Rules
           </h1>
           <p className="text-sm text-muted-foreground">
@@ -130,17 +135,17 @@ export default function AdminAutomationPage() {
           size="sm"
           onClick={() => setShowForm(!showForm)}
           data-ocid="automation-new-btn"
+          className="active-press"
         >
-          <Plus className="mr-2 h-3.5 w-3.5" />
-          New Rule
+          <Plus className="mr-2 h-3.5 w-3.5" /> New Rule
         </Button>
       </div>
 
-      {/* Summary */}
+      {/* Summary strip */}
       {!isLoading && totalCount > 0 && (
-        <div className="flex items-center gap-4 rounded-xl bg-muted/40 px-5 py-3">
+        <div className="flex items-center gap-4 rounded-xl bg-muted/30 border border-border/40 px-5 py-3">
           <div className="flex items-center gap-2">
-            <span className="h-2 w-2 rounded-full bg-green-500" />
+            <span className="h-2 w-2 rounded-full bg-emerald-500" />
             <span className="text-sm text-foreground font-medium">
               {activeCount} active
             </span>
@@ -158,11 +163,10 @@ export default function AdminAutomationPage() {
 
       {/* Create Form */}
       {showForm && (
-        <Card className="border-border bg-card">
+        <Card className="border-border/50 bg-card shadow-card">
           <CardHeader className="pb-3">
             <CardTitle className="text-base font-semibold text-foreground flex items-center gap-2">
-              <Zap className="h-4 w-4 text-yellow-500" />
-              Create Automation Rule
+              <Zap className="h-4 w-4 text-amber-500" /> Create Automation Rule
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
@@ -225,15 +229,12 @@ export default function AdminAutomationPage() {
               </div>
             </div>
             {/* Preview */}
-            <div className="flex items-center gap-2 rounded-lg bg-muted/50 px-4 py-3 text-sm">
-              <Badge variant="outline" className="text-xs shrink-0">
+            <div className="flex items-center gap-2 rounded-lg bg-muted/40 border border-border/40 px-4 py-3 text-sm">
+              <Badge className="text-xs rounded-full px-2.5 py-0.5 bg-muted text-muted-foreground border-border shrink-0">
                 {TRIGGER_LABELS[trigger]}
               </Badge>
               <ArrowRight className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-              <Badge
-                variant="outline"
-                className="text-xs shrink-0 bg-yellow-500/10 text-yellow-600 border-yellow-200"
-              >
+              <Badge className="text-xs rounded-full px-2.5 py-0.5 bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20 shrink-0">
                 {ACTION_LABELS[action]}
               </Badge>
             </div>
@@ -245,6 +246,7 @@ export default function AdminAutomationPage() {
                 onClick={() => create()}
                 disabled={!name.trim() || isPending}
                 data-ocid="automation-save-btn"
+                className="active-press"
               >
                 {isPending ? "Creating..." : "Create Rule"}
               </Button>
@@ -261,15 +263,15 @@ export default function AdminAutomationPage() {
           ))}
         </div>
       ) : rules && rules.length > 0 ? (
-        <div className="space-y-2">
+        <div className="rounded-xl border border-border/50 overflow-hidden shadow-card divide-y divide-border/40">
           {rules.map((rule) => (
             <div
               key={rule.id}
-              className="flex items-center gap-4 rounded-xl border border-border bg-card p-4 hover:bg-muted/20 transition-smooth"
+              className="flex items-center gap-4 bg-card px-4 py-3.5 hover:bg-muted/30 transition-colors duration-150"
               data-ocid={`rule-${rule.id}`}
             >
-              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-yellow-500/10">
-                <Zap className="h-4 w-4 text-yellow-500" />
+              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-amber-500/10">
+                <Zap className="h-4 w-4 text-amber-500" />
               </div>
               <div className="flex-1 min-w-0">
                 <p className="font-medium text-foreground text-sm truncate">
@@ -281,31 +283,24 @@ export default function AdminAutomationPage() {
                   </p>
                 )}
                 <div className="flex items-center gap-2 mt-1.5 flex-wrap">
-                  <Badge variant="outline" className="text-xs">
+                  <Badge className="text-xs rounded-full px-2 py-0.5 bg-muted text-muted-foreground border-border">
                     {TRIGGER_LABELS[rule.trigger]}
                   </Badge>
                   <ArrowRight className="h-3 w-3 text-muted-foreground" />
-                  <Badge
-                    variant="outline"
-                    className="text-xs bg-yellow-500/10 text-yellow-600 border-yellow-200"
-                  >
+                  <Badge className="text-xs rounded-full px-2 py-0.5 bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20">
                     {ACTION_LABELS[rule.action]}
                   </Badge>
                 </div>
               </div>
               <Badge
-                className={
-                  rule.isActive
-                    ? "bg-green-500/10 text-green-600 border-green-200 dark:border-green-900 shrink-0"
-                    : "bg-muted text-muted-foreground shrink-0"
-                }
+                className={`text-xs rounded-full px-2.5 py-0.5 shrink-0 ${rule.isActive ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20" : "bg-muted text-muted-foreground border-border"}`}
               >
                 {rule.isActive ? "Active" : "Paused"}
               </Badge>
               <Switch
                 checked={rule.isActive}
                 onCheckedChange={() => toggle(rule.id)}
-                aria-label={rule.isActive ? "Deactivate rule" : "Activate rule"}
+                aria-label={rule.isActive ? "Deactivate" : "Activate"}
                 data-ocid={`rule-toggle-${rule.id}`}
               />
             </div>
@@ -313,19 +308,22 @@ export default function AdminAutomationPage() {
         </div>
       ) : (
         <div
-          className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-border bg-muted/20 py-16 text-center"
+          className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-border bg-muted/10 py-16 text-center"
           data-ocid="automation-empty"
         >
-          <Zap className="h-10 w-10 text-muted-foreground mb-3" />
+          <Zap className="h-10 w-10 text-muted-foreground/40 mb-3" />
           <p className="font-semibold text-foreground">
             No automation rules yet
           </p>
           <p className="text-sm text-muted-foreground mt-1">
             Create rules to automate repetitive tasks and save time.
           </p>
-          <Button size="sm" className="mt-4" onClick={() => setShowForm(true)}>
-            <Plus className="mr-2 h-3.5 w-3.5" />
-            Create First Rule
+          <Button
+            size="sm"
+            className="mt-4 active-press"
+            onClick={() => setShowForm(true)}
+          >
+            <Plus className="mr-2 h-3.5 w-3.5" /> Create First Rule
           </Button>
         </div>
       )}

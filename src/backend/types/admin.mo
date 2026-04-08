@@ -11,6 +11,7 @@ module {
   public type Backup = {
     id : C.EntityId;
     tenantId : C.TenantId;
+    workspaceId : C.WorkspaceId;
     backupLabel : Text;
     status : BackupStatus;
     createdBy : C.UserId;
@@ -22,6 +23,7 @@ module {
   public type AuditLog = {
     id : C.EntityId;
     tenantId : C.TenantId;
+    workspaceId : C.WorkspaceId;
     userId : C.UserId;
     action : Text;
     entityType : Text;
@@ -49,6 +51,7 @@ module {
   public type AutomationRule = {
     id : C.EntityId;
     tenantId : C.TenantId;
+    workspaceId : C.WorkspaceId;
     name : Text;
     description : Text;
     trigger : AutomationTrigger;

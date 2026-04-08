@@ -7,22 +7,35 @@
     --font-display: "Space Grotesk", sans-serif;
     --font-body: "Figtree", sans-serif;
     --font-mono: "Geist Mono", monospace;
-    --radius: 0.625rem;
+    --radius: 0.5rem;
 
-    --background: 0.98 0 0;
+    /* Typography scale — Linear uses 14px base */
+    --font-size-xs: 0.75rem;
+    --font-size-sm: 0.8125rem;
+    --font-size-base: 0.875rem;
+    --font-size-md: 0.9375rem;
+    --font-size-lg: 1rem;
+    --font-size-xl: 1.125rem;
+    --font-size-2xl: 1.25rem;
+    --font-size-3xl: 1.5rem;
+
+    /* Light mode — clean, near-white Linear aesthetic */
+    --background: 0.99 0 0;
     --foreground: 0.12 0 0;
     --card: 1.0 0 0;
     --card-foreground: 0.12 0 0;
     --popover: 1.0 0 0;
     --popover-foreground: 0.12 0 0;
 
+    /* Fourthspace purple — kept intact */
     --primary: 0.45 0.24 264;
     --primary-foreground: 0.98 0 0;
 
     --secondary: 0.62 0.22 48;
     --secondary-foreground: 1.0 0 0;
-    --muted: 0.93 0.01 0;
-    --muted-foreground: 0.52 0 0;
+
+    --muted: 0.96 0.005 0;
+    --muted-foreground: 0.52 0.01 264;
 
     --accent: 0.58 0.19 172;
     --accent-foreground: 0.98 0 0;
@@ -30,8 +43,8 @@
     --destructive: 0.58 0.25 22;
     --destructive-foreground: 0.98 0 0;
 
-    --border: 0.91 0.01 0;
-    --input: 0.94 0.01 0;
+    --border: 0.89 0.01 264;
+    --input: 0.92 0.01 264;
     --ring: 0.45 0.24 264;
 
     --chart-1: 0.65 0.24 264;
@@ -40,40 +53,43 @@
     --chart-4: 0.55 0.22 142;
     --chart-5: 0.68 0.18 88;
 
-    --sidebar: 0.98 0 0;
+    --sidebar: 0.975 0.005 264;
     --sidebar-foreground: 0.12 0 0;
     --sidebar-primary: 0.45 0.24 264;
     --sidebar-primary-foreground: 0.98 0 0;
-    --sidebar-accent: 0.93 0.01 0;
-    --sidebar-accent-foreground: 0.25 0 0;
-    --sidebar-border: 0.91 0.01 0;
+    --sidebar-accent: 0.95 0.01 264;
+    --sidebar-accent-foreground: 0.2 0 0;
+    --sidebar-border: 0.89 0.01 264;
     --sidebar-ring: 0.45 0.24 264;
   }
 
   .dark {
-    --background: 0.14 0 0;
-    --foreground: 0.94 0 0;
-    --card: 0.16 0 0;
-    --card-foreground: 0.94 0 0;
-    --popover: 0.2 0 0;
-    --popover-foreground: 0.94 0 0;
+    /* Dark mode — near-black Linear aesthetic */
+    --background: 0.08 0 0;
+    --foreground: 0.98 0 0;
+    --card: 0.13 0.006 264;
+    --card-foreground: 0.98 0 0;
+    --popover: 0.13 0.006 264;
+    --popover-foreground: 0.98 0 0;
 
+    /* Fourthspace purple — brighter in dark mode */
     --primary: 0.68 0.22 264;
-    --primary-foreground: 0.14 0 0;
+    --primary-foreground: 0.08 0 0;
 
     --secondary: 0.65 0.21 48;
-    --secondary-foreground: 0.14 0 0;
-    --muted: 0.22 0.01 0;
-    --muted-foreground: 0.62 0 0;
+    --secondary-foreground: 0.08 0 0;
+
+    --muted: 0.18 0.01 264;
+    --muted-foreground: 0.6 0.01 264;
 
     --accent: 0.72 0.18 172;
-    --accent-foreground: 0.14 0 0;
+    --accent-foreground: 0.08 0 0;
 
     --destructive: 0.65 0.22 22;
-    --destructive-foreground: 0.14 0 0;
+    --destructive-foreground: 0.08 0 0;
 
-    --border: 0.25 0.01 0;
-    --input: 0.25 0.01 0;
+    --border: 0.22 0.01 264;
+    --input: 0.24 0.01 264;
     --ring: 0.68 0.22 264;
 
     --chart-1: 0.68 0.22 264;
@@ -82,27 +98,246 @@
     --chart-4: 0.62 0.2 142;
     --chart-5: 0.74 0.16 88;
 
-    --sidebar: 0.16 0 0;
-    --sidebar-foreground: 0.94 0 0;
+    --sidebar: 0.11 0.006 264;
+    --sidebar-foreground: 0.98 0 0;
     --sidebar-primary: 0.68 0.22 264;
-    --sidebar-primary-foreground: 0.14 0 0;
-    --sidebar-accent: 0.22 0.01 0;
-    --sidebar-accent-foreground: 0.78 0 0;
-    --sidebar-border: 0.25 0.01 0;
+    --sidebar-primary-foreground: 0.08 0 0;
+    --sidebar-accent: 0.18 0.01 264;
+    --sidebar-accent-foreground: 0.85 0 0;
+    --sidebar-border: 0.22 0.01 264;
     --sidebar-ring: 0.68 0.22 264;
+  }
+
+  html {
+    font-size: 14px;
+    color-scheme: light;
+  }
+
+  html.dark {
+    color-scheme: dark;
   }
 
   * {
     @apply border-border;
+    scrollbar-width: thin;
+    scrollbar-color: oklch(var(--border)) transparent;
   }
+
+  *::-webkit-scrollbar {
+    width: 5px;
+    height: 5px;
+  }
+
+  *::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  *::-webkit-scrollbar-thumb {
+    background: oklch(var(--border));
+    border-radius: 99px;
+  }
+
+  *::-webkit-scrollbar-thumb:hover {
+    background: oklch(var(--muted-foreground) / 0.5);
+  }
+
   body {
     @apply bg-background text-foreground font-body antialiased;
+    font-size: var(--font-size-base);
+    line-height: 1.5;
+  }
+
+  h1,
+  h2,
+  h3,
+  h4,
+  h5,
+  h6 {
+    font-family: var(--font-display);
+    line-height: 1.3;
+    letter-spacing: -0.02em;
+  }
+
+  /* Focus-visible ring consistency */
+  *:focus-visible {
+    outline: 2px solid oklch(var(--ring));
+    outline-offset: 2px;
+  }
+
+  /* Button & interactive disabled states */
+  button:disabled,
+  [disabled] {
+    opacity: 0.45;
+    cursor: not-allowed;
   }
 }
 
 @layer utilities {
+  /* Smooth transition on all interactive elements — tighter than before */
   .transition-smooth {
-    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    transition: all 0.15s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+
+  /* Interactive hover lift effect */
+  .hover-lift {
+    transition: transform 0.15s ease, box-shadow 0.15s ease, border-color 0.15s
+      ease;
+  }
+  .hover-lift:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px -2px oklch(var(--foreground) / 0.08);
+  }
+
+  /* Subtle press on interactive elements */
+  .active-press:active {
+    transform: scale(0.98);
+  }
+
+  /* Card interactive hover */
+  .card-interactive {
+    transition: border-color 0.15s ease, box-shadow 0.15s ease, background-color
+      0.15s ease;
+    cursor: pointer;
+  }
+  .card-interactive:hover {
+    border-color: oklch(var(--border) / 0.8);
+    box-shadow: 0 2px 8px -2px oklch(var(--foreground) / 0.06);
+  }
+
+  /* Backdrop blur for overlays and dropdowns */
+  .backdrop-blur-subtle {
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+  }
+
+  /* Skeleton loading */
+  .skeleton {
+    background: oklch(var(--muted));
+    border-radius: var(--radius);
+    animation: skeleton-pulse 1.5s ease-in-out infinite;
+  }
+
+  /* Page entrance */
+  .animate-fade-in-up {
+    animation: fade-in-up 0.2s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+  }
+
+  /* Status-driven badges and indicators */
+  .status-active {
+    @apply bg-accent/10 text-accent border-accent/30;
+  }
+  .status-at-risk {
+    @apply bg-secondary/10 text-secondary border-secondary/30;
+  }
+  .status-behind {
+    @apply bg-destructive/10 text-destructive border-destructive/30;
+  }
+  .status-completed {
+    @apply bg-muted text-muted-foreground border-muted;
+  }
+
+  /* Progress bar styling */
+  .progress-track {
+    @apply bg-muted rounded-full overflow-hidden;
+  }
+  .progress-fill-active {
+    @apply bg-accent transition-smooth;
+  }
+  .progress-fill-at-risk {
+    @apply bg-secondary transition-smooth;
+  }
+  .progress-fill-behind {
+    @apply bg-destructive transition-smooth;
+  }
+
+  /* Elevated goal cards */
+  .goal-card-elevated {
+    @apply bg-card border border-border shadow-card hover:shadow-card-hover transition-smooth;
+  }
+
+  /* Mobile-first responsive utilities */
+  .sidebar-mobile-drawer {
+    @apply fixed inset-0 z-40 md:relative md:z-auto;
+  }
+
+  .touch-target {
+    @apply min-h-[44px] min-w-[44px] flex items-center justify-center;
+  }
+
+  .dashboard-hero {
+    @apply bg-gradient-to-br from-primary via-primary/85 to-primary/70 rounded-lg p-6 sm:p-8 text-primary-foreground;
+  }
+
+  .dashboard-stat-card {
+    @apply bg-card border border-border rounded-lg p-4 sm:p-6 transition-smooth hover:shadow-card-hover;
+  }
+
+  .quick-action-button {
+    @apply px-4 py-2 rounded-full text-sm font-medium transition-smooth hover-lift active-press;
+  }
+
+  /* Mobile safe area utilities — for notch / home indicator on iOS */
+  .pb-safe {
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+  .pt-safe {
+    padding-top: env(safe-area-inset-top, 0px);
+  }
+
+  /* Bottom tab bar height = 60px tab area + safe area inset */
+  .bottom-tab-bar-height {
+    height: calc(60px + env(safe-area-inset-bottom, 0px));
+  }
+  /* Padding equivalent for content that must clear the bottom tab bar */
+  .pb-tab-bar {
+    padding-bottom: calc(60px + env(safe-area-inset-bottom, 0px));
+  }
+
+  /* Typography utilities */
+  .font-size-xs {
+    font-size: var(--font-size-xs);
+  }
+  .font-size-sm {
+    font-size: var(--font-size-sm);
+  }
+  .font-size-base {
+    font-size: var(--font-size-base);
+  }
+  .font-size-md {
+    font-size: var(--font-size-md);
+  }
+  .font-size-lg {
+    font-size: var(--font-size-lg);
+  }
+  .font-size-xl {
+    font-size: var(--font-size-xl);
+  }
+  .font-size-2xl {
+    font-size: var(--font-size-2xl);
+  }
+  .font-size-3xl {
+    font-size: var(--font-size-3xl);
+  }
+}
+
+@keyframes skeleton-pulse {
+  0%,
+  100% {
+    opacity: 0.4;
+  }
+  50% {
+    opacity: 0.8;
+  }
+}
+
+@keyframes fade-in-up {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
   }
 }
 

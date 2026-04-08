@@ -31,6 +31,7 @@ module {
   public func createBackup(
     store : [(Common.EntityId, Types.Backup)],
     tenantId : Common.TenantId,
+    workspaceId : Common.WorkspaceId,
     caller : Common.UserId,
     backupLabel : Text,
   ) : (Types.Backup, [(Common.EntityId, Types.Backup)]) {
@@ -39,6 +40,7 @@ module {
     let backup : Types.Backup = {
       id;
       tenantId;
+      workspaceId;
       backupLabel;
       status = #Completed;
       createdBy = caller;
@@ -54,11 +56,12 @@ module {
   public func getBackup(
     store : [(Common.EntityId, Types.Backup)],
     tenantId : Common.TenantId,
+    workspaceId : Common.WorkspaceId,
     id : Common.EntityId,
   ) : ?Types.Backup {
     let m = toBackupMap(store);
     switch (m.get(id)) {
-      case (?b) { if (b.tenantId == tenantId) ?b else null };
+      case (?b) { if (b.tenantId == tenantId and b.workspaceId == workspaceId) ?b else null };
       case null null;
     }
   };
@@ -66,11 +69,10 @@ module {
   public func listBackups(
     store : [(Common.EntityId, Types.Backup)],
     tenantId : Common.TenantId,
+    workspaceId : Common.WorkspaceId,
   ) : [Types.Backup] {
     let m = toBackupMap(store);
-    m.values().filter(func(b : Types.Backup) : Bool { b.tenantId == tenantId }).toArray(
-      
-    )
+    m.values().filter(func(b : Types.Backup) : Bool { b.tenantId == tenantId and b.workspaceId == workspaceId }).toArray()
   };
 
   // ── Audit Logging ─────────────────────────────────────────────────────────────
@@ -78,6 +80,7 @@ module {
   public func logAuditEvent(
     store : [(Common.EntityId, Types.AuditLog)],
     tenantId : Common.TenantId,
+    workspaceId : Common.WorkspaceId,
     userId : Common.UserId,
     action : Text,
     entityType : Text,
@@ -89,6 +92,7 @@ module {
     let entry : Types.AuditLog = {
       id;
       tenantId;
+      workspaceId;
       userId;
       action;
       entityType;
@@ -104,13 +108,14 @@ module {
   public func listAuditLogs(
     store : [(Common.EntityId, Types.AuditLog)],
     tenantId : Common.TenantId,
+    workspaceId : Common.WorkspaceId,
     entityTypeFilter : ?Text,
     limit : Nat,
   ) : [Types.AuditLog] {
     let m = toAuditMap(store);
     let filtered = m.values().filter(
         func(log : Types.AuditLog) : Bool {
-          if (log.tenantId != tenantId) return false;
+          if (log.tenantId != tenantId or log.workspaceId != workspaceId) return false;
           switch (entityTypeFilter) {
             case (?et) log.entityType == et;
             case null true;
@@ -134,6 +139,7 @@ module {
   public func createAutomationRule(
     store : [(Common.EntityId, Types.AutomationRule)],
     tenantId : Common.TenantId,
+    workspaceId : Common.WorkspaceId,
     caller : Common.UserId,
     name : Text,
     description : Text,
@@ -145,6 +151,7 @@ module {
     let rule : Types.AutomationRule = {
       id;
       tenantId;
+      workspaceId;
       name;
       description;
       trigger;
@@ -161,22 +168,22 @@ module {
   public func listAutomationRules(
     store : [(Common.EntityId, Types.AutomationRule)],
     tenantId : Common.TenantId,
+    workspaceId : Common.WorkspaceId,
   ) : [Types.AutomationRule] {
     let m = toRuleMap(store);
-    m.values().filter(func(r : Types.AutomationRule) : Bool { r.tenantId == tenantId }).toArray(
-      
-    )
+    m.values().filter(func(r : Types.AutomationRule) : Bool { r.tenantId == tenantId and r.workspaceId == workspaceId }).toArray()
   };
 
   public func toggleAutomationRule(
     store : [(Common.EntityId, Types.AutomationRule)],
     tenantId : Common.TenantId,
+    workspaceId : Common.WorkspaceId,
     id : Common.EntityId,
   ) : (?Types.AutomationRule, [(Common.EntityId, Types.AutomationRule)]) {
     let m = toRuleMap(store);
     switch (m.get(id)) {
       case (?rule) {
-        if (rule.tenantId != tenantId) return (null, store);
+        if (rule.tenantId != tenantId or rule.workspaceId != workspaceId) return (null, store);
         let toggled : Types.AutomationRule = { rule with isActive = not rule.isActive };
         m.add(id, toggled);
         (?toggled, m.toArray())

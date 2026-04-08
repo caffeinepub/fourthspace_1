@@ -1,0 +1,348 @@
+import { g as getTenantId, f as useWorkspace, n as useQueryClient, h as useQuery, a7 as PayrollStatus, D as DollarSign, j as jsxRuntimeExports, B as Button, i as Link, P as Plus, F as FileText } from "./index-BZqaRhAX.js";
+import { C as Card, b as CardHeader, c as CardTitle, a as CardContent } from "./card-DQu6DGwy.js";
+import { S as Skeleton } from "./skeleton-CXUiMpVp.js";
+import { u as useMutation } from "./useMutation-CLofsIuD.js";
+import { u as ue } from "./index-BRf-248B.js";
+import { u as useBackend } from "./useBackend-DSxJo5MU.js";
+import { U as Users } from "./users-hFv2lO5Q.js";
+import { C as Clock } from "./clock-BL9M8ZaB.js";
+import { T as TrendingUp } from "./trending-up-Da3p-3P5.js";
+import { B as BadgeDollarSign } from "./badge-dollar-sign-DoXqtEsK.js";
+import { P as Play } from "./play-GvfN7bTG.js";
+import { C as CircleAlert } from "./circle-alert-BzUnhcW5.js";
+import { A as ArrowRight } from "./arrow-right-vB32eJ-w.js";
+import { C as Calendar } from "./calendar-DNogRdhP.js";
+import { C as CircleCheck } from "./circle-check-wa2s5his.js";
+import { R as RefreshCw } from "./refresh-cw-zBJl8Ogw.js";
+function formatCurrency(amount, currency = "USD") {
+  return new Intl.NumberFormat("en-US", {
+    style: "currency",
+    currency: currency || "USD"
+  }).format(Number(amount) / 100);
+}
+function PayrollStatusBadge({ status }) {
+  const map = {
+    [PayrollStatus.Completed]: {
+      label: "Completed",
+      className: "bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 border-emerald-500/20"
+    },
+    [PayrollStatus.Approved]: {
+      label: "Approved",
+      className: "bg-blue-500/15 text-blue-700 dark:text-blue-400 border-blue-500/20"
+    },
+    [PayrollStatus.PendingApproval]: {
+      label: "Pending",
+      className: "bg-amber-500/15 text-amber-700 dark:text-amber-400 border-amber-500/20"
+    },
+    [PayrollStatus.Rejected]: {
+      label: "Rejected",
+      className: "bg-red-500/15 text-red-700 dark:text-red-400 border-red-500/20"
+    },
+    [PayrollStatus.Processed]: {
+      label: "Processed",
+      className: "bg-purple-500/15 text-purple-700 dark:text-purple-400 border-purple-500/20"
+    },
+    [PayrollStatus.Active]: {
+      label: "Active",
+      className: "bg-cyan-500/15 text-cyan-700 dark:text-cyan-400 border-cyan-500/20"
+    },
+    [PayrollStatus.Paused]: {
+      label: "Paused",
+      className: "bg-muted text-muted-foreground"
+    }
+  };
+  const s = map[status] ?? {
+    label: status,
+    className: "bg-muted text-muted-foreground"
+  };
+  return /* @__PURE__ */ jsxRuntimeExports.jsx(
+    "span",
+    {
+      className: `inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium border ${s.className}`,
+      children: s.label
+    }
+  );
+}
+function PayrollPage() {
+  const { actor, isFetching } = useBackend();
+  const tenantId = getTenantId();
+  const { activeWorkspaceId } = useWorkspace();
+  const workspaceId = activeWorkspaceId ?? "";
+  const queryClient = useQueryClient();
+  const navLinks = [
+    {
+      to: `/app/${workspaceId}/payroll/employees`,
+      label: "Employees",
+      icon: Users,
+      desc: "Manage employee profiles"
+    },
+    {
+      to: `/app/${workspaceId}/payroll/schedules`,
+      label: "Pay Schedules",
+      icon: Calendar,
+      desc: "Weekly, bi-weekly, monthly"
+    },
+    {
+      to: `/app/${workspaceId}/payroll/contractors`,
+      label: "Contractors",
+      icon: FileText,
+      desc: "Freelancer & contractor payments"
+    },
+    {
+      to: `/app/${workspaceId}/payroll/bulk-approval`,
+      label: "Bulk Approval",
+      icon: CircleCheck,
+      desc: "Review & approve payroll runs"
+    },
+    {
+      to: `/app/${workspaceId}/payroll/off-cycle`,
+      label: "Off-Cycle Payments",
+      icon: RefreshCw,
+      desc: "Bonuses & reimbursements"
+    },
+    {
+      to: `/app/${workspaceId}/payroll/audit-log`,
+      label: "Audit Log",
+      icon: CircleAlert,
+      desc: "Full payroll history log"
+    }
+  ];
+  const { data: employees = [], isLoading: empLoading } = useQuery({
+    queryKey: ["employees", tenantId, workspaceId],
+    queryFn: async () => actor ? actor.listEmployees(tenantId, workspaceId) : [],
+    enabled: !!actor && !isFetching && !!workspaceId
+  });
+  const { data: records = [], isLoading: recLoading } = useQuery({
+    queryKey: ["payrollRecords", tenantId, workspaceId, null],
+    queryFn: async () => actor ? actor.listPayrollRecords(tenantId, workspaceId, null) : [],
+    enabled: !!actor && !isFetching && !!workspaceId
+  });
+  const runPayroll = useMutation({
+    mutationFn: async () => {
+      if (!actor) throw new Error("Not connected");
+      const activeEmps = employees.filter((e) => e.isActive);
+      if (activeEmps.length === 0) throw new Error("No active employees");
+      const period = (/* @__PURE__ */ new Date()).toISOString().slice(0, 7);
+      const results = await Promise.allSettled(
+        activeEmps.map(
+          (e) => actor.processPayroll(tenantId, workspaceId, e.id, period)
+        )
+      );
+      return results.filter((r) => r.status === "fulfilled").length;
+    },
+    onSuccess: (count) => {
+      ue.success(`Payroll processed for ${count} employee(s)`);
+      queryClient.invalidateQueries({ queryKey: ["payrollRecords"] });
+    },
+    onError: (e) => ue.error(e.message)
+  });
+  const activeEmployees = employees.filter((e) => e.isActive);
+  const pendingApproval = records.filter(
+    (r) => r.status === PayrollStatus.PendingApproval
+  );
+  const thisMonth = (/* @__PURE__ */ new Date()).toISOString().slice(0, 7);
+  const monthRecords = records.filter((r) => r.period.startsWith(thisMonth));
+  const totalPayroll = monthRecords.reduce(
+    (sum, r) => sum + Number(r.amount),
+    0
+  );
+  const recentRecords = [...records].sort((a, b) => Number(b.createdAt) - Number(a.createdAt)).slice(0, 6);
+  const employeeMap = new Map(employees.map((e) => [e.id, e]));
+  const statsLoading = empLoading || recLoading;
+  const stats = [
+    {
+      label: "Active Employees",
+      value: statsLoading ? null : String(activeEmployees.length),
+      icon: Users,
+      trend: "+2 this month"
+    },
+    {
+      label: "Payroll This Month",
+      value: statsLoading ? null : `$${(totalPayroll / 100).toLocaleString("en-US", { minimumFractionDigits: 2 })}`,
+      icon: DollarSign,
+      trend: "Current period"
+    },
+    {
+      label: "Pending Approval",
+      value: statsLoading ? null : String(pendingApproval.length),
+      icon: Clock,
+      link: `/app/${workspaceId}/payroll/bulk-approval`,
+      urgent: pendingApproval.length > 0
+    },
+    {
+      label: "Total Payroll Runs",
+      value: statsLoading ? null : String(records.length),
+      icon: TrendingUp,
+      trend: "All time"
+    }
+  ];
+  return /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "animate-fade-in-up p-6 space-y-6 max-w-7xl mx-auto", children: [
+    /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center justify-between flex-wrap gap-4", children: [
+      /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-3", children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-500/15 border border-emerald-500/20", children: /* @__PURE__ */ jsxRuntimeExports.jsx(BadgeDollarSign, { className: "h-5 w-5 text-emerald-600 dark:text-emerald-400" }) }),
+        /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { children: [
+          /* @__PURE__ */ jsxRuntimeExports.jsx("h1", { className: "font-display text-2xl font-bold tracking-tight text-foreground", children: "Payroll" }),
+          /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "text-sm text-muted-foreground", children: "Manage employee payments and compensation" })
+        ] })
+      ] }),
+      /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-2", children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsx(Button, { asChild: true, variant: "outline", size: "sm", className: "active-press", children: /* @__PURE__ */ jsxRuntimeExports.jsxs(Link, { to: `/app/${workspaceId}/payroll/employees`, children: [
+          /* @__PURE__ */ jsxRuntimeExports.jsx(Plus, { className: "mr-1.5 h-3.5 w-3.5" }),
+          "Add Employee"
+        ] }) }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx(
+          Button,
+          {
+            size: "sm",
+            className: "bg-emerald-600 hover:bg-emerald-700 text-white active-press",
+            onClick: () => runPayroll.mutate(),
+            disabled: runPayroll.isPending || activeEmployees.length === 0,
+            "data-ocid": "payroll-run-all-btn",
+            children: runPayroll.isPending ? "Running…" : /* @__PURE__ */ jsxRuntimeExports.jsxs(jsxRuntimeExports.Fragment, { children: [
+              /* @__PURE__ */ jsxRuntimeExports.jsx(Play, { className: "mr-1.5 h-3.5 w-3.5" }),
+              "Run Payroll"
+            ] })
+          }
+        )
+      ] })
+    ] }),
+    /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "grid gap-4 sm:grid-cols-2 lg:grid-cols-4", children: stats.map(({ label, value, icon: Icon, trend, link, urgent }) => {
+      const card = /* @__PURE__ */ jsxRuntimeExports.jsx(
+        Card,
+        {
+          className: `shadow-card rounded-xl border border-border/50 bg-card transition-colors ${link ? "card-interactive" : ""} ${urgent ? "border-amber-500/40" : ""}`,
+          children: /* @__PURE__ */ jsxRuntimeExports.jsx(CardContent, { className: "p-5", children: /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-start justify-between", children: [
+            /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "space-y-1", children: [
+              /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "text-xs font-medium text-muted-foreground uppercase tracking-wider", children: label }),
+              value === null ? /* @__PURE__ */ jsxRuntimeExports.jsx(Skeleton, { className: "h-7 w-24 mt-1" }) : /* @__PURE__ */ jsxRuntimeExports.jsx(
+                "p",
+                {
+                  className: `text-2xl font-bold font-mono tabular-nums ${urgent ? "text-amber-600 dark:text-amber-400" : "text-foreground"}`,
+                  children: value
+                }
+              ),
+              trend && /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "text-[11px] text-muted-foreground/70", children: trend })
+            ] }),
+            /* @__PURE__ */ jsxRuntimeExports.jsx(
+              "div",
+              {
+                className: `flex h-9 w-9 items-center justify-center rounded-lg ${urgent ? "bg-amber-500/10" : "bg-emerald-500/10"}`,
+                children: /* @__PURE__ */ jsxRuntimeExports.jsx(
+                  Icon,
+                  {
+                    className: `h-4 w-4 ${urgent ? "text-amber-600 dark:text-amber-400" : "text-emerald-600 dark:text-emerald-400"}`
+                  }
+                )
+              }
+            )
+          ] }) })
+        },
+        label
+      );
+      return link ? /* @__PURE__ */ jsxRuntimeExports.jsx(Link, { to: link, children: card }, label) : card;
+    }) }),
+    pendingApproval.length > 0 && /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center justify-between gap-4 rounded-xl border border-amber-500/30 bg-amber-500/5 px-4 py-3", children: [
+      /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-2.5", children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsx(CircleAlert, { className: "h-4 w-4 text-amber-600 dark:text-amber-400 shrink-0" }),
+        /* @__PURE__ */ jsxRuntimeExports.jsxs("p", { className: "text-sm font-medium text-foreground", children: [
+          /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { className: "text-amber-700 dark:text-amber-400 font-semibold", children: [
+            pendingApproval.length,
+            " payroll record",
+            pendingApproval.length !== 1 ? "s" : ""
+          ] }),
+          " ",
+          "awaiting approval"
+        ] })
+      ] }),
+      /* @__PURE__ */ jsxRuntimeExports.jsx(
+        Button,
+        {
+          asChild: true,
+          size: "sm",
+          className: "bg-amber-600 hover:bg-amber-700 text-white shrink-0 active-press",
+          "data-ocid": "payroll-approval-banner-btn",
+          children: /* @__PURE__ */ jsxRuntimeExports.jsxs(Link, { to: `/app/${workspaceId}/payroll/bulk-approval`, children: [
+            "Review Now ",
+            /* @__PURE__ */ jsxRuntimeExports.jsx(ArrowRight, { className: "ml-1.5 h-3.5 w-3.5" })
+          ] })
+        }
+      )
+    ] }),
+    /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "grid gap-6 lg:grid-cols-5", children: [
+      /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "lg:col-span-2 space-y-2", children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "text-xs font-semibold text-muted-foreground uppercase tracking-wider px-1", children: "Quick Access" }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "space-y-1.5", children: navLinks.map(({ to, label, icon: Icon, desc }) => /* @__PURE__ */ jsxRuntimeExports.jsx(
+          Link,
+          {
+            to,
+            "data-ocid": `payroll-nav-${label.toLowerCase().replace(/\s+/g, "-")}`,
+            children: /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-3 rounded-xl border border-border/50 bg-card px-4 py-3 hover:border-emerald-400/50 hover:bg-emerald-500/5 transition-colors group", children: [
+              /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-emerald-500/10", children: /* @__PURE__ */ jsxRuntimeExports.jsx(Icon, { className: "h-4 w-4 text-emerald-600 dark:text-emerald-400" }) }),
+              /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "min-w-0 flex-1", children: [
+                /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "text-sm font-medium text-foreground truncate", children: label }),
+                /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "text-xs text-muted-foreground truncate", children: desc })
+              ] }),
+              /* @__PURE__ */ jsxRuntimeExports.jsx(ArrowRight, { className: "h-3.5 w-3.5 text-muted-foreground/40 group-hover:text-emerald-600 transition-colors shrink-0" })
+            ] })
+          },
+          to
+        )) })
+      ] }),
+      /* @__PURE__ */ jsxRuntimeExports.jsxs(
+        Card,
+        {
+          className: "lg:col-span-3 shadow-card rounded-xl border border-border/50 bg-card",
+          "data-ocid": "recent-payroll-card",
+          children: [
+            /* @__PURE__ */ jsxRuntimeExports.jsxs(CardHeader, { className: "pb-3 flex flex-row items-center justify-between border-b border-border/40", children: [
+              /* @__PURE__ */ jsxRuntimeExports.jsx(CardTitle, { className: "text-sm font-semibold text-foreground", children: "Recent Payroll Records" }),
+              records.length > 6 && /* @__PURE__ */ jsxRuntimeExports.jsx(Button, { asChild: true, variant: "ghost", size: "sm", className: "text-xs", children: /* @__PURE__ */ jsxRuntimeExports.jsx(Link, { to: `/app/${workspaceId}/payroll/bulk-approval`, children: "View all" }) })
+            ] }),
+            /* @__PURE__ */ jsxRuntimeExports.jsx(CardContent, { className: "p-0", children: recLoading ? /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "space-y-2 p-4", children: [1, 2, 3, 4].map((n) => /* @__PURE__ */ jsxRuntimeExports.jsx(Skeleton, { className: "h-12 rounded-lg" }, n)) }) : recentRecords.length === 0 ? /* @__PURE__ */ jsxRuntimeExports.jsxs(
+              "div",
+              {
+                className: "flex flex-col items-center justify-center py-12 text-center",
+                "data-ocid": "payroll-records-empty",
+                children: [
+                  /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "flex h-12 w-12 items-center justify-center rounded-2xl bg-emerald-500/10 mb-3", children: /* @__PURE__ */ jsxRuntimeExports.jsx(BadgeDollarSign, { className: "h-6 w-6 text-emerald-600 dark:text-emerald-400" }) }),
+                  /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "text-sm font-medium text-foreground", children: "No payroll records yet" }),
+                  /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "text-xs text-muted-foreground mt-1", children: 'Click "Run Payroll" to process the current pay period.' })
+                ]
+              }
+            ) : /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "overflow-x-auto", children: /* @__PURE__ */ jsxRuntimeExports.jsxs("table", { className: "w-full text-sm", children: [
+              /* @__PURE__ */ jsxRuntimeExports.jsx("thead", { children: /* @__PURE__ */ jsxRuntimeExports.jsxs("tr", { className: "border-b border-border/40 bg-muted/30", children: [
+                /* @__PURE__ */ jsxRuntimeExports.jsx("th", { className: "px-5 py-2.5 text-left text-xs font-medium text-muted-foreground", children: "Employee" }),
+                /* @__PURE__ */ jsxRuntimeExports.jsx("th", { className: "px-5 py-2.5 text-left text-xs font-medium text-muted-foreground hidden sm:table-cell", children: "Period" }),
+                /* @__PURE__ */ jsxRuntimeExports.jsx("th", { className: "px-5 py-2.5 text-right text-xs font-medium text-muted-foreground", children: "Amount" }),
+                /* @__PURE__ */ jsxRuntimeExports.jsx("th", { className: "px-5 py-2.5 text-right text-xs font-medium text-muted-foreground", children: "Status" })
+              ] }) }),
+              /* @__PURE__ */ jsxRuntimeExports.jsx("tbody", { className: "divide-y divide-border/40", children: recentRecords.map((record) => {
+                const emp = employeeMap.get(record.employeeId);
+                return /* @__PURE__ */ jsxRuntimeExports.jsxs(
+                  "tr",
+                  {
+                    className: "hover:bg-muted/50 transition-colors",
+                    "data-ocid": `payroll-record-${record.id}`,
+                    children: [
+                      /* @__PURE__ */ jsxRuntimeExports.jsx("td", { className: "px-5 py-3", children: /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-2.5", children: [
+                        /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-emerald-500/10 text-xs font-semibold text-emerald-700 dark:text-emerald-400", children: emp ? `${emp.firstName[0]}${emp.lastName[0]}` : "?" }),
+                        /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "font-medium text-foreground truncate max-w-[140px]", children: emp ? `${emp.firstName} ${emp.lastName}` : "—" })
+                      ] }) }),
+                      /* @__PURE__ */ jsxRuntimeExports.jsx("td", { className: "px-5 py-3 text-muted-foreground hidden sm:table-cell", children: record.period }),
+                      /* @__PURE__ */ jsxRuntimeExports.jsx("td", { className: "px-5 py-3 text-right font-mono font-semibold tabular-nums text-foreground", children: formatCurrency(record.amount, record.currency) }),
+                      /* @__PURE__ */ jsxRuntimeExports.jsx("td", { className: "px-5 py-3 text-right", children: /* @__PURE__ */ jsxRuntimeExports.jsx(PayrollStatusBadge, { status: record.status }) })
+                    ]
+                  },
+                  record.id
+                );
+              }) })
+            ] }) }) })
+          ]
+        }
+      )
+    ] })
+  ] });
+}
+export {
+  PayrollPage as default
+};

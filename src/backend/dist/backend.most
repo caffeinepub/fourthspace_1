@@ -1,5 +1,93 @@
-// Version: 1.0.0
+// Version: 3.0.0
+type AIConfig__1029196330 =
+  {
+    apiKey : Text;
+    createdAt : Timestamp__301639476;
+    id : EntityId__892221652;
+    model : Text;
+    provider : AIProvider__264802627;
+    tenantId : TenantId__234751125;
+    workspaceId : WorkspaceId__377827389
+  };
+type AIPromptType__205380256 =
+  {
+    #Analyze;
+    #Custom;
+    #Generate;
+    #GenerateTasks;
+    #MeetingSummary;
+    #SuggestPriorities;
+    #Summarize;
+    #Translate;
+    #WorkspaceQA
+  };
+type AIPrompt__631099167 =
+  {
+    content : Text;
+    createdAt : Timestamp__301639476;
+    id : EntityId__892221652;
+    model : Text;
+    promptType : AIPromptType__205380256;
+    tenantId : TenantId__234751125;
+    userId : UserId__158757552;
+    workspaceId : WorkspaceId__377827389
+  };
+type AIProvider__264802627 = {#Anthropic; #OpenAI};
+type AIResponse__363792681 =
+  {
+    content : Text;
+    createdAt : Timestamp__301639476;
+    id : EntityId__892221652;
+    model : Text;
+    promptId : EntityId__892221652;
+    tenantId : TenantId__234751125;
+    tokensUsed : Nat;
+    workspaceId : WorkspaceId__377827389
+  };
+type AccountType__879311470 = {#personal; #treasury};
+type ActivityEventType__1043684729 =
+  {
+    #checklistItemAdded;
+    #checklistItemCompleted;
+    #commentAdded;
+    #commentEdited;
+    #dependencyAdded;
+    #milestoneCreated;
+    #sprintCompleted;
+    #sprintStarted;
+    #subtaskAdded;
+    #taskAssigned;
+    #taskCreated;
+    #taskStatusChanged;
+    #taskUpdated;
+    #watcherAdded
+  };
+type ActivityEvent__867712350 =
+  {
+    actorId : UserId__158757552;
+    createdAt : Timestamp__301639476;
+    description : Text;
+    eventType : ActivityEventType__1043684729;
+    id : EntityId__892221652;
+    metadata : Text;
+    projectId : EntityId__892221652;
+    taskId : EntityId__892221652;
+    tenantId : TenantId__234751125;
+    workspaceId : WorkspaceId__377827389
+  };
 type AssetType__697693138 = {#BTC; #ICP};
+type AuditLogEntry__447130560 =
+  {
+    action : Text;
+    details : Text;
+    entityId : EntityId__892221652;
+    entityType : Text;
+    id : EntityId__892221652;
+    performedBy : UserId__158757552;
+    tenantId : TenantId__234751125;
+    timestamp : Timestamp__301639476;
+    workspaceId : WorkspaceId__377827389
+  };
 type AuditLog__383524706 =
   {
     action : Text;
@@ -9,8 +97,11 @@ type AuditLog__383524706 =
     id : EntityId__892221652;
     tenantId : TenantId__234751125;
     timestamp : Timestamp__301639476;
-    userId : UserId__158757552
+    userId : UserId__158757552;
+    workspaceId : WorkspaceId__377827389
   };
+type AutoCreateTaskConfig__900486912 =
+  {assigneeId : ?Principal; projectId : Text; taskTitle : Text};
 type AutomationAction__810997989 =
   {#CreateTask; #RunPayroll; #SendNotification; #UpdateStatus};
 type AutomationRule__416221658 =
@@ -23,7 +114,8 @@ type AutomationRule__416221658 =
     isActive : Bool;
     name : Text;
     tenantId : TenantId__234751125;
-    trigger : AutomationTrigger__1040122353
+    trigger : AutomationTrigger__1040122353;
+    workspaceId : WorkspaceId__377827389
   };
 type AutomationTrigger__1040122353 =
   {
@@ -44,8 +136,45 @@ type Backup__459295811 =
     id : EntityId__892221652;
     sizeBytes : ?Nat;
     status : BackupStatus__367870296;
-    tenantId : TenantId__234751125
+    tenantId : TenantId__234751125;
+    workspaceId : WorkspaceId__377827389
   };
+type Benefit__39905783 =
+  {
+    employeeId : EntityId__892221652;
+    endDate : ?Text;
+    id : EntityId__892221652;
+    isActive : Bool;
+    monthlyCost : Float;
+    name : Text;
+    startDate : Text;
+    tenantId : TenantId__234751125;
+    workspaceId : WorkspaceId__377827389
+  };
+type BlockTypeTag__592712845 = Text;
+type Block__603512191 =
+  {
+    blockType : BlockTypeTag__592712845;
+    content : Text;
+    id : EntityId__892221652;
+    metadata : Text;
+    order : Nat;
+    parentId : ?EntityId__892221652
+  };
+type CalendarDef__292324246 =
+  {
+    calendarType : CalendarType__1037820690;
+    color : Text;
+    createdAt : Timestamp__301639476;
+    id : EntityId__892221652;
+    isVisible : Bool;
+    name : Text;
+    ownerId : UserId__158757552;
+    projectId : ?Text;
+    tenantId : TenantId__234751125;
+    workspaceId : WorkspaceId__377827389
+  };
+type CalendarType__1037820690 = {#company; #personal; #project; #team};
 type Channel__662979216 =
   {
     createdAt : Timestamp__301639476;
@@ -54,8 +183,57 @@ type Channel__662979216 =
     id : EntityId__892221652;
     isPublic : Bool;
     memberIds : [UserId__158757552];
+    mentionFlags : ?[MentionEntry__1060255972];
     name : Text;
-    tenantId : TenantId__234751125
+    pinnedMessageIds : ?[Text];
+    tenantId : TenantId__234751125;
+    topic : ?Text;
+    unreadCounts : ?[UnreadEntry__355195530];
+    workspaceId : WorkspaceId__377827389
+  };
+type ChecklistItem__389672564 =
+  {
+    completed : Bool;
+    content : Text;
+    createdAt : Timestamp__301639476;
+    id : EntityId__892221652;
+    order : Nat;
+    taskId : EntityId__892221652;
+    tenantId : TenantId__234751125;
+    updatedAt : Timestamp__301639476;
+    workspaceId : WorkspaceId__377827389
+  };
+type ConditionalLogic__192470623 =
+  {fieldId : Text; operator : Text; value : Text};
+type ContractorPaymentReason__39025318 =
+  {#freelanceInvoice; #other; #projectMilestone; #reimbursement};
+type ContractorPaymentStatus__281417165 = {#pending; #processed};
+type ContractorPayment__830236605 =
+  {
+    amount : Float;
+    contractorId : EntityId__892221652;
+    createdAt : Timestamp__301639476;
+    id : EntityId__892221652;
+    notes : Text;
+    paymentDate : Text;
+    processedAt : ?Timestamp__301639476;
+    reason : ContractorPaymentReason__39025318;
+    status : ContractorPaymentStatus__281417165;
+    tenantId : TenantId__234751125;
+    workspaceId : WorkspaceId__377827389
+  };
+type Contractor__971014736 =
+  {
+    createdAt : Timestamp__301639476;
+    currency : Text;
+    email : Text;
+    id : EntityId__892221652;
+    isActive : Bool;
+    name : Text;
+    rate : Float;
+    taxId : Text;
+    tenantId : TenantId__234751125;
+    workspaceId : WorkspaceId__377827389
   };
 type CrossLink__241900781 =
   {
@@ -64,8 +242,37 @@ type CrossLink__241900781 =
     linkLabel : Text;
     tenantId : TenantId__234751125
   };
+type DeductionFrequency__888118868 = {#annual; #perRun};
+type DeductionType__975244036 = {#postTax; #preTax};
+type Deduction__686196060 =
+  {
+    amount : Float;
+    createdAt : Timestamp__301639476;
+    deductionType : DeductionType__975244036;
+    employeeId : EntityId__892221652;
+    frequency : DeductionFrequency__888118868;
+    id : EntityId__892221652;
+    isActive : Bool;
+    name : Text;
+    tenantId : TenantId__234751125;
+    workspaceId : WorkspaceId__377827389
+  };
+type DisputeStatus__964792718 = {#Open; #Resolved};
+type DrawingTool__673539675 =
+  {
+    #Circle;
+    #Connector;
+    #Eraser;
+    #Image;
+    #Line;
+    #Pen;
+    #Rectangle;
+    #Sticky;
+    #Text
+  };
 type Employee__19034336 =
   {
+    contractorFlag : Bool;
     createdAt : Timestamp__301639476;
     currency : Text;
     email : Text;
@@ -74,11 +281,14 @@ type Employee__19034336 =
     isActive : Bool;
     lastName : Text;
     payFrequency : PayFrequency__27584117;
+    payScheduleId : Text;
     salary : Nat;
     startDate : Timestamp__301639476;
     taxRate : Nat;
     tenantId : TenantId__234751125;
-    userId : UserId__158757552
+    timeZone : Text;
+    userId : UserId__158757552;
+    workspaceId : WorkspaceId__377827389
   };
 type EntityId__892221652 = Text;
 type EscrowContract__1011191203 =
@@ -90,31 +300,261 @@ type EscrowContract__1011191203 =
     currency : Text;
     description : Text;
     dueDate : ?Timestamp__301639476;
+    fundedAmount : ?Nat;
+    fundingBlockHeight : ?Nat;
     id : EntityId__892221652;
     payeeId : UserId__158757552;
     payerId : UserId__158757552;
     status : EscrowStatus__38437157;
+    statusHistory : [StatusHistoryEntry__1058365233];
     tenantId : TenantId__234751125;
     title : Text;
-    updatedAt : Timestamp__301639476
+    updatedAt : Timestamp__301639476;
+    workspaceId : WorkspaceId__377827389
+  };
+type EscrowDispute__775543295 =
+  {
+    arbiter : ?Principal;
+    createdAt : Timestamp__301639476;
+    escrowId : EntityId__892221652;
+    id : EntityId__892221652;
+    raisedBy : Principal;
+    reason : Text;
+    resolution : ?Text;
+    status : DisputeStatus__964792718;
+    tenantId : TenantId__234751125;
+    updatedAt : Timestamp__301639476;
+    workspaceId : WorkspaceId__377827389
+  };
+type EscrowMilestone__764038538 =
+  {
+    amount : Nat;
+    createdAt : Timestamp__301639476;
+    description : Text;
+    escrowId : EntityId__892221652;
+    id : EntityId__892221652;
+    ledgerBlockHeight : ?Nat;
+    status : MilestoneStatus__610610695;
+    tenantId : TenantId__234751125;
+    title : Text;
+    updatedAt : Timestamp__301639476;
+    workspaceId : WorkspaceId__377827389
   };
 type EscrowStatus__38437157 =
   {#Cancelled; #Disputed; #Funded; #Pending; #Released};
+type EventCategory__1047467535 =
+  {#deadline; #external; #internal; #meeting; #other; #pto};
+type EventException__406348344 =
+  {
+    createdAt : Timestamp__301639476;
+    eventId : Text;
+    exceptionType : ExceptionType__169964119;
+    id : EntityId__892221652;
+    originalDate : Text;
+    overrideData : ?EventInput__558491276;
+    tenantId : TenantId__234751125;
+    workspaceId : WorkspaceId__377827389
+  };
+type EventInput__558491276 =
+  {
+    attendeeIds : [UserId__158757552];
+    calendarId : ?Text;
+    category : ?EventCategory__1047467535;
+    categoryColor : ?Text;
+    crossLinks : [CrossLink__241900781];
+    description : Text;
+    endTime : Timestamp__301639476;
+    isProjectDeadline : ?Bool;
+    linkedNoteId : ?Text;
+    projectId : ?Text;
+    recurrence : RecurrenceRule__544597201;
+    rsvpRequired : ?Bool;
+    startTime : Timestamp__301639476;
+    timeZone : ?Text;
+    title : Text
+  };
+type EventRsvp__293707463 =
+  {
+    eventId : Text;
+    id : EntityId__892221652;
+    respondedAt : ?Timestamp__301639476;
+    status : RsvpStatus__479455962;
+    tenantId : TenantId__234751125;
+    userId : UserId__158757552;
+    workspaceId : WorkspaceId__377827389
+  };
 type Event__327837626 =
   {
     attendeeIds : [UserId__158757552];
+    calendarId : Text;
+    category : EventCategory__1047467535;
+    categoryColor : Text;
     createdAt : Timestamp__301639476;
     createdBy : UserId__158757552;
     crossLinks : [CrossLink__241900781];
     description : Text;
     endTime : Timestamp__301639476;
     id : EntityId__892221652;
+    isProjectDeadline : Bool;
+    isRecurringSeries : Bool;
+    linkedNoteId : ?Text;
+    projectId : ?Text;
     recurrence : RecurrenceRule__544597201;
+    rsvpRequired : Bool;
+    seriesId : ?Text;
     startTime : Timestamp__301639476;
     tenantId : TenantId__234751125;
+    timeZone : Text;
     title : Text;
-    updatedAt : Timestamp__301639476
+    updatedAt : Timestamp__301639476;
+    workspaceId : WorkspaceId__377827389
   };
+type ExceptionType__169964119 = {#deleted; #modified};
+type FormBranding__1001477720 =
+  {backgroundColor : ?Text; logoUrl : ?Text; primaryColor : ?Text};
+type FormFieldType__873314974 =
+  {#Checkbox; #Date; #Dropdown; #Email; #Text; #Textarea};
+type FormField__1070193069 =
+  {
+    conditionalLogic : ?ConditionalLogic__192470623;
+    fieldLabel : Text;
+    fieldType : FormFieldType__873314974;
+    id : EntityId__892221652;
+    options : [Text];
+    required : Bool
+  };
+type FormStatus__856537756 = {#Draft; #Published};
+type FormSubmission__618744830 =
+  {
+    data : [(Text, Text)];
+    formId : EntityId__892221652;
+    id : EntityId__892221652;
+    submittedAt : Timestamp__301639476;
+    submitterEmail : Text;
+    tenantId : TenantId__234751125;
+    workspaceId : WorkspaceId__377827389
+  };
+type Form__519346290 =
+  {
+    autoCreateTask : ?AutoCreateTaskConfig__900486912;
+    branding : ?FormBranding__1001477720;
+    createdAt : Timestamp__301639476;
+    createdBy : UserId__158757552;
+    description : Text;
+    fields : [FormField__1070193069];
+    formTemplateId : ?Text;
+    id : EntityId__892221652;
+    publicUrl : Text;
+    status : FormStatus__856537756;
+    tenantId : TenantId__234751125;
+    title : Text;
+    updatedAt : Timestamp__301639476;
+    workspaceId : WorkspaceId__377827389
+  };
+type GoalCheckIn__198760579 =
+  {
+    goalId : EntityId__892221652;
+    id : EntityId__892221652;
+    krId : ?EntityId__892221652;
+    newValue : Float;
+    note : Text;
+    previousValue : Float;
+    tenantId : TenantId__234751125;
+    timestamp : Timestamp__301639476;
+    userId : UserId__158757552;
+    workspaceId : WorkspaceId__377827389
+  };
+type GoalStatus__862526074 = {#Active; #Cancelled; #Completed; #OnHold};
+type Goal__520167328 =
+  {
+    contributorIds : [UserId__158757552];
+    createdAt : Timestamp__301639476;
+    description : ?Text;
+    endDate : Timestamp__301639476;
+    id : EntityId__892221652;
+    isPublic : Bool;
+    keyResults : [EntityId__892221652];
+    ownerId : UserId__158757552;
+    period : Text;
+    progress : Float;
+    startDate : Timestamp__301639476;
+    status : GoalStatus__862526074;
+    tenantId : TenantId__234751125;
+    title : Text;
+    updatedAt : Timestamp__301639476;
+    workspaceId : WorkspaceId__377827389
+  };
+type GuestInvitation__1017064848 =
+  {
+    accepted : Bool;
+    createdAt : Timestamp__301639476;
+    expiresAt : Timestamp__301639476;
+    id : EntityId__892221652;
+    inviteToken : Text;
+    invitedBy : UserId__158757552;
+    inviteeEmail : Text;
+    projectId : EntityId__892221652;
+    tenantId : TenantId__234751125;
+    workspaceId : WorkspaceId__377827389
+  };
+type GuestStatus__782872810 = {#Active; #Pending; #Revoked};
+type GuestUser__18943929 =
+  {
+    createdAt : Timestamp__301639476;
+    email : Text;
+    id : EntityId__892221652;
+    principal : ?UserId__158757552;
+    projectIds : [EntityId__892221652];
+    status : GuestStatus__782872810;
+    tenantId : TenantId__234751125;
+    workspaceId : WorkspaceId__377827389
+  };
+type IntegrationEvent__115930653 =
+  {
+    eventType : Text;
+    id : EntityId__892221652;
+    integrationId : EntityId__892221652;
+    payload : Text;
+    tenantId : TenantId__234751125;
+    timestamp : Timestamp__301639476;
+    triggerAction : ?Text;
+    workspaceId : WorkspaceId__377827389
+  };
+type IntegrationProvider__236570261 = {#GitHub; #GoogleDrive; #Slack};
+type IntegrationStatus__155519520 = {#Connected; #Disconnected; #Error};
+type Integration__331404845 =
+  {
+    accessToken : Text;
+    config : Text;
+    createdAt : Timestamp__301639476;
+    id : EntityId__892221652;
+    lastSyncAt : ?Timestamp__301639476;
+    oauthToken : ?Text;
+    provider : IntegrationProvider__236570261;
+    status : IntegrationStatus__155519520;
+    syncStatus : ?Text;
+    tenantId : TenantId__234751125;
+    updatedAt : Timestamp__301639476;
+    workspaceId : WorkspaceId__377827389
+  };
+type KRStatus__967216966 = {#AtRisk; #Behind; #Completed; #OnTrack};
+type KeyResult__600683166 =
+  {
+    createdAt : Timestamp__301639476;
+    currentValue : Float;
+    description : ?Text;
+    goalId : EntityId__892221652;
+    id : EntityId__892221652;
+    linkedTaskIds : [EntityId__892221652];
+    status : KRStatus__967216966;
+    targetValue : Float;
+    tenantId : TenantId__234751125;
+    title : Text;
+    unit : Text;
+    updatedAt : Timestamp__301639476;
+    workspaceId : WorkspaceId__377827389
+  };
+type MentionEntry__1060255972 = {hasMention : Bool; userId : Principal};
 type Message__454780518 =
   {
     channelId : EntityId__892221652;
@@ -122,10 +562,43 @@ type Message__454780518 =
     createdAt : Timestamp__301639476;
     crossLinks : [CrossLink__241900781];
     id : EntityId__892221652;
+    isThreadReply : ?Bool;
+    reactions : ?[Reaction__248509560];
     replyToId : ?EntityId__892221652;
     senderId : UserId__158757552;
     tenantId : TenantId__234751125;
-    updatedAt : Timestamp__301639476
+    threadCount : ?Nat;
+    updatedAt : Timestamp__301639476;
+    workspaceId : WorkspaceId__377827389
+  };
+type MilestoneStatus__525086009 = {#missed; #reached; #upcoming};
+type MilestoneStatus__610610695 =
+  {#Approved; #Pending; #Released; #Releasing};
+type Milestone__807753983 =
+  {
+    createdAt : Timestamp__301639476;
+    description : Text;
+    dueDate : Timestamp__301639476;
+    id : EntityId__892221652;
+    linkedTaskIds : [EntityId__892221652];
+    projectId : EntityId__892221652;
+    status : MilestoneStatus__525086009;
+    tenantId : TenantId__234751125;
+    title : Text;
+    updatedAt : Timestamp__301639476;
+    workspaceId : WorkspaceId__377827389
+  };
+type NoteTemplate__298735437 =
+  {
+    authorId : UserId__158757552;
+    blocksJson : Text;
+    createdAt : Timestamp__301639476;
+    description : Text;
+    icon : Text;
+    id : EntityId__892221652;
+    name : Text;
+    tenantId : TenantId__234751125;
+    workspaceId : WorkspaceId__377827389
   };
 type Note__1063160515 =
   {
@@ -137,22 +610,139 @@ type Note__1063160515 =
     tags : [Text];
     tenantId : TenantId__234751125;
     title : Text;
-    updatedAt : Timestamp__301639476
+    updatedAt : Timestamp__301639476;
+    workspaceId : WorkspaceId__377827389
   };
-type PayFrequency__27584117 = {#BiWeekly; #Monthly; #Quarterly; #Weekly};
+type OffCyclePayment__713930344 =
+  {
+    amount : Float;
+    createdAt : Timestamp__301639476;
+    employeeId : EntityId__892221652;
+    id : EntityId__892221652;
+    notes : Text;
+    processImmediately : Bool;
+    reason : OffCycleReason__1039797764;
+    status : OffCycleStatus__290347654;
+    tenantId : TenantId__234751125;
+    workspaceId : WorkspaceId__377827389
+  };
+type OffCycleReason__1039797764 = {#adjustment; #bonus; #reimbursement};
+type OffCycleStatus__290347654 = {#pending; #processed};
+type OldEscrowContract__242776966 =
+  {
+    amount : Nat;
+    conditions : [Text];
+    createdAt : Timestamp__301639476;
+    crossLinks : [CrossLink__241900781];
+    currency : Text;
+    description : Text;
+    dueDate : ?Timestamp__301639476;
+    fundedAmount : ?Nat;
+    fundingBlockHeight : ?Nat;
+    id : EntityId__892221652;
+    payeeId : UserId__158757552;
+    payerId : UserId__158757552;
+    status : EscrowStatus__38437157;
+    statusHistory : [StatusHistoryEntry__1058365233];
+    tenantId : TenantId__234751125;
+    title : Text;
+    updatedAt : Timestamp__301639476;
+    workspaceId : WorkspaceId__377827389
+  };
+type OldWalletTransaction__334249798 =
+  {
+    accountId : EntityId__892221652;
+    amount : Nat;
+    approvals : [TransactionApproval__394172020];
+    asset : AssetType__697693138;
+    createdAt : Timestamp__301639476;
+    fromAddress : ?Text;
+    id : EntityId__892221652;
+    ledgerBlockHeight : ?Nat;
+    ledgerTxHash : ?Text;
+    memo : ?Text;
+    memoValue : ?Nat64;
+    requiredApprovals : Nat;
+    status : TransactionStatus__52851611;
+    tenantId : TenantId__234751125;
+    toAddress : ?Text;
+    txType : TransactionType__907911643;
+    workspaceId : WorkspaceId__377827389
+  };
+type PageNode__756858894 =
+  {
+    authorId : UserId__158757552;
+    blocks : [Block__603512191];
+    coverUrl : ?Text;
+    createdAt : Timestamp__301639476;
+    crossLinks : [CrossLink__241900781];
+    icon : Text;
+    id : EntityId__892221652;
+    parentPageId : ?EntityId__892221652;
+    tenantId : TenantId__234751125;
+    title : Text;
+    updatedAt : Timestamp__301639476;
+    watchers : [UserId__158757552];
+    workspaceId : WorkspaceId__377827389
+  };
+type PayFrequency__27584117 =
+  {#BiWeekly; #Monthly; #Quarterly; #SemiMonthly; #Weekly};
+type PaySchedule__136082290 =
+  {
+    createdAt : Timestamp__301639476;
+    description : Text;
+    frequency : PayFrequency__27584117;
+    id : EntityId__892221652;
+    isDefault : Bool;
+    name : Text;
+    tenantId : TenantId__234751125;
+    workspaceId : WorkspaceId__377827389
+  };
+type PayStub__229205174 =
+  {
+    details : Text;
+    employeeId : EntityId__892221652;
+    generatedAt : Timestamp__301639476;
+    grossPay : Float;
+    id : EntityId__892221652;
+    netPay : Float;
+    otherDeductions : Float;
+    payrollRecordId : EntityId__892221652;
+    period : Text;
+    taxDeductions : Float;
+    tenantId : TenantId__234751125;
+    workspaceId : WorkspaceId__377827389
+  };
 type PayrollRecord__556311547 =
   {
     amount : Nat;
+    approvedAt : ?Timestamp__301639476;
+    approvedBy : ?UserId__158757552;
     createdAt : Timestamp__301639476;
     currency : Text;
+    deductionAmount : Float;
     employeeId : EntityId__892221652;
+    grossAmount : Float;
     id : EntityId__892221652;
+    netAmount : Float;
     period : Text;
     processedAt : ?Timestamp__301639476;
+    rejectionReason : ?Text;
     status : PayrollStatus__483582428;
-    tenantId : TenantId__234751125
+    taxAmount : Float;
+    tenantId : TenantId__234751125;
+    workspaceId : WorkspaceId__377827389
   };
-type PayrollStatus__483582428 = {#Active; #Completed; #Paused};
+type PayrollStatus__483582428 =
+  {
+    #Active;
+    #Approved;
+    #Completed;
+    #Paused;
+    #PendingApproval;
+    #Processed;
+    #Rejected
+  };
 type ProjectStatus__886440159 = {#Active; #Archived; #Completed; #OnHold};
 type Project__614212307 =
   {
@@ -165,9 +755,12 @@ type Project__614212307 =
     ownerId : UserId__158757552;
     status : ProjectStatus__886440159;
     tenantId : TenantId__234751125;
-    updatedAt : Timestamp__301639476
+    updatedAt : Timestamp__301639476;
+    workspaceId : WorkspaceId__377827389
   };
+type Reaction__248509560 = {emoji : Text; userIds : [Principal]};
 type RecurrenceRule__544597201 = {#Daily; #Monthly; #None; #Weekly; #Yearly};
+type RecurrenceType__372578890 = {#daily; #monthly; #weekly};
 type RecurringPayment__52651042 =
   {
     accountId : EntityId__892221652;
@@ -179,11 +772,116 @@ type RecurringPayment__52651042 =
     isActive : Bool;
     nextRunAt : Timestamp__301639476;
     tenantId : TenantId__234751125;
-    toAddress : Text
+    toAddress : Text;
+    workspaceId : WorkspaceId__377827389
+  };
+type RecurringTask__512999641 =
+  {
+    assigneeId : ?UserId__158757552;
+    createdAt : Timestamp__301639476;
+    description : Text;
+    id : EntityId__892221652;
+    lastCreatedAt : ?Timestamp__301639476;
+    nextDueAt : Timestamp__301639476;
+    priority : TaskPriority__409192515;
+    projectId : EntityId__892221652;
+    recurrenceType : RecurrenceType__372578890;
+    tenantId : TenantId__234751125;
+    title : Text;
+    updatedAt : Timestamp__301639476;
+    workspaceId : WorkspaceId__377827389
   };
 type Role__300349085 = {#Admin; #Manager; #TeamMember};
+type RsvpStatus__479455962 = {#accepted; #declined; #noResponse; #tentative};
+type SprintStatus__545514941 = {#active; #completed; #planned};
+type Sprint__759831711 =
+  {
+    createdAt : Timestamp__301639476;
+    endDate : Timestamp__301639476;
+    goal : Text;
+    id : EntityId__892221652;
+    name : Text;
+    projectId : EntityId__892221652;
+    startDate : Timestamp__301639476;
+    status : SprintStatus__545514941;
+    taskIds : [EntityId__892221652];
+    tenantId : TenantId__234751125;
+    updatedAt : Timestamp__301639476;
+    workspaceId : WorkspaceId__377827389
+  };
+type StatusHistoryEntry__1058365233 =
+  {
+    changedBy : Principal;
+    note : ?Text;
+    status : EscrowStatus__38437157;
+    timestamp : Timestamp__301639476
+  };
+type Subtask__159820170 =
+  {
+    assigneeId : ?UserId__158757552;
+    createdAt : Timestamp__301639476;
+    description : Text;
+    dueDate : ?Timestamp__301639476;
+    id : EntityId__892221652;
+    order : Nat;
+    parentTaskId : EntityId__892221652;
+    priority : TaskPriority__409192515;
+    projectId : EntityId__892221652;
+    status : TaskStatus__562831937;
+    tenantId : TenantId__234751125;
+    title : Text;
+    updatedAt : Timestamp__301639476;
+    workspaceId : WorkspaceId__377827389
+  };
+type TaskComment__832328084 =
+  {
+    authorId : UserId__158757552;
+    content : Text;
+    createdAt : Timestamp__301639476;
+    editedAt : ?Timestamp__301639476;
+    id : EntityId__892221652;
+    taskId : EntityId__892221652;
+    tenantId : TenantId__234751125;
+    updatedAt : Timestamp__301639476;
+    workspaceId : WorkspaceId__377827389
+  };
 type TaskPriority__409192515 = {#Critical; #High; #Low; #Medium};
+type TaskRelationshipType__362890953 =
+  {#blockedBy; #blocks; #duplicateOf; #relatedTo};
+type TaskRelationship__29946541 =
+  {
+    createdAt : Timestamp__301639476;
+    createdBy : UserId__158757552;
+    id : EntityId__892221652;
+    relationshipType : TaskRelationshipType__362890953;
+    sourceTaskId : EntityId__892221652;
+    targetTaskId : EntityId__892221652;
+    tenantId : TenantId__234751125;
+    workspaceId : WorkspaceId__377827389
+  };
 type TaskStatus__562831937 = {#Blocked; #Done; #InProgress; #Todo};
+type TaskTemplate__952203582 =
+  {
+    checklistItems : [Text];
+    createdAt : Timestamp__301639476;
+    defaultAssigneeId : ?UserId__158757552;
+    defaultPriority : TaskPriority__409192515;
+    description : Text;
+    id : EntityId__892221652;
+    name : Text;
+    projectId : ?EntityId__892221652;
+    tenantId : TenantId__234751125;
+    updatedAt : Timestamp__301639476;
+    workspaceId : WorkspaceId__377827389
+  };
+type TaskWatcher__576885533 =
+  {
+    addedAt : Timestamp__301639476;
+    taskId : EntityId__892221652;
+    tenantId : TenantId__234751125;
+    userId : UserId__158757552;
+    workspaceId : WorkspaceId__377827389
+  };
 type Task__929654902 =
   {
     assigneeId : ?UserId__158757552;
@@ -197,13 +895,50 @@ type Task__929654902 =
     status : TaskStatus__562831937;
     tenantId : TenantId__234751125;
     title : Text;
-    updatedAt : Timestamp__301639476
+    updatedAt : Timestamp__301639476;
+    workspaceId : WorkspaceId__377827389
   };
 type TenantId__234751125 = Text;
+type ThreadNotification__306762693 =
+  {
+    channelId : Text;
+    createdAt : Int;
+    id : Text;
+    messageId : Text;
+    recipientId : Principal;
+    senderId : Principal;
+    tenantId : TenantId__234751125
+  };
+type TimeEntry__332413573 =
+  {
+    billable : Bool;
+    createdAt : Timestamp__301639476;
+    durationMinutes : Nat;
+    endTime : ?Timestamp__301639476;
+    id : EntityId__892221652;
+    notes : Text;
+    projectId : EntityId__892221652;
+    startTime : Timestamp__301639476;
+    taskId : ?EntityId__892221652;
+    tenantId : TenantId__234751125;
+    userId : UserId__158757552;
+    workspaceId : WorkspaceId__377827389
+  };
 type Timestamp__301639476 = Int;
+type TransactionApproval__394172020 =
+  {
+    approved : Bool;
+    approver : Principal;
+    id : EntityId__892221652;
+    tenantId : TenantId__234751125;
+    timestamp : Timestamp__301639476;
+    txId : EntityId__892221652;
+    workspaceId : WorkspaceId__377827389
+  };
 type TransactionStatus__52851611 =
-  {#Cancelled; #Completed; #Failed; #Pending};
+  {#AwaitingApproval; #Cancelled; #Completed; #Failed; #Pending};
 type TransactionType__907911643 = {#Receive; #Send; #Stake; #Swap; #Unstake};
+type UnreadEntry__355195530 = {count : Nat; userId : Principal};
 type UserId__158757552 = Principal;
 type UserProfile__244945094 =
   {
@@ -215,54 +950,205 @@ type UserProfile__244945094 =
     userId : UserId__158757552;
     workspaceId : EntityId__892221652
   };
+type UserStatus__380884490 =
+  {
+    customStatus : Text;
+    id : Principal;
+    lastSeen : Int;
+    status : {#away; #offline; #online};
+    tenantId : TenantId__234751125;
+    workspaceId : WorkspaceId__377827389
+  };
 type WalletAccount__310674054 =
   {
     accountId : Text;
+    accountType : AccountType__879311470;
     btcBalance : Nat;
     createdAt : Timestamp__301639476;
     displayName : Text;
     icpBalance : Nat;
+    icrc1Account : Text;
     id : EntityId__892221652;
     principalId : Text;
     tenantId : TenantId__234751125;
     updatedAt : Timestamp__301639476;
-    userId : UserId__158757552
+    userId : UserId__158757552;
+    workspaceId : WorkspaceId__377827389
   };
 type WalletTransaction__850303578 =
   {
     accountId : EntityId__892221652;
     amount : Nat;
+    approvals : [TransactionApproval__394172020];
     asset : AssetType__697693138;
     createdAt : Timestamp__301639476;
     fromAddress : ?Text;
     id : EntityId__892221652;
+    ledgerBlockHeight : ?Nat;
+    ledgerTxHash : ?Text;
     memo : ?Text;
+    memoValue : ?Nat64;
+    requiredApprovals : Nat;
     status : TransactionStatus__52851611;
     tenantId : TenantId__234751125;
     toAddress : ?Text;
-    txType : TransactionType__907911643
+    txType : TransactionType__907911643;
+    workspaceId : WorkspaceId__377827389
+  };
+type WhiteboardElement__769964822 =
+  {
+    color : Text;
+    connectorFrom : ?Text;
+    connectorTo : ?Text;
+    converted : Bool;
+    height : Float;
+    id : EntityId__892221652;
+    imageUrl : ?Text;
+    linkedTaskId : ?Text;
+    points : [Float];
+    strokeWidth : Float;
+    text : Text;
+    tool : DrawingTool__673539675;
+    width : Float;
+    x : Float;
+    y : Float
+  };
+type Whiteboard__8914256 =
+  {
+    createdAt : Timestamp__301639476;
+    createdBy : UserId__158757552;
+    elements : [WhiteboardElement__769964822];
+    id : EntityId__892221652;
+    projectId : ?EntityId__892221652;
+    templateId : ?Text;
+    templateName : ?Text;
+    tenantId : TenantId__234751125;
+    title : Text;
+    updatedAt : Timestamp__301639476;
+    workspaceId : WorkspaceId__377827389
+  };
+type WorkspaceId__377827389 = Text;
+type WorkspaceMember__545567312 =
+  {
+    displayName : Text;
+    email : Text;
+    joinedAt : Timestamp__301639476;
+    role : WorkspaceRole__170063324;
+    userId : UserId__158757552;
+    workspaceId : WorkspaceId__377827389
+  };
+type WorkspaceRole__170063324 = {#Admin; #Guest; #Manager; #TeamMember};
+type WorkspaceSpendingLimit__746113473 =
+  {
+    createdAt : Timestamp__301639476;
+    currency : Text;
+    id : EntityId__892221652;
+    maxAmount : Float;
+    role : Role__300349085;
+    tenantId : TenantId__234751125;
+    updatedAt : Timestamp__301639476;
+    workspaceId : WorkspaceId__377827389
   };
 type Workspace__405571195 =
   {
     createdAt : Timestamp__301639476;
     id : EntityId__892221652;
+    members : [(UserId__158757552, WorkspaceMember__545567312)];
     name : Text;
     ownerId : UserId__158757552;
     tenantId : TenantId__234751125
   };
-actor {
+actor ({
+  stable var activityEvents :
+    [(EntityId__892221652, ActivityEvent__867712350)];
+  stable var aiConfigs : [(EntityId__892221652, AIConfig__1029196330)];
+  stable var aiPrompts : [(EntityId__892221652, AIPrompt__631099167)];
+  stable var aiResponses : [(EntityId__892221652, AIResponse__363792681)];
   stable var auditLogs : [(EntityId__892221652, AuditLog__383524706)];
   stable var automationRules :
     [(EntityId__892221652, AutomationRule__416221658)];
   stable var backups : [(EntityId__892221652, Backup__459295811)];
+  stable var calendarDefs : [(EntityId__892221652, CalendarDef__292324246)];
   stable var channels : [(EntityId__892221652, Channel__662979216)];
+  stable var checklistItems :
+    [(EntityId__892221652, ChecklistItem__389672564)];
+  stable var contractorPayments :
+    [(EntityId__892221652, ContractorPayment__830236605)];
+  stable var contractors : [(EntityId__892221652, Contractor__971014736)];
   stable var employees : [(EntityId__892221652, Employee__19034336)];
-  stable var escrowContracts :
-    [(EntityId__892221652, EscrowContract__1011191203)];
+  in escrowContracts : [(EntityId__892221652, OldEscrowContract__242776966)];
+  stable var escrowDisputes :
+    [(EntityId__892221652, EscrowDispute__775543295)];
+  stable var escrowMilestones :
+    [(EntityId__892221652, EscrowMilestone__764038538)];
+  stable var eventExceptions :
+    [(EntityId__892221652, EventException__406348344)];
+  stable var eventRsvps : [(EntityId__892221652, EventRsvp__293707463)];
   stable var events : [(EntityId__892221652, Event__327837626)];
+  stable var formSubmissions :
+    [(EntityId__892221652, FormSubmission__618744830)];
+  stable var forms : [(EntityId__892221652, Form__519346290)];
+  stable var goalCheckIns : [(EntityId__892221652, GoalCheckIn__198760579)];
+  stable var goals : [(EntityId__892221652, Goal__520167328)];
+  stable var guestInvitations :
+    [(EntityId__892221652, GuestInvitation__1017064848)];
+  stable var guestUsers : [(EntityId__892221652, GuestUser__18943929)];
+  stable ic :
+    actor {
+      http_request :
+        shared {
+                 body : ?Blob;
+                 headers : [{name : Text; value : Text}];
+                 is_replicated : ?Bool;
+                 max_response_bytes : ?Nat64;
+                 method : {#get; #head; #post};
+                 transform :
+                   ?{
+                      context : Blob;
+                      function :
+                        shared query {
+                                       context : Blob;
+                                       response :
+                                         {
+                                           body : Blob;
+                                           headers :
+                                             [{name : Text; value : Text}];
+                                           status : Nat
+                                         }
+                                     } ->
+                          async
+                            {
+                              body : Blob;
+                              headers : [{name : Text; value : Text}];
+                              status : Nat
+                            }
+                    };
+                 url : Text
+               } ->
+          async
+            {
+              body : Blob;
+              headers : [{name : Text; value : Text}];
+              status : Nat
+            }
+    };
   stable var idCounter : Nat;
+  stable var integrationEvents :
+    [(EntityId__892221652, IntegrationEvent__115930653)];
+  stable var integrations : [(EntityId__892221652, Integration__331404845)];
+  stable var keyResults : [(EntityId__892221652, KeyResult__600683166)];
   stable var messages : [(EntityId__892221652, Message__454780518)];
+  stable var milestones : [(EntityId__892221652, Milestone__807753983)];
+  stable var noteTemplates : [(EntityId__892221652, NoteTemplate__298735437)];
   stable var notes : [(EntityId__892221652, Note__1063160515)];
+  stable var offCyclePayments :
+    [(EntityId__892221652, OffCyclePayment__713930344)];
+  stable var pages : [(EntityId__892221652, PageNode__756858894)];
+  stable var payAuditLog : [(EntityId__892221652, AuditLogEntry__447130560)];
+  stable var payBenefits : [(EntityId__892221652, Benefit__39905783)];
+  stable var payDeductions : [(EntityId__892221652, Deduction__686196060)];
+  stable var paySchedules : [(EntityId__892221652, PaySchedule__136082290)];
+  stable var payStubs : [(EntityId__892221652, PayStub__229205174)];
   stable var payrollRecords :
     [(EntityId__892221652, PayrollRecord__556311547)];
   stable profilesRef :
@@ -270,11 +1156,156 @@ actor {
   stable var projects : [(EntityId__892221652, Project__614212307)];
   stable var recurringPmts :
     [(EntityId__892221652, RecurringPayment__52651042)];
+  stable var recurringTasks :
+    [(EntityId__892221652, RecurringTask__512999641)];
+  stable var spendingLimits :
+    [(EntityId__892221652, WorkspaceSpendingLimit__746113473)];
+  stable var sprints : [(EntityId__892221652, Sprint__759831711)];
+  stable var statusStore : [(Text, UserStatus__380884490)];
+  stable var subtasks : [(EntityId__892221652, Subtask__159820170)];
+  stable var taskComments : [(EntityId__892221652, TaskComment__832328084)];
+  stable var taskRelationships :
+    [(EntityId__892221652, TaskRelationship__29946541)];
+  stable var taskTemplates : [(EntityId__892221652, TaskTemplate__952203582)];
+  stable var taskWatchers : [TaskWatcher__576885533];
   stable var tasks : [(EntityId__892221652, Task__929654902)];
+  stable var threadNotifications : [(Text, ThreadNotification__306762693)];
+  stable var timeEntries : [(EntityId__892221652, TimeEntry__332413573)];
+  stable var txMemoCounter : Nat64;
   stable var walletAccounts :
     [(EntityId__892221652, WalletAccount__310674054)];
-  stable var walletTxs :
-    [(EntityId__892221652, WalletTransaction__850303578)];
+  stable var walletApprovals :
+    [(EntityId__892221652, TransactionApproval__394172020)];
+  stable var walletApprovalsCounter : Nat;
+  in walletTxs : [(EntityId__892221652, OldWalletTransaction__334249798)];
+  stable var whiteboards : [(EntityId__892221652, Whiteboard__8914256)];
+  stable var workspaceShareTokens : [(Text, Text)];
   stable workspacesRef :
     {var val : [(EntityId__892221652, Workspace__405571195)]}
-};
+}, {
+  stable var activityEvents :
+    [(EntityId__892221652, ActivityEvent__867712350)];
+  stable var aiConfigs : [(EntityId__892221652, AIConfig__1029196330)];
+  stable var aiPrompts : [(EntityId__892221652, AIPrompt__631099167)];
+  stable var aiResponses : [(EntityId__892221652, AIResponse__363792681)];
+  stable var auditLogs : [(EntityId__892221652, AuditLog__383524706)];
+  stable var automationRules :
+    [(EntityId__892221652, AutomationRule__416221658)];
+  stable var backups : [(EntityId__892221652, Backup__459295811)];
+  stable var calendarDefs : [(EntityId__892221652, CalendarDef__292324246)];
+  stable var channels : [(EntityId__892221652, Channel__662979216)];
+  stable var checklistItems :
+    [(EntityId__892221652, ChecklistItem__389672564)];
+  stable var contractorPayments :
+    [(EntityId__892221652, ContractorPayment__830236605)];
+  stable var contractors : [(EntityId__892221652, Contractor__971014736)];
+  stable var employees : [(EntityId__892221652, Employee__19034336)];
+  stable var escrowContracts :
+    [(EntityId__892221652, EscrowContract__1011191203)];
+  stable var escrowDisputes :
+    [(EntityId__892221652, EscrowDispute__775543295)];
+  stable var escrowMilestones :
+    [(EntityId__892221652, EscrowMilestone__764038538)];
+  stable var eventExceptions :
+    [(EntityId__892221652, EventException__406348344)];
+  stable var eventRsvps : [(EntityId__892221652, EventRsvp__293707463)];
+  stable var events : [(EntityId__892221652, Event__327837626)];
+  stable var formSubmissions :
+    [(EntityId__892221652, FormSubmission__618744830)];
+  stable var forms : [(EntityId__892221652, Form__519346290)];
+  stable var goalCheckIns : [(EntityId__892221652, GoalCheckIn__198760579)];
+  stable var goals : [(EntityId__892221652, Goal__520167328)];
+  stable var guestInvitations :
+    [(EntityId__892221652, GuestInvitation__1017064848)];
+  stable var guestUsers : [(EntityId__892221652, GuestUser__18943929)];
+  stable ic :
+    actor {
+      http_request :
+        shared {
+                 body : ?Blob;
+                 headers : [{name : Text; value : Text}];
+                 is_replicated : ?Bool;
+                 max_response_bytes : ?Nat64;
+                 method : {#get; #head; #post};
+                 transform :
+                   ?{
+                      context : Blob;
+                      function :
+                        shared query {
+                                       context : Blob;
+                                       response :
+                                         {
+                                           body : Blob;
+                                           headers :
+                                             [{name : Text; value : Text}];
+                                           status : Nat
+                                         }
+                                     } ->
+                          async
+                            {
+                              body : Blob;
+                              headers : [{name : Text; value : Text}];
+                              status : Nat
+                            }
+                    };
+                 url : Text
+               } ->
+          async
+            {
+              body : Blob;
+              headers : [{name : Text; value : Text}];
+              status : Nat
+            }
+    };
+  stable var idCounter : Nat;
+  stable var integrationEvents :
+    [(EntityId__892221652, IntegrationEvent__115930653)];
+  stable var integrations : [(EntityId__892221652, Integration__331404845)];
+  stable var keyResults : [(EntityId__892221652, KeyResult__600683166)];
+  stable var messages : [(EntityId__892221652, Message__454780518)];
+  stable var milestones : [(EntityId__892221652, Milestone__807753983)];
+  stable var noteTemplates : [(EntityId__892221652, NoteTemplate__298735437)];
+  stable var notes : [(EntityId__892221652, Note__1063160515)];
+  stable var offCyclePayments :
+    [(EntityId__892221652, OffCyclePayment__713930344)];
+  stable var pages : [(EntityId__892221652, PageNode__756858894)];
+  stable var payAuditLog : [(EntityId__892221652, AuditLogEntry__447130560)];
+  stable var payBenefits : [(EntityId__892221652, Benefit__39905783)];
+  stable var payDeductions : [(EntityId__892221652, Deduction__686196060)];
+  stable var paySchedules : [(EntityId__892221652, PaySchedule__136082290)];
+  stable var payStubs : [(EntityId__892221652, PayStub__229205174)];
+  stable var payrollRecords :
+    [(EntityId__892221652, PayrollRecord__556311547)];
+  stable profilesRef :
+    {var val : [(UserId__158757552, UserProfile__244945094)]};
+  stable var projects : [(EntityId__892221652, Project__614212307)];
+  stable var recurringPmts :
+    [(EntityId__892221652, RecurringPayment__52651042)];
+  stable var recurringTasks :
+    [(EntityId__892221652, RecurringTask__512999641)];
+  stable var spendingLimits :
+    [(EntityId__892221652, WorkspaceSpendingLimit__746113473)];
+  stable var sprints : [(EntityId__892221652, Sprint__759831711)];
+  stable var statusStore : [(Text, UserStatus__380884490)];
+  stable var subtasks : [(EntityId__892221652, Subtask__159820170)];
+  stable var taskComments : [(EntityId__892221652, TaskComment__832328084)];
+  stable var taskRelationships :
+    [(EntityId__892221652, TaskRelationship__29946541)];
+  stable var taskTemplates : [(EntityId__892221652, TaskTemplate__952203582)];
+  stable var taskWatchers : [TaskWatcher__576885533];
+  stable var tasks : [(EntityId__892221652, Task__929654902)];
+  stable var threadNotifications : [(Text, ThreadNotification__306762693)];
+  stable var timeEntries : [(EntityId__892221652, TimeEntry__332413573)];
+  stable var txMemoCounter : Nat64;
+  stable var walletAccounts :
+    [(EntityId__892221652, WalletAccount__310674054)];
+  stable var walletApprovals :
+    [(EntityId__892221652, TransactionApproval__394172020)];
+  stable var walletApprovalsCounter : Nat;
+  stable var walletTxs :
+    [(EntityId__892221652, WalletTransaction__850303578)];
+  stable var whiteboards : [(EntityId__892221652, Whiteboard__8914256)];
+  stable var workspaceShareTokens : [(Text, Text)];
+  stable workspacesRef :
+    {var val : [(EntityId__892221652, Workspace__405571195)]}
+}) ;

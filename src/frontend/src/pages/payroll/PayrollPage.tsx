@@ -1,111 +1,173 @@
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import {
+  AlertCircle,
   ArrowRight,
   BadgeDollarSign,
   Calendar,
   CheckCircle2,
   Clock,
   DollarSign,
+  FileText,
   Play,
+  Plus,
+  RefreshCw,
+  TrendingUp,
   Users,
 } from "lucide-react";
-import { useState } from "react";
 import { toast } from "sonner";
 import { useBackend } from "../../hooks/useBackend";
-import { getTenantId } from "../../hooks/useWorkspace";
+import { getTenantId, useWorkspace } from "../../hooks/useWorkspace";
 import { PayrollStatus } from "../../types";
 import type { Employee, PayrollRecord } from "../../types";
 
-function PayrollStatusBadge({ status }: { status: PayrollStatus }) {
-  if (status === PayrollStatus.Completed)
-    return (
-      <Badge className="bg-green-500/15 text-green-700 dark:text-green-400 border-green-500/20 gap-1">
-        <CheckCircle2 className="h-3 w-3" /> Completed
-      </Badge>
-    );
-  if (status === PayrollStatus.Active)
-    return (
-      <Badge className="bg-blue-500/15 text-blue-700 dark:text-blue-400 border-blue-500/20 gap-1">
-        <Clock className="h-3 w-3" /> Active
-      </Badge>
-    );
-  return (
-    <Badge variant="outline" className="text-muted-foreground gap-1">
-      <Clock className="h-3 w-3" /> Paused
-    </Badge>
-  );
-}
-
-function formatCurrency(amount: bigint, currency: string) {
+function formatCurrency(amount: number | bigint, currency = "USD") {
   return new Intl.NumberFormat("en-US", {
     style: "currency",
     currency: currency || "USD",
   }).format(Number(amount) / 100);
 }
 
-function nextPayrollDate() {
-  const d = new Date();
-  d.setMonth(d.getMonth() + 1, 1);
-  return d.toLocaleDateString("en-US", {
-    month: "long",
-    day: "numeric",
-    year: "numeric",
-  });
+function PayrollStatusBadge({ status }: { status: PayrollStatus }) {
+  const map: Record<string, { label: string; className: string }> = {
+    [PayrollStatus.Completed]: {
+      label: "Completed",
+      className:
+        "bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 border-emerald-500/20",
+    },
+    [PayrollStatus.Approved]: {
+      label: "Approved",
+      className:
+        "bg-blue-500/15 text-blue-700 dark:text-blue-400 border-blue-500/20",
+    },
+    [PayrollStatus.PendingApproval]: {
+      label: "Pending",
+      className:
+        "bg-amber-500/15 text-amber-700 dark:text-amber-400 border-amber-500/20",
+    },
+    [PayrollStatus.Rejected]: {
+      label: "Rejected",
+      className:
+        "bg-red-500/15 text-red-700 dark:text-red-400 border-red-500/20",
+    },
+    [PayrollStatus.Processed]: {
+      label: "Processed",
+      className:
+        "bg-purple-500/15 text-purple-700 dark:text-purple-400 border-purple-500/20",
+    },
+    [PayrollStatus.Active]: {
+      label: "Active",
+      className:
+        "bg-cyan-500/15 text-cyan-700 dark:text-cyan-400 border-cyan-500/20",
+    },
+    [PayrollStatus.Paused]: {
+      label: "Paused",
+      className: "bg-muted text-muted-foreground",
+    },
+  };
+  const s = map[status] ?? {
+    label: status,
+    className: "bg-muted text-muted-foreground",
+  };
+  return (
+    <span
+      className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium border ${s.className}`}
+    >
+      {s.label}
+    </span>
+  );
 }
 
 export default function PayrollPage() {
   const { actor, isFetching } = useBackend();
   const tenantId = getTenantId();
+  const { activeWorkspaceId } = useWorkspace();
+  const workspaceId = activeWorkspaceId ?? "";
   const queryClient = useQueryClient();
 
-  const [selectedEmployeeId, setSelectedEmployeeId] = useState("");
-  const [period, setPeriod] = useState(() => {
-    const now = new Date();
-    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
-  });
+  const navLinks = [
+    {
+      to: `/app/${workspaceId}/payroll/employees` as const,
+      label: "Employees",
+      icon: Users,
+      desc: "Manage employee profiles",
+    },
+    {
+      to: `/app/${workspaceId}/payroll/schedules` as const,
+      label: "Pay Schedules",
+      icon: Calendar,
+      desc: "Weekly, bi-weekly, monthly",
+    },
+    {
+      to: `/app/${workspaceId}/payroll/contractors` as const,
+      label: "Contractors",
+      icon: FileText,
+      desc: "Freelancer & contractor payments",
+    },
+    {
+      to: `/app/${workspaceId}/payroll/bulk-approval` as const,
+      label: "Bulk Approval",
+      icon: CheckCircle2,
+      desc: "Review & approve payroll runs",
+    },
+    {
+      to: `/app/${workspaceId}/payroll/off-cycle` as const,
+      label: "Off-Cycle Payments",
+      icon: RefreshCw,
+      desc: "Bonuses & reimbursements",
+    },
+    {
+      to: `/app/${workspaceId}/payroll/audit-log` as const,
+      label: "Audit Log",
+      icon: AlertCircle,
+      desc: "Full payroll history log",
+    },
+  ];
 
   const { data: employees = [], isLoading: empLoading } = useQuery<Employee[]>({
-    queryKey: ["employees", tenantId],
-    queryFn: async () => (actor ? actor.listEmployees(tenantId) : []),
-    enabled: !!actor && !isFetching,
+    queryKey: ["employees", tenantId, workspaceId],
+    queryFn: async () =>
+      actor ? actor.listEmployees(tenantId, workspaceId) : [],
+    enabled: !!actor && !isFetching && !!workspaceId,
   });
 
   const { data: records = [], isLoading: recLoading } = useQuery<
     PayrollRecord[]
   >({
-    queryKey: ["payrollRecords", tenantId, null],
+    queryKey: ["payrollRecords", tenantId, workspaceId, null],
     queryFn: async () =>
-      actor ? actor.listPayrollRecords(tenantId, null) : [],
-    enabled: !!actor && !isFetching,
+      actor ? actor.listPayrollRecords(tenantId, workspaceId, null) : [],
+    enabled: !!actor && !isFetching && !!workspaceId,
   });
 
-  const processPayroll = useMutation({
+  const runPayroll = useMutation({
     mutationFn: async () => {
-      if (!actor || !selectedEmployeeId) throw new Error("Select an employee");
-      const res = await actor.processPayroll(
-        tenantId,
-        selectedEmployeeId,
-        period,
+      if (!actor) throw new Error("Not connected");
+      const activeEmps = employees.filter((e) => e.isActive);
+      if (activeEmps.length === 0) throw new Error("No active employees");
+      const period = new Date().toISOString().slice(0, 7);
+      const results = await Promise.allSettled(
+        activeEmps.map((e) =>
+          actor.processPayroll(tenantId, workspaceId, e.id, period),
+        ),
       );
-      if (res.__kind__ === "err") throw new Error(res.err);
-      return res.ok;
+      return results.filter((r) => r.status === "fulfilled").length;
     },
-    onSuccess: () => {
-      toast.success("Payroll processed successfully");
+    onSuccess: (count) => {
+      toast.success(`Payroll processed for ${count} employee(s)`);
       queryClient.invalidateQueries({ queryKey: ["payrollRecords"] });
-      setSelectedEmployeeId("");
     },
     onError: (e: Error) => toast.error(e.message),
   });
 
   const activeEmployees = employees.filter((e) => e.isActive);
+  const pendingApproval = records.filter(
+    (r) => r.status === PayrollStatus.PendingApproval,
+  );
   const thisMonth = new Date().toISOString().slice(0, 7);
   const monthRecords = records.filter((r) => r.period.startsWith(thisMonth));
   const totalPayroll = monthRecords.reduce(
@@ -114,158 +176,213 @@ export default function PayrollPage() {
   );
   const recentRecords = [...records]
     .sort((a, b) => Number(b.createdAt) - Number(a.createdAt))
-    .slice(0, 8);
+    .slice(0, 6);
   const employeeMap = new Map(employees.map((e) => [e.id, e]));
   const statsLoading = empLoading || recLoading;
 
+  const stats = [
+    {
+      label: "Active Employees",
+      value: statsLoading ? null : String(activeEmployees.length),
+      icon: Users,
+      trend: "+2 this month",
+    },
+    {
+      label: "Payroll This Month",
+      value: statsLoading
+        ? null
+        : `$${(totalPayroll / 100).toLocaleString("en-US", { minimumFractionDigits: 2 })}`,
+      icon: DollarSign,
+      trend: "Current period",
+    },
+    {
+      label: "Pending Approval",
+      value: statsLoading ? null : String(pendingApproval.length),
+      icon: Clock,
+      link: `/app/${workspaceId}/payroll/bulk-approval`,
+      urgent: pendingApproval.length > 0,
+    },
+    {
+      label: "Total Payroll Runs",
+      value: statsLoading ? null : String(records.length),
+      icon: TrendingUp,
+      trend: "All time",
+    },
+  ];
+
   return (
-    <div className="p-6 md:p-8 max-w-6xl mx-auto space-y-8">
+    <div className="animate-fade-in-up p-6 space-y-6 max-w-7xl mx-auto">
       {/* Header */}
       <div className="flex items-center justify-between flex-wrap gap-4">
         <div className="flex items-center gap-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-green-500/15">
-            <BadgeDollarSign className="h-5 w-5 text-green-600 dark:text-green-400" />
+          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-500/15 border border-emerald-500/20">
+            <BadgeDollarSign className="h-5 w-5 text-emerald-600 dark:text-emerald-400" />
           </div>
           <div>
-            <h1 className="font-display text-2xl font-bold text-foreground">
+            <h1 className="font-display text-2xl font-bold tracking-tight text-foreground">
               Payroll
             </h1>
             <p className="text-sm text-muted-foreground">
-              Manage payroll and employee payments
+              Manage employee payments and compensation
             </p>
           </div>
         </div>
-        <Button asChild variant="outline" data-ocid="payroll-employees-link">
-          <Link to="/app/payroll/employees">
-            <Users className="mr-2 h-4 w-4" />
-            Manage Employees
-            <ArrowRight className="ml-2 h-4 w-4" />
-          </Link>
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button asChild variant="outline" size="sm" className="active-press">
+            <Link to={`/app/${workspaceId}/payroll/employees`}>
+              <Plus className="mr-1.5 h-3.5 w-3.5" />
+              Add Employee
+            </Link>
+          </Button>
+          <Button
+            size="sm"
+            className="bg-emerald-600 hover:bg-emerald-700 text-white active-press"
+            onClick={() => runPayroll.mutate()}
+            disabled={runPayroll.isPending || activeEmployees.length === 0}
+            data-ocid="payroll-run-all-btn"
+          >
+            {runPayroll.isPending ? (
+              "Running…"
+            ) : (
+              <>
+                <Play className="mr-1.5 h-3.5 w-3.5" />
+                Run Payroll
+              </>
+            )}
+          </Button>
+        </div>
       </div>
 
       {/* Stats */}
-      <div className="grid gap-4 sm:grid-cols-3">
-        {[
-          {
-            label: "Active Employees",
-            value: statsLoading ? null : String(activeEmployees.length),
-            icon: Users,
-          },
-          {
-            label: "Payroll This Month",
-            value: statsLoading
-              ? null
-              : `$${(totalPayroll / 100).toLocaleString("en-US", { minimumFractionDigits: 2 })}`,
-            icon: DollarSign,
-          },
-          {
-            label: "Next Payroll Date",
-            value: nextPayrollDate(),
-            icon: Calendar,
-          },
-        ].map(({ label, value, icon: Icon }) => (
-          <Card key={label} className="border-border">
-            <CardContent className="flex items-center gap-4 pt-6">
-              <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-green-500/10">
-                <Icon className="h-5 w-5 text-green-600 dark:text-green-400" />
-              </div>
-              <div className="min-w-0">
-                <p className="text-sm text-muted-foreground">{label}</p>
-                {value === null ? (
-                  <Skeleton className="mt-1 h-6 w-24" />
-                ) : (
-                  <p className="text-xl font-bold font-display text-foreground truncate">
-                    {value}
-                  </p>
-                )}
-              </div>
-            </CardContent>
-          </Card>
-        ))}
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        {stats.map(({ label, value, icon: Icon, trend, link, urgent }) => {
+          const card = (
+            <Card
+              key={label}
+              className={`shadow-card rounded-xl border border-border/50 bg-card transition-colors ${link ? "card-interactive" : ""} ${urgent ? "border-amber-500/40" : ""}`}
+            >
+              <CardContent className="p-5">
+                <div className="flex items-start justify-between">
+                  <div className="space-y-1">
+                    <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                      {label}
+                    </p>
+                    {value === null ? (
+                      <Skeleton className="h-7 w-24 mt-1" />
+                    ) : (
+                      <p
+                        className={`text-2xl font-bold font-mono tabular-nums ${urgent ? "text-amber-600 dark:text-amber-400" : "text-foreground"}`}
+                      >
+                        {value}
+                      </p>
+                    )}
+                    {trend && (
+                      <p className="text-[11px] text-muted-foreground/70">
+                        {trend}
+                      </p>
+                    )}
+                  </div>
+                  <div
+                    className={`flex h-9 w-9 items-center justify-center rounded-lg ${urgent ? "bg-amber-500/10" : "bg-emerald-500/10"}`}
+                  >
+                    <Icon
+                      className={`h-4 w-4 ${urgent ? "text-amber-600 dark:text-amber-400" : "text-emerald-600 dark:text-emerald-400"}`}
+                    />
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          );
+          return link ? (
+            <Link key={label} to={link}>
+              {card}
+            </Link>
+          ) : (
+            card
+          );
+        })}
       </div>
 
+      {/* Pending Approval Banner */}
+      {pendingApproval.length > 0 && (
+        <div className="flex items-center justify-between gap-4 rounded-xl border border-amber-500/30 bg-amber-500/5 px-4 py-3">
+          <div className="flex items-center gap-2.5">
+            <AlertCircle className="h-4 w-4 text-amber-600 dark:text-amber-400 shrink-0" />
+            <p className="text-sm font-medium text-foreground">
+              <span className="text-amber-700 dark:text-amber-400 font-semibold">
+                {pendingApproval.length} payroll record
+                {pendingApproval.length !== 1 ? "s" : ""}
+              </span>{" "}
+              awaiting approval
+            </p>
+          </div>
+          <Button
+            asChild
+            size="sm"
+            className="bg-amber-600 hover:bg-amber-700 text-white shrink-0 active-press"
+            data-ocid="payroll-approval-banner-btn"
+          >
+            <Link to={`/app/${workspaceId}/payroll/bulk-approval`}>
+              Review Now <ArrowRight className="ml-1.5 h-3.5 w-3.5" />
+            </Link>
+          </Button>
+        </div>
+      )}
+
       <div className="grid gap-6 lg:grid-cols-5">
-        {/* Run Payroll */}
-        <Card
-          className="lg:col-span-2 border-green-500/20 bg-green-500/[0.03]"
-          data-ocid="run-payroll-card"
-        >
-          <CardHeader className="pb-3">
-            <CardTitle className="flex items-center gap-2 text-base font-semibold">
-              <Play className="h-4 w-4 text-green-600 dark:text-green-400" />
-              Run Payroll
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="space-y-1.5">
-              <Label htmlFor="employee-select">Employee</Label>
-              <select
-                id="employee-select"
-                value={selectedEmployeeId}
-                onChange={(e) => setSelectedEmployeeId(e.target.value)}
-                data-ocid="payroll-employee-select"
-                className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        {/* Quick Navigation */}
+        <div className="lg:col-span-2 space-y-2">
+          <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider px-1">
+            Quick Access
+          </p>
+          <div className="space-y-1.5">
+            {navLinks.map(({ to, label, icon: Icon, desc }) => (
+              <Link
+                key={to}
+                to={to}
+                data-ocid={`payroll-nav-${label.toLowerCase().replace(/\s+/g, "-")}`}
               >
-                <option value="">Select employee…</option>
-                {activeEmployees.map((emp) => (
-                  <option key={emp.id} value={emp.id}>
-                    {emp.firstName} {emp.lastName}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div className="space-y-1.5">
-              <Label htmlFor="period-input">Pay Period (YYYY-MM)</Label>
-              <Input
-                id="period-input"
-                type="month"
-                value={period}
-                onChange={(e) => setPeriod(e.target.value)}
-                data-ocid="payroll-period-input"
-              />
-            </div>
-
-            <Button
-              className="w-full bg-green-600 hover:bg-green-700 text-white"
-              disabled={!selectedEmployeeId || processPayroll.isPending}
-              onClick={() => processPayroll.mutate()}
-              data-ocid="payroll-process-btn"
-            >
-              {processPayroll.isPending ? (
-                "Processing…"
-              ) : (
-                <>
-                  <Play className="mr-2 h-4 w-4" />
-                  Process Payroll
-                </>
-              )}
-            </Button>
-
-            {!selectedEmployeeId && (
-              <p className="text-xs text-muted-foreground text-center">
-                Select an employee to enable payroll processing
-              </p>
-            )}
-          </CardContent>
-        </Card>
+                <div className="flex items-center gap-3 rounded-xl border border-border/50 bg-card px-4 py-3 hover:border-emerald-400/50 hover:bg-emerald-500/5 transition-colors group">
+                  <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-emerald-500/10">
+                    <Icon className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-medium text-foreground truncate">
+                      {label}
+                    </p>
+                    <p className="text-xs text-muted-foreground truncate">
+                      {desc}
+                    </p>
+                  </div>
+                  <ArrowRight className="h-3.5 w-3.5 text-muted-foreground/40 group-hover:text-emerald-600 transition-colors shrink-0" />
+                </div>
+              </Link>
+            ))}
+          </div>
+        </div>
 
         {/* Recent Records */}
         <Card
-          className="lg:col-span-3 border-border"
+          className="lg:col-span-3 shadow-card rounded-xl border border-border/50 bg-card"
           data-ocid="recent-payroll-card"
         >
-          <CardHeader className="pb-3">
-            <CardTitle className="text-base font-semibold">
+          <CardHeader className="pb-3 flex flex-row items-center justify-between border-b border-border/40">
+            <CardTitle className="text-sm font-semibold text-foreground">
               Recent Payroll Records
             </CardTitle>
+            {records.length > 6 && (
+              <Button asChild variant="ghost" size="sm" className="text-xs">
+                <Link to={`/app/${workspaceId}/payroll/bulk-approval`}>
+                  View all
+                </Link>
+              </Button>
+            )}
           </CardHeader>
-          <CardContent>
+          <CardContent className="p-0">
             {recLoading ? (
-              <div className="space-y-3">
+              <div className="space-y-2 p-4">
                 {[1, 2, 3, 4].map((n) => (
-                  <Skeleton key={n} className="h-12 rounded-xl" />
+                  <Skeleton key={n} className="h-12 rounded-lg" />
                 ))}
               </div>
             ) : recentRecords.length === 0 ? (
@@ -273,56 +390,63 @@ export default function PayrollPage() {
                 className="flex flex-col items-center justify-center py-12 text-center"
                 data-ocid="payroll-records-empty"
               >
-                <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-green-500/10 mb-3">
-                  <BadgeDollarSign className="h-6 w-6 text-green-600 dark:text-green-400" />
+                <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-emerald-500/10 mb-3">
+                  <BadgeDollarSign className="h-6 w-6 text-emerald-600 dark:text-emerald-400" />
                 </div>
                 <p className="text-sm font-medium text-foreground">
                   No payroll records yet
                 </p>
                 <p className="text-xs text-muted-foreground mt-1">
-                  Process your first payroll using the form.
+                  Click "Run Payroll" to process the current pay period.
                 </p>
               </div>
             ) : (
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
                   <thead>
-                    <tr className="border-b border-border">
-                      <th className="pb-2 text-left font-medium text-muted-foreground">
+                    <tr className="border-b border-border/40 bg-muted/30">
+                      <th className="px-5 py-2.5 text-left text-xs font-medium text-muted-foreground">
                         Employee
                       </th>
-                      <th className="pb-2 text-left font-medium text-muted-foreground">
+                      <th className="px-5 py-2.5 text-left text-xs font-medium text-muted-foreground hidden sm:table-cell">
                         Period
                       </th>
-                      <th className="pb-2 text-right font-medium text-muted-foreground">
+                      <th className="px-5 py-2.5 text-right text-xs font-medium text-muted-foreground">
                         Amount
                       </th>
-                      <th className="pb-2 text-right font-medium text-muted-foreground">
+                      <th className="px-5 py-2.5 text-right text-xs font-medium text-muted-foreground">
                         Status
                       </th>
                     </tr>
                   </thead>
-                  <tbody>
+                  <tbody className="divide-y divide-border/40">
                     {recentRecords.map((record) => {
                       const emp = employeeMap.get(record.employeeId);
                       return (
                         <tr
                           key={record.id}
-                          className="border-b border-border/60 last:border-0"
+                          className="hover:bg-muted/50 transition-colors"
                           data-ocid={`payroll-record-${record.id}`}
                         >
-                          <td className="py-3 pr-4">
-                            <span className="font-medium text-foreground truncate max-w-[120px] block">
-                              {emp ? `${emp.firstName} ${emp.lastName}` : "—"}
-                            </span>
+                          <td className="px-5 py-3">
+                            <div className="flex items-center gap-2.5">
+                              <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-emerald-500/10 text-xs font-semibold text-emerald-700 dark:text-emerald-400">
+                                {emp
+                                  ? `${emp.firstName[0]}${emp.lastName[0]}`
+                                  : "?"}
+                              </div>
+                              <span className="font-medium text-foreground truncate max-w-[140px]">
+                                {emp ? `${emp.firstName} ${emp.lastName}` : "—"}
+                              </span>
+                            </div>
                           </td>
-                          <td className="py-3 pr-4 text-muted-foreground">
+                          <td className="px-5 py-3 text-muted-foreground hidden sm:table-cell">
                             {record.period}
                           </td>
-                          <td className="py-3 pr-4 text-right font-mono font-medium tabular-nums text-foreground">
+                          <td className="px-5 py-3 text-right font-mono font-semibold tabular-nums text-foreground">
                             {formatCurrency(record.amount, record.currency)}
                           </td>
-                          <td className="py-3 text-right">
+                          <td className="px-5 py-3 text-right">
                             <PayrollStatusBadge status={record.status} />
                           </td>
                         </tr>

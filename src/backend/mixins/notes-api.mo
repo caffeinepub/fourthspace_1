@@ -10,19 +10,21 @@ module {
   public func createNote(
     store : [(Common.EntityId, NTypes.Note)],
     tenantId : Common.TenantId,
+    workspaceId : Common.WorkspaceId,
     caller : Common.UserId,
     input : NTypes.NoteInput,
   ) : { result : { #ok : NTypes.Note; #err : Text }; store : [(Common.EntityId, NTypes.Note)] } {
-    let (note, updated) = Notes.createNote(store, tenantId, caller, input);
+    let (note, updated) = Notes.createNote(store, tenantId, workspaceId, caller, input);
     { result = #ok note; store = updated }
   };
 
   public func getNote(
     store : [(Common.EntityId, NTypes.Note)],
     tenantId : Common.TenantId,
+    workspaceId : Common.WorkspaceId,
     id : Common.EntityId,
   ) : { #ok : NTypes.Note; #err : Text } {
-    switch (Notes.getNote(store, tenantId, id)) {
+    switch (Notes.getNote(store, tenantId, workspaceId, id)) {
       case (?n) #ok n;
       case null #err "Note not found";
     }
@@ -31,18 +33,20 @@ module {
   public func listNotes(
     store : [(Common.EntityId, NTypes.Note)],
     tenantId : Common.TenantId,
+    workspaceId : Common.WorkspaceId,
   ) : [NTypes.Note] {
-    Notes.listNotes(store, tenantId)
+    Notes.listNotes(store, tenantId, workspaceId)
   };
 
   public func updateNote(
     store : [(Common.EntityId, NTypes.Note)],
     tenantId : Common.TenantId,
+    workspaceId : Common.WorkspaceId,
     id : Common.EntityId,
     caller : Common.UserId,
     input : NTypes.NoteInput,
   ) : { result : { #ok : NTypes.Note; #err : Text }; store : [(Common.EntityId, NTypes.Note)] } {
-    let (maybeNote, updated) = Notes.updateNote(store, tenantId, id, caller, input);
+    let (maybeNote, updated) = Notes.updateNote(store, tenantId, workspaceId, id, caller, input);
     switch (maybeNote) {
       case (?n) ({ result = #ok(n); store = updated });
       case null ({ result = #err("Note not found or access denied"); store = store });
@@ -52,10 +56,11 @@ module {
   public func deleteNote(
     store : [(Common.EntityId, NTypes.Note)],
     tenantId : Common.TenantId,
+    workspaceId : Common.WorkspaceId,
     id : Common.EntityId,
     caller : Common.UserId,
   ) : { result : { #ok : Bool; #err : Text }; store : [(Common.EntityId, NTypes.Note)] } {
-    let (ok, updated) = Notes.deleteNote(store, tenantId, id, caller);
+    let (ok, updated) = Notes.deleteNote(store, tenantId, workspaceId, id, caller);
     if (ok) {
       { result = #ok true; store = updated }
     } else {
@@ -66,8 +71,9 @@ module {
   public func searchNotes(
     store : [(Common.EntityId, NTypes.Note)],
     tenantId : Common.TenantId,
+    workspaceId : Common.WorkspaceId,
     searchQuery : Text,
   ) : [NTypes.Note] {
-    Notes.searchNotes(store, tenantId, searchQuery)
+    Notes.searchNotes(store, tenantId, workspaceId, searchQuery)
   };
 };

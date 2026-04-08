@@ -10,52 +10,17 @@ import {
 import { useNavigate } from "@tanstack/react-router";
 import {
   ArrowRight,
-  Bot,
   Brain,
+  ClipboardList,
   FileText,
   Languages,
+  ListChecks,
+  MessageSquare,
+  Settings,
   Sparkles,
   Zap,
 } from "lucide-react";
-
-const AI_TOOLS = [
-  {
-    id: "content",
-    icon: FileText,
-    title: "Content Creator",
-    description:
-      "Generate blog posts, emails, meeting notes, project summaries, and social media content from a simple prompt.",
-    route: "/app/ai/content",
-    gradient: "from-violet-500 to-purple-600",
-    bg: "bg-violet-500/10",
-    iconColor: "text-violet-500",
-    tag: "Generate",
-  },
-  {
-    id: "chat",
-    icon: Bot,
-    title: "Chat Assistant",
-    description:
-      "Ask anything about your workspace — notes, projects, payroll, calendar, escrow, and more. Get instant helpful answers.",
-    route: "/app/ai/chat",
-    gradient: "from-purple-500 to-indigo-600",
-    bg: "bg-purple-500/10",
-    iconColor: "text-purple-500",
-    tag: "Interactive",
-  },
-  {
-    id: "translate",
-    icon: Languages,
-    title: "Language Translation",
-    description:
-      "Instantly translate content into 7 languages — Spanish, French, German, Japanese, Chinese, Arabic, and more.",
-    route: "/app/ai/translate",
-    gradient: "from-indigo-500 to-blue-600",
-    bg: "bg-indigo-500/10",
-    iconColor: "text-indigo-500",
-    tag: "Translate",
-  },
-];
+import { useWorkspace } from "../../hooks/useWorkspace";
 
 const CAPABILITIES = [
   { icon: Zap, label: "Instant Results", desc: "Sub-second AI processing" },
@@ -65,14 +30,105 @@ const CAPABILITIES = [
 
 export default function AIHubPage() {
   const navigate = useNavigate();
+  const { activeWorkspaceId } = useWorkspace();
+  const workspaceId = activeWorkspaceId ?? "";
+
+  const AI_TOOLS = [
+    {
+      id: "content",
+      icon: FileText,
+      title: "Writing Assistant",
+      description:
+        "Summarize, expand, rewrite, or fix grammar on any text. Professional AI editing at your fingertips.",
+      route: `/app/${workspaceId}/ai/content`,
+      gradient: "from-violet-500 to-purple-600",
+      bg: "bg-violet-500/10",
+      iconColor: "text-violet-500",
+      tag: "Write",
+      tagColor:
+        "bg-violet-500/10 text-violet-600 dark:text-violet-400 border-violet-200 dark:border-violet-800",
+    },
+    {
+      id: "workspace-qa",
+      icon: MessageSquare,
+      title: "Workspace Q&A",
+      description:
+        "Ask questions about your workspace — tasks, notes, projects. Get instant AI-powered answers.",
+      route: `/app/${workspaceId}/ai/workspace-qa`,
+      gradient: "from-purple-500 to-indigo-600",
+      bg: "bg-purple-500/10",
+      iconColor: "text-purple-500",
+      tag: "Ask",
+      tagColor:
+        "bg-purple-500/10 text-purple-600 dark:text-purple-400 border-purple-200 dark:border-purple-800",
+    },
+    {
+      id: "task-generator",
+      icon: ListChecks,
+      title: "Task Generator",
+      description:
+        "Describe a project or goal and get a full list of actionable tasks generated instantly by AI.",
+      route: `/app/${workspaceId}/ai/task-generator`,
+      gradient: "from-indigo-500 to-blue-600",
+      bg: "bg-indigo-500/10",
+      iconColor: "text-indigo-500",
+      tag: "Generate",
+      tagColor:
+        "bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border-indigo-200 dark:border-indigo-800",
+    },
+    {
+      id: "meeting-summary",
+      icon: ClipboardList,
+      title: "Meeting Summary",
+      description:
+        "Paste raw meeting notes and get a structured summary with decisions, action items, and next steps.",
+      route: `/app/${workspaceId}/ai/meeting-summary`,
+      gradient: "from-blue-500 to-cyan-600",
+      bg: "bg-blue-500/10",
+      iconColor: "text-blue-500",
+      tag: "Summarize",
+      tagColor:
+        "bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-200 dark:border-blue-800",
+    },
+    {
+      id: "translate",
+      icon: Languages,
+      title: "Language Translation",
+      description:
+        "Translate content across 10+ languages with AI-powered accuracy and natural phrasing.",
+      route: `/app/${workspaceId}/ai/translate`,
+      gradient: "from-cyan-500 to-teal-600",
+      bg: "bg-cyan-500/10",
+      iconColor: "text-cyan-500",
+      tag: "Translate",
+      tagColor:
+        "bg-cyan-500/10 text-cyan-600 dark:text-cyan-400 border-cyan-200 dark:border-cyan-800",
+    },
+    {
+      id: "priority-suggester",
+      icon: Brain,
+      title: "Chat Assistant",
+      description:
+        "Conversational AI assistant for your entire workspace. Ask anything, get smart, contextual answers.",
+      route: `/app/${workspaceId}/ai/chat`,
+      gradient: "from-teal-500 to-green-600",
+      bg: "bg-teal-500/10",
+      iconColor: "text-teal-500",
+      tag: "Chat",
+      tagColor:
+        "bg-teal-500/10 text-teal-600 dark:text-teal-400 border-teal-200 dark:border-teal-800",
+    },
+  ];
 
   return (
-    <div className="flex flex-col min-h-full" data-ocid="ai-hub">
+    <div
+      className="animate-fade-in-up flex flex-col min-h-full"
+      data-ocid="ai-hub"
+    >
       {/* Hero Header */}
       <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-violet-600 via-purple-600 to-indigo-700 mx-6 mt-6 p-8 md:p-12">
         <div className="absolute top-0 right-0 w-64 h-64 rounded-full bg-white/5 -translate-y-1/2 translate-x-1/4 blur-3xl" />
         <div className="absolute bottom-0 left-0 w-48 h-48 rounded-full bg-white/5 translate-y-1/2 -translate-x-1/4 blur-2xl" />
-
         <div className="relative z-10 flex flex-col md:flex-row md:items-center md:justify-between gap-6">
           <div>
             <div className="flex items-center gap-2 mb-3">
@@ -87,12 +143,11 @@ export default function AIHubPage() {
               Fourthspace AI
             </h1>
             <p className="text-violet-200 text-lg max-w-xl">
-              Your intelligent workspace assistant — create content, get
-              answers, and translate in seconds.
+              Your intelligent workspace assistant — write, ask, generate, and
+              summarize in seconds.
             </p>
           </div>
-
-          <div className="flex flex-col gap-3 shrink-0">
+          <div className="flex flex-col gap-2.5 shrink-0">
             {CAPABILITIES.map(({ icon: Icon, label, desc }) => (
               <div
                 key={label}
@@ -113,14 +168,29 @@ export default function AIHubPage() {
 
       {/* Tool Cards */}
       <div className="p-6 flex-1">
-        <h2 className="text-xl font-display font-semibold text-foreground mb-1">
-          AI Tools
-        </h2>
-        <p className="text-muted-foreground text-sm mb-6">
-          Choose a tool to get started
-        </p>
+        <div className="flex items-center justify-between mb-6">
+          <div>
+            <h2 className="text-xl font-display font-semibold text-foreground">
+              AI Tools
+            </h2>
+            <p className="text-sm text-muted-foreground mt-0.5">
+              Choose a tool to get started
+            </p>
+          </div>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() =>
+              navigate({ to: `/app/${workspaceId}/ai/settings` as "/" })
+            }
+            data-ocid="ai-settings-link"
+          >
+            <Settings className="w-4 h-4 mr-1.5" />
+            Settings
+          </Button>
+        </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
           {AI_TOOLS.map(
             ({
               id,
@@ -132,46 +202,51 @@ export default function AIHubPage() {
               bg,
               iconColor,
               tag,
+              tagColor,
             }) => (
-              <Card
+              <button
                 key={id}
-                className="group relative overflow-hidden border-border hover:shadow-lg transition-all duration-300 hover:-translate-y-1 cursor-pointer"
+                type="button"
+                className="group relative overflow-hidden rounded-xl border border-border/50 bg-card shadow-card hover:shadow-card-hover hover:-translate-y-0.5 transition-all duration-200 cursor-pointer text-left w-full"
                 onClick={() => navigate({ to: route as "/" })}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" || e.key === " ")
+                    navigate({ to: route as "/" });
+                }}
                 data-ocid={`ai-tool-card-${id}`}
               >
+                {/* Gradient top bar */}
                 <div
-                  className={`absolute top-0 left-0 right-0 h-1 bg-gradient-to-r ${gradient}`}
+                  className={`absolute top-0 left-0 right-0 h-0.5 bg-gradient-to-r ${gradient}`}
                 />
-
-                <CardHeader className="pb-3">
-                  <div className="flex items-start justify-between mb-3">
+                <div className="p-5">
+                  <div className="flex items-start justify-between mb-4">
                     <div
-                      className={`w-12 h-12 rounded-xl ${bg} flex items-center justify-center`}
+                      className={`w-11 h-11 rounded-xl ${bg} flex items-center justify-center`}
                     >
-                      <Icon className={`w-6 h-6 ${iconColor}`} />
+                      <Icon className={`w-5 h-5 ${iconColor}`} />
                     </div>
-                    <Badge variant="outline" className="text-xs">
+                    <Badge
+                      variant="outline"
+                      className={`text-xs border ${tagColor}`}
+                    >
                       {tag}
                     </Badge>
                   </div>
-                  <CardTitle className="text-lg font-display">
+                  <h3 className="text-base font-display font-semibold text-foreground mb-1.5">
                     {title}
-                  </CardTitle>
-                  <CardDescription className="text-sm leading-relaxed">
+                  </h3>
+                  <p className="text-sm text-muted-foreground leading-relaxed mb-4">
                     {description}
-                  </CardDescription>
-                </CardHeader>
-
-                <CardContent>
-                  <Button
-                    className={`w-full bg-gradient-to-r ${gradient} text-white border-0 hover:opacity-90 transition-opacity`}
-                    data-ocid={`ai-open-${id}`}
-                  >
-                    Open Tool
-                    <ArrowRight className="w-4 h-4 ml-2" />
-                  </Button>
-                </CardContent>
-              </Card>
+                  </p>
+                  <div className="flex items-center justify-between text-sm font-medium text-foreground transition-all">
+                    <span>Open Tool</span>
+                    <ArrowRight
+                      className={`w-4 h-4 ${iconColor} group-hover:translate-x-0.5 transition-transform`}
+                    />
+                  </div>
+                </div>
+              </button>
             ),
           )}
         </div>
@@ -179,8 +254,7 @@ export default function AIHubPage() {
         <div className="mt-8 flex items-center justify-center gap-2 text-muted-foreground text-sm">
           <Sparkles className="w-4 h-4 text-violet-500" />
           <span>
-            Powered by Fourthspace AI — All responses are simulated for this
-            workspace.
+            Configure your API key in AI Settings for full functionality.
           </span>
         </div>
       </div>

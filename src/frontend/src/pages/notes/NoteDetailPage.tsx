@@ -9,7 +9,6 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -36,61 +35,28 @@ import { useBackend } from "../../hooks/useBackend";
 import { useWorkspace } from "../../hooks/useWorkspace";
 import type { CrossLink, Note, NoteInput } from "../../types";
 
-const ENTITY_ROUTE_MAP: Record<string, string> = {
-  note: "/app/notes",
-  project: "/app/projects",
-  task: "/app/projects",
-  event: "/app/calendar",
-  channel: "/app/chat",
-  employee: "/app/payroll/employees",
-  escrow: "/app/escrow",
-};
-
 function CrossLinkItem({ link }: { link: CrossLink }) {
-  const basePath = ENTITY_ROUTE_MAP[link.entityType] ?? "/app";
-  const href = `${basePath}/${link.entityId}`;
-
   return (
-    <Link
-      to={href as never}
-      className="flex items-center gap-2.5 rounded-lg border border-border bg-muted/40 px-3 py-2.5 text-sm hover:bg-muted hover:border-primary/40 transition-smooth group"
+    <div
+      className="flex items-center gap-2.5 rounded-lg border border-border/50 bg-muted/40 px-3 py-2 text-sm group"
       data-ocid={`crosslink-item-${link.entityId}`}
     >
-      <Link2 className="h-3.5 w-3.5 text-primary shrink-0" />
-      <span className="min-w-0 flex-1 truncate text-foreground">
+      <Link2 className="h-3 w-3 text-primary shrink-0" />
+      <span className="min-w-0 flex-1 truncate text-foreground text-xs">
         {link.linkLabel}
       </span>
-      <Badge variant="secondary" className="text-xs shrink-0">
+      <span className="rounded-full px-2 py-0.5 text-xs font-medium bg-muted text-muted-foreground shrink-0">
         {link.entityType}
-      </Badge>
+      </span>
       <ExternalLink className="h-3 w-3 text-muted-foreground opacity-0 group-hover:opacity-100 transition-smooth shrink-0" />
-    </Link>
-  );
-}
-
-function NoteDetailSkeleton() {
-  return (
-    <div className="p-6 lg:p-8 max-w-3xl space-y-6">
-      <div className="flex items-center gap-3">
-        <Skeleton className="h-9 w-9 rounded-md" />
-        <div className="space-y-1.5">
-          <Skeleton className="h-7 w-48" />
-          <Skeleton className="h-4 w-32" />
-        </div>
-      </div>
-      <div className="space-y-3">
-        <Skeleton className="h-4 w-full" />
-        <Skeleton className="h-4 w-5/6" />
-        <Skeleton className="h-4 w-4/6" />
-        <Skeleton className="h-4 w-full" />
-        <Skeleton className="h-4 w-3/4" />
-      </div>
     </div>
   );
 }
 
 export default function NoteDetailPage() {
-  const { noteId } = useParams({ from: "/app/notes/$noteId" });
+  const { workspaceId, noteId } = useParams({
+    from: "/app/$workspaceId/notes/$noteId",
+  });
   const { actor, isFetching } = useBackend();
   const { tenantId } = useWorkspace();
   const navigate = useNavigate();
@@ -108,10 +74,10 @@ export default function NoteDetailPage() {
     isLoading,
     isError,
   } = useQuery<Note | null>({
-    queryKey: ["note", tenantId, noteId],
+    queryKey: ["note", tenantId, workspaceId, noteId],
     queryFn: async () => {
       if (!actor) return null;
-      const result = await actor.getNote(tenantId, noteId);
+      const result = await actor.getNote(tenantId, workspaceId, noteId);
       if (result.__kind__ === "err") throw new Error(result.err);
       return result.ok;
     },
@@ -130,36 +96,46 @@ export default function NoteDetailPage() {
   const { mutate: updateNote, isPending: isUpdating } = useMutation({
     mutationFn: async (input: NoteInput) => {
       if (!actor) throw new Error("Not connected");
-      const result = await actor.updateNote(tenantId, noteId, input);
+      const result = await actor.updateNote(
+        tenantId,
+        workspaceId,
+        noteId,
+        input,
+      );
       if (result.__kind__ === "err") throw new Error(result.err);
       return result.ok;
     },
     onSuccess: (updated) => {
-      queryClient.setQueryData(["note", tenantId, noteId], updated);
-      queryClient.invalidateQueries({ queryKey: ["notes", tenantId] });
+      queryClient.setQueryData(
+        ["note", tenantId, workspaceId, noteId],
+        updated,
+      );
+      queryClient.invalidateQueries({
+        queryKey: ["notes", tenantId, workspaceId],
+      });
       toast.success("Note updated");
       setIsEditing(false);
     },
-    onError: (err: Error) => {
-      toast.error("Failed to update note", { description: err.message });
-    },
+    onError: (err: Error) =>
+      toast.error("Failed to update note", { description: err.message }),
   });
 
   const { mutate: deleteNote, isPending: isDeleting } = useMutation({
     mutationFn: async () => {
       if (!actor) throw new Error("Not connected");
-      const result = await actor.deleteNote(tenantId, noteId);
+      const result = await actor.deleteNote(tenantId, workspaceId, noteId);
       if (result.__kind__ === "err") throw new Error(result.err);
       return result.ok;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["notes", tenantId] });
+      queryClient.invalidateQueries({
+        queryKey: ["notes", tenantId, workspaceId],
+      });
       toast.success("Note deleted");
-      navigate({ to: "/app/notes" });
+      navigate({ to: "/app/$workspaceId/notes", params: { workspaceId } });
     },
-    onError: (err: Error) => {
-      toast.error("Failed to delete note", { description: err.message });
-    },
+    onError: (err: Error) =>
+      toast.error("Failed to delete note", { description: err.message }),
   });
 
   const handleSave = () => {
@@ -197,27 +173,49 @@ export default function NoteDetailPage() {
     }
   };
 
-  if (isLoading) return <NoteDetailSkeleton />;
+  if (isLoading) {
+    return (
+      <div className="p-4 sm:p-6 max-w-3xl space-y-5 pb-20 md:pb-6">
+        <div className="flex items-center gap-3">
+          <Skeleton className="h-8 w-8 rounded-lg" />
+          <div className="space-y-1.5">
+            <Skeleton className="h-6 w-48" />
+            <Skeleton className="h-3.5 w-32" />
+          </div>
+        </div>
+        <div className="space-y-2.5">
+          {[1, 2, 3, 4, 5].map((n) => (
+            <Skeleton
+              key={n}
+              className={`h-3.5 ${n % 2 === 0 ? "w-4/5" : "w-full"}`}
+            />
+          ))}
+        </div>
+      </div>
+    );
+  }
 
   if (isError || !note) {
     return (
-      <div className="p-6 lg:p-8 max-w-3xl">
-        <div className="flex items-center gap-3 mb-8">
+      <div className="p-4 sm:p-6 max-w-3xl pb-20 md:pb-6">
+        <div className="flex items-center gap-2 mb-8">
           <Button variant="ghost" size="icon" asChild>
-            <Link to="/app/notes">
+            <Link to="/app/$workspaceId/notes" params={{ workspaceId }}>
               <ArrowLeft className="h-4 w-4" />
             </Link>
           </Button>
         </div>
         <div className="flex flex-col items-center justify-center py-16 text-center">
-          <p className="text-lg font-medium text-foreground mb-2">
+          <p className="text-base font-medium text-foreground mb-1.5">
             Note not found
           </p>
-          <p className="text-muted-foreground text-sm mb-6">
-            This note may have been deleted or you don't have access to it.
+          <p className="text-muted-foreground text-sm mb-5">
+            This note may have been deleted.
           </p>
-          <Button asChild variant="outline">
-            <Link to="/app/notes">Back to Notes</Link>
+          <Button asChild variant="outline" size="sm">
+            <Link to="/app/$workspaceId/notes" params={{ workspaceId }}>
+              Back to Notes
+            </Link>
           </Button>
         </div>
       </div>
@@ -240,22 +238,31 @@ export default function NoteDetailPage() {
   });
 
   return (
-    <div className="p-6 lg:p-8 max-w-3xl">
+    <div className="animate-fade-in-up p-4 sm:p-6 max-w-3xl pb-20 md:pb-6">
       {/* Header */}
-      <div className="flex items-start justify-between gap-4 mb-8">
-        <div className="flex items-center gap-3 min-w-0">
-          <Button variant="ghost" size="icon" asChild className="shrink-0">
-            <Link to="/app/notes" aria-label="Back to notes">
+      <div className="flex items-start justify-between gap-3 mb-5">
+        <div className="flex items-center gap-2.5 min-w-0">
+          <Button
+            variant="ghost"
+            size="icon"
+            asChild
+            className="shrink-0 h-9 w-9 min-h-[44px] min-w-[44px]"
+          >
+            <Link
+              to="/app/$workspaceId/notes"
+              params={{ workspaceId }}
+              aria-label="Back to notes"
+            >
               <ArrowLeft className="h-4 w-4" />
             </Link>
           </Button>
           {!isEditing && (
             <div className="min-w-0">
-              <h1 className="font-display text-2xl font-bold text-foreground break-words">
+              <h1 className="font-display text-lg sm:text-xl font-bold text-foreground break-words tracking-tight">
                 {note.title}
               </h1>
-              <div className="flex items-center gap-1.5 mt-1 text-xs text-muted-foreground">
-                <Calendar className="h-3 w-3" />
+              <div className="flex items-center gap-1.5 mt-0.5 text-xs text-muted-foreground flex-wrap">
+                <Calendar className="h-3 w-3 shrink-0" />
                 <span>Created {createdDate}</span>
                 {note.createdAt !== note.updatedAt && (
                   <span className="text-muted-foreground/60">
@@ -266,21 +273,20 @@ export default function NoteDetailPage() {
             </div>
           )}
         </div>
-
-        <div className="flex items-center gap-2 shrink-0">
+        <div className="flex items-center gap-1 shrink-0">
           {isEditing ? (
             <>
               <Button
                 size="sm"
                 onClick={handleSave}
                 disabled={isUpdating || !editTitle.trim()}
-                className="gap-2"
+                className="gap-1.5 h-9 text-xs active-press min-h-[44px]"
                 data-ocid="note-save-edit-btn"
               >
                 {isUpdating ? (
-                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  <Loader2 className="h-3 w-3 animate-spin" />
                 ) : (
-                  <Save className="h-3.5 w-3.5" />
+                  <Save className="h-3 w-3" />
                 )}
                 Save
               </Button>
@@ -289,6 +295,7 @@ export default function NoteDetailPage() {
                 variant="ghost"
                 onClick={handleCancelEdit}
                 disabled={isUpdating}
+                className="h-9 text-xs min-h-[44px]"
                 data-ocid="note-cancel-edit-btn"
               >
                 Cancel
@@ -300,44 +307,45 @@ export default function NoteDetailPage() {
                 size="sm"
                 variant="outline"
                 onClick={() => setIsEditing(true)}
-                className="gap-2"
+                className="gap-1.5 h-9 text-xs min-h-[44px]"
                 data-ocid="note-edit-btn"
               >
-                <Edit2 className="h-3.5 w-3.5" />
-                Edit
+                <Edit2 className="h-3 w-3" />{" "}
+                <span className="hidden sm:inline">Edit</span>
               </Button>
               <AlertDialog>
                 <AlertDialogTrigger asChild>
                   <Button
                     size="sm"
                     variant="ghost"
-                    className="gap-2 text-destructive hover:text-destructive hover:bg-destructive/10"
+                    className="gap-1.5 h-9 text-xs text-destructive hover:text-destructive hover:bg-destructive/10 min-h-[44px]"
                     data-ocid="note-delete-btn"
                   >
-                    <Trash2 className="h-3.5 w-3.5" />
-                    Delete
+                    <Trash2 className="h-3 w-3" />
                   </Button>
                 </AlertDialogTrigger>
-                <AlertDialogContent>
+                <AlertDialogContent className="mx-4 max-w-sm sm:max-w-md">
                   <AlertDialogHeader>
                     <AlertDialogTitle>Delete this note?</AlertDialogTitle>
                     <AlertDialogDescription>
                       <strong>"{note.title}"</strong> will be permanently
-                      deleted. This action cannot be undone.
+                      deleted.
                     </AlertDialogDescription>
                   </AlertDialogHeader>
-                  <AlertDialogFooter>
-                    <AlertDialogCancel>Cancel</AlertDialogCancel>
+                  <AlertDialogFooter className="flex-col-reverse sm:flex-row gap-2">
+                    <AlertDialogCancel className="w-full sm:w-auto">
+                      Cancel
+                    </AlertDialogCancel>
                     <AlertDialogAction
                       onClick={() => deleteNote()}
                       disabled={isDeleting}
-                      className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                      className="bg-destructive text-destructive-foreground hover:bg-destructive/90 w-full sm:w-auto"
                       data-ocid="note-delete-confirm-btn"
                     >
                       {isDeleting && (
                         <Loader2 className="h-4 w-4 animate-spin mr-2" />
-                      )}
-                      Delete Note
+                      )}{" "}
+                      Delete
                     </AlertDialogAction>
                   </AlertDialogFooter>
                 </AlertDialogContent>
@@ -347,25 +355,22 @@ export default function NoteDetailPage() {
         </div>
       </div>
 
-      {/* View Mode */}
       {!isEditing ? (
-        <div className="space-y-6">
+        <div className="space-y-5">
           {note.tags.length > 0 && (
-            <div className="flex flex-wrap gap-2 items-center">
-              <Tag className="h-3.5 w-3.5 text-muted-foreground" />
+            <div className="flex flex-wrap gap-1.5 items-center">
+              <Tag className="h-3 w-3 text-muted-foreground" />
               {note.tags.map((tag) => (
-                <Badge
+                <span
                   key={tag}
-                  variant="secondary"
-                  className="bg-primary/10 text-primary border-0 text-xs"
+                  className="rounded-full px-2.5 py-0.5 text-xs font-medium bg-primary/10 text-primary"
                 >
                   {tag}
-                </Badge>
+                </span>
               ))}
             </div>
           )}
-
-          <div className="rounded-xl bg-card border border-border p-6">
+          <div className="rounded-xl bg-card border border-border/50 p-4 sm:p-6 shadow-card">
             {note.content ? (
               <p className="text-foreground leading-relaxed whitespace-pre-wrap font-body text-sm">
                 {note.content}
@@ -376,16 +381,15 @@ export default function NoteDetailPage() {
               </p>
             )}
           </div>
-
           {note.crossLinks.length > 0 && (
-            <div className="space-y-3">
-              <div className="flex items-center gap-2">
-                <Link2 className="h-4 w-4 text-muted-foreground" />
+            <div className="space-y-2">
+              <div className="flex items-center gap-1.5">
+                <Link2 className="h-3.5 w-3.5 text-muted-foreground" />
                 <h2 className="text-sm font-semibold text-foreground">
                   Cross-links ({note.crossLinks.length})
                 </h2>
               </div>
-              <div className="space-y-2">
+              <div className="space-y-1.5">
                 {note.crossLinks.map((link, idx) => (
                   <CrossLinkItem key={`${link.entityId}-${idx}`} link={link} />
                 ))}
@@ -394,56 +398,57 @@ export default function NoteDetailPage() {
           )}
         </div>
       ) : (
-        /* Edit Mode */
         <form
           onSubmit={(e) => {
             e.preventDefault();
             handleSave();
           }}
-          className="space-y-6"
+          className="space-y-5"
           noValidate
         >
-          <div className="space-y-2">
-            <Label htmlFor="edit-title" className="text-sm font-medium">
+          <div className="space-y-1.5">
+            <Label
+              htmlFor="edit-title"
+              className="text-xs font-semibold uppercase tracking-wider text-muted-foreground"
+            >
               Title <span className="text-destructive">*</span>
             </Label>
             <Input
               id="edit-title"
               value={editTitle}
               onChange={(e) => setEditTitle(e.target.value)}
-              className="text-base font-medium h-11"
+              className="text-base font-medium h-11 border-border/60 focus:border-primary focus:ring-1 focus:ring-primary/30"
               autoFocus
               required
               data-ocid="note-edit-title"
             />
           </div>
-
-          <div className="space-y-2">
-            <Label htmlFor="edit-content" className="text-sm font-medium">
+          <div className="space-y-1.5">
+            <Label
+              htmlFor="edit-content"
+              className="text-xs font-semibold uppercase tracking-wider text-muted-foreground"
+            >
               Content
             </Label>
             <Textarea
               id="edit-content"
               value={editContent}
               onChange={(e) => setEditContent(e.target.value)}
-              className="min-h-[280px] resize-y leading-relaxed font-body"
+              className="min-h-[240px] sm:min-h-[280px] resize-y leading-relaxed font-body border-border/60 focus:border-primary focus:ring-1 focus:ring-primary/30"
               data-ocid="note-edit-content"
             />
           </div>
-
-          <div className="space-y-2">
-            <Label className="text-sm font-medium flex items-center gap-1.5">
-              <Tag className="h-3.5 w-3.5" />
-              Tags
+          <div className="space-y-1.5">
+            <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
+              <Tag className="h-3 w-3" /> Tags
             </Label>
-            <div className="rounded-md border border-input bg-background p-3 space-y-2 focus-within:ring-2 focus-within:ring-ring">
+            <div className="rounded-lg border border-border/60 bg-background p-3 space-y-2 focus-within:border-primary focus-within:ring-1 focus-within:ring-primary/30">
               {editTags.length > 0 && (
                 <div className="flex flex-wrap gap-1.5">
                   {editTags.map((tag) => (
-                    <Badge
+                    <span
                       key={tag}
-                      variant="secondary"
-                      className="gap-1 pl-2 pr-1 bg-primary/10 text-primary border-0"
+                      className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium bg-primary/10 text-primary"
                     >
                       {tag}
                       <button
@@ -452,11 +457,11 @@ export default function NoteDetailPage() {
                           setEditTags((prev) => prev.filter((t) => t !== tag))
                         }
                         aria-label={`Remove tag ${tag}`}
-                        className="rounded-sm hover:text-destructive"
+                        className="rounded-sm hover:text-destructive min-h-[24px] min-w-[24px] flex items-center justify-center"
                       >
-                        <X className="h-3 w-3" />
+                        <X className="h-2.5 w-2.5" />
                       </button>
-                    </Badge>
+                    </span>
                   ))}
                 </div>
               )}
@@ -476,21 +481,48 @@ export default function NoteDetailPage() {
                     setEditTagInput("");
                   }
                 }}
-                className="border-0 px-0 h-8 focus-visible:ring-0 shadow-none bg-transparent"
+                className="border-0 px-0 h-7 focus-visible:ring-0 shadow-none bg-transparent text-sm"
                 data-ocid="note-edit-tags"
               />
             </div>
           </div>
-
-          <div className="space-y-2">
-            <Label className="text-sm font-medium">Cross-links</Label>
-            <div className="rounded-md border border-input bg-background p-4">
+          <div className="space-y-1.5">
+            <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+              Cross-links
+            </Label>
+            <div className="rounded-lg border border-border/60 bg-background p-3.5">
               <CrossLinkPicker
                 tenantId={tenantId}
                 value={editCrossLinks}
                 onChange={setEditCrossLinks}
               />
             </div>
+          </div>
+          {/* Mobile save button */}
+          <div className="flex gap-2 pt-2 sm:hidden">
+            <Button
+              type="submit"
+              size="sm"
+              disabled={isUpdating || !editTitle.trim()}
+              className="flex-1 gap-1.5 active-press"
+            >
+              {isUpdating ? (
+                <Loader2 className="h-3 w-3 animate-spin" />
+              ) : (
+                <Save className="h-3 w-3" />
+              )}
+              Save Note
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              onClick={handleCancelEdit}
+              disabled={isUpdating}
+              className="flex-1"
+            >
+              Cancel
+            </Button>
           </div>
         </form>
       )}

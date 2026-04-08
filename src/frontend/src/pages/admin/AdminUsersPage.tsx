@@ -16,7 +16,7 @@ import { ArrowLeft, Crown, Shield, User, UserCheck, Users } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 import { useBackend } from "../../hooks/useBackend";
-import { getTenantId } from "../../hooks/useWorkspace";
+import { getTenantId, useWorkspace } from "../../hooks/useWorkspace";
 import { Role } from "../../types";
 import type { UserProfile } from "../../types";
 
@@ -31,7 +31,8 @@ const ROLE_META: Record<
   [Role.Admin]: {
     label: "Admin",
     icon: Crown,
-    className: "bg-primary/10 text-primary border-primary/20",
+    className:
+      "bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20",
   },
   [Role.Manager]: {
     label: "Manager",
@@ -41,7 +42,7 @@ const ROLE_META: Record<
   [Role.TeamMember]: {
     label: "Team Member",
     icon: User,
-    className: "bg-muted text-muted-foreground",
+    className: "bg-muted text-muted-foreground border-border",
   },
 };
 
@@ -60,8 +61,10 @@ function getInitials(name: string) {
 export default function AdminUsersPage() {
   const navigate = useNavigate();
   const { actor, isFetching } = useBackend();
+  const { activeWorkspaceId } = useWorkspace();
   const queryClient = useQueryClient();
   const tenantId = getTenantId();
+  const workspaceId = activeWorkspaceId ?? "";
   const [roleFilter, setRoleFilter] = useState<RoleFilter>("All");
   const [updatingId, setUpdatingId] = useState<string | null>(null);
 
@@ -75,10 +78,7 @@ export default function AdminUsersPage() {
     mutationFn: async ({
       profile,
       newRole,
-    }: {
-      profile: UserProfile;
-      newRole: Role;
-    }) => {
+    }: { profile: UserProfile; newRole: Role }) => {
       if (!actor) throw new Error("Not connected");
       setUpdatingId(profile.userId.toString());
       return actor.upsertProfile(tenantId, {
@@ -106,7 +106,6 @@ export default function AdminUsersPage() {
   const filtered = (profiles ?? []).filter(
     (p) => roleFilter === "All" || p.role === roleFilter,
   );
-
   const adminCount = profiles?.filter((p) => p.role === Role.Admin).length ?? 0;
   const managerCount =
     profiles?.filter((p) => p.role === Role.Manager).length ?? 0;
@@ -114,22 +113,23 @@ export default function AdminUsersPage() {
     profiles?.filter((p) => p.role === Role.TeamMember).length ?? 0;
 
   return (
-    <div className="p-6 md:p-8 max-w-5xl mx-auto space-y-6">
+    <div className="p-6 md:p-8 max-w-5xl mx-auto space-y-6 animate-fade-in-up">
       {/* Header */}
       <div className="flex items-center gap-3">
         <Button
           variant="ghost"
           size="icon"
-          onClick={() => navigate({ to: "/app/admin" })}
-          aria-label="Back to admin"
+          onClick={() => navigate({ to: `/app/${workspaceId}/admin` as "/" })}
+          aria-label="Back"
+          className="hover:bg-muted"
         >
           <ArrowLeft className="h-4 w-4" />
         </Button>
-        <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-teal-500/10">
+        <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-teal-500/10">
           <Users className="h-4 w-4 text-teal-500" />
         </div>
         <div className="flex-1 min-w-0">
-          <h1 className="font-display text-2xl font-bold text-foreground">
+          <h1 className="font-display text-2xl font-bold tracking-tight text-foreground">
             User Management
           </h1>
           <p className="text-sm text-muted-foreground">
@@ -145,8 +145,8 @@ export default function AdminUsersPage() {
             label: "Admins",
             count: adminCount,
             icon: Crown,
-            color: "text-primary",
-            bg: "bg-primary/10",
+            color: "text-amber-500",
+            bg: "bg-amber-500/10",
           },
           {
             label: "Managers",
@@ -163,10 +163,13 @@ export default function AdminUsersPage() {
             bg: "bg-teal-500/10",
           },
         ].map((stat) => (
-          <Card key={stat.label} className="border-border bg-card">
+          <Card
+            key={stat.label}
+            className="border-border/50 bg-card shadow-card"
+          >
             <CardContent className="p-4 flex items-center gap-3">
               <div
-                className={`flex h-9 w-9 items-center justify-center rounded-lg ${stat.bg}`}
+                className={`flex h-9 w-9 items-center justify-center rounded-xl ${stat.bg}`}
               >
                 <stat.icon className={`h-4 w-4 ${stat.color}`} />
               </div>
@@ -186,40 +189,37 @@ export default function AdminUsersPage() {
       </div>
 
       {/* Filter Bar */}
-      <div className="flex items-center gap-3">
-        <span className="text-sm font-medium text-muted-foreground">
-          Filter by role:
+      <div className="flex items-center gap-2 flex-wrap">
+        <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+          Filter:
         </span>
-        <div className="flex gap-2 flex-wrap">
-          {ROLE_FILTERS.map((filter) => (
-            <button
-              key={filter}
-              onClick={() => setRoleFilter(filter)}
-              data-ocid={`role-filter-${filter.toLowerCase()}`}
-              type="button"
-              className={`rounded-full px-3 py-1 text-xs font-medium transition-smooth ${
-                roleFilter === filter
-                  ? "bg-primary text-primary-foreground"
-                  : "bg-muted text-muted-foreground hover:bg-muted/70"
-              }`}
-            >
-              {filter === "TeamMember" ? "Team Member" : filter}
-            </button>
-          ))}
-        </div>
+        {ROLE_FILTERS.map((filter) => (
+          <button
+            key={filter}
+            onClick={() => setRoleFilter(filter)}
+            data-ocid={`role-filter-${filter.toLowerCase()}`}
+            type="button"
+            className={`rounded-full px-3 py-1 text-xs font-medium transition-all duration-150 ${
+              roleFilter === filter
+                ? "bg-primary text-primary-foreground shadow-sm"
+                : "bg-muted text-muted-foreground hover:bg-muted/70 hover:text-foreground"
+            }`}
+          >
+            {filter === "TeamMember" ? "Team Member" : filter}
+          </button>
+        ))}
       </div>
 
       {/* User Table */}
       {isLoading ? (
         <div className="space-y-2">
           {[1, 2, 3, 4].map((n) => (
-            <Skeleton key={n} className="h-20 rounded-xl" />
+            <Skeleton key={n} className="h-16 rounded-xl" />
           ))}
         </div>
       ) : filtered.length > 0 ? (
-        <div className="rounded-2xl border border-border overflow-hidden">
-          {/* Table header */}
-          <div className="hidden md:grid grid-cols-[1fr_2fr_1fr_1fr_140px] gap-4 bg-muted/40 px-5 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+        <div className="rounded-xl border border-border/50 overflow-hidden shadow-card">
+          <div className="hidden md:grid grid-cols-[1fr_2fr_1fr_1fr_140px] gap-4 bg-muted/40 px-5 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wider border-b border-border/40">
             <span>Member</span>
             <span>Email</span>
             <span>Workspace</span>
@@ -233,37 +233,32 @@ export default function AdminUsersPage() {
             return (
               <div
                 key={profile.userId.toString()}
-                className="grid grid-cols-1 md:grid-cols-[1fr_2fr_1fr_1fr_140px] gap-4 items-center border-t border-border bg-card px-5 py-4 hover:bg-muted/20 transition-smooth"
+                className="grid grid-cols-1 md:grid-cols-[1fr_2fr_1fr_1fr_140px] gap-4 items-center border-t border-border/40 bg-card px-5 py-3.5 hover:bg-muted/30 transition-colors duration-150"
                 data-ocid={`user-${profile.userId.toString()}`}
               >
-                {/* Name + Avatar */}
                 <div className="flex items-center gap-3">
-                  <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary/10 text-sm font-semibold text-primary">
+                  <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary/10 text-xs font-semibold text-primary">
                     {getInitials(profile.displayName)}
                   </div>
                   <span className="font-medium text-foreground text-sm truncate">
                     {profile.displayName}
                   </span>
                 </div>
-                {/* Email */}
                 <p className="text-sm text-muted-foreground truncate">
                   {profile.email || "—"}
                 </p>
-                {/* Workspace */}
                 <p className="text-xs text-muted-foreground font-mono truncate">
                   {profile.workspaceId.slice(0, 10)}...
                 </p>
-                {/* Joined date */}
                 <p className="text-xs text-muted-foreground">
                   {format(
                     new Date(Number(profile.createdAt) / 1_000_000),
                     "MMM d, yyyy",
                   )}
                 </p>
-                {/* Role selector */}
                 <div className="flex items-center gap-2">
                   <Badge
-                    className={`${meta.className} shrink-0 hidden md:flex`}
+                    className={`${meta.className} shrink-0 hidden md:flex rounded-full px-2.5 py-0.5 text-xs`}
                   >
                     <RoleIcon className="mr-1 h-3 w-3" />
                     {meta.label}
@@ -296,10 +291,10 @@ export default function AdminUsersPage() {
         </div>
       ) : (
         <div
-          className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-border bg-muted/20 py-16 text-center"
+          className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-border bg-muted/10 py-16 text-center"
           data-ocid="users-empty"
         >
-          <Users className="h-10 w-10 text-muted-foreground mb-3" />
+          <Users className="h-10 w-10 text-muted-foreground/40 mb-3" />
           <p className="font-semibold text-foreground">No users found</p>
           <p className="text-sm text-muted-foreground mt-1">
             {roleFilter !== "All"

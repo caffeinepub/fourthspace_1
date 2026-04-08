@@ -29,6 +29,7 @@ module {
   public func createNote(
     store : [(Common.EntityId, Types.Note)],
     tenantId : Common.TenantId,
+    workspaceId : Common.WorkspaceId,
     caller : Common.UserId,
     input : Types.NoteInput,
   ) : (Types.Note, [(Common.EntityId, Types.Note)]) {
@@ -37,6 +38,7 @@ module {
     let note : Types.Note = {
       id;
       tenantId;
+      workspaceId;
       title = input.title;
       content = input.content;
       tags = input.tags;
@@ -53,12 +55,13 @@ module {
   public func getNote(
     store : [(Common.EntityId, Types.Note)],
     tenantId : Common.TenantId,
+    workspaceId : Common.WorkspaceId,
     id : Common.EntityId,
   ) : ?Types.Note {
     let m = toMap(store);
     switch (m.get(id)) {
       case (?note) {
-        if (note.tenantId == tenantId) ?note else null
+        if (note.tenantId == tenantId and note.workspaceId == workspaceId) ?note else null
       };
       case null null;
     }
@@ -67,16 +70,18 @@ module {
   public func listNotes(
     store : [(Common.EntityId, Types.Note)],
     tenantId : Common.TenantId,
+    workspaceId : Common.WorkspaceId,
   ) : [Types.Note] {
     let m = toMap(store);
-    m.values().filter(func(n : Types.Note) : Bool { n.tenantId == tenantId }).toArray(
-      
-    )
+    m.values().filter(func(n : Types.Note) : Bool {
+      n.tenantId == tenantId and n.workspaceId == workspaceId
+    }).toArray()
   };
 
   public func updateNote(
     store : [(Common.EntityId, Types.Note)],
     tenantId : Common.TenantId,
+    workspaceId : Common.WorkspaceId,
     id : Common.EntityId,
     caller : Common.UserId,
     input : Types.NoteInput,
@@ -84,7 +89,7 @@ module {
     let m = toMap(store);
     switch (m.get(id)) {
       case (?existing) {
-        if (existing.tenantId != tenantId) return (null, store);
+        if (existing.tenantId != tenantId or existing.workspaceId != workspaceId) return (null, store);
         let updated : Types.Note = {
           existing with
           title = input.title;
@@ -103,13 +108,14 @@ module {
   public func deleteNote(
     store : [(Common.EntityId, Types.Note)],
     tenantId : Common.TenantId,
+    workspaceId : Common.WorkspaceId,
     id : Common.EntityId,
     caller : Common.UserId,
   ) : (Bool, [(Common.EntityId, Types.Note)]) {
     let m = toMap(store);
     switch (m.get(id)) {
       case (?note) {
-        if (note.tenantId != tenantId) return (false, store);
+        if (note.tenantId != tenantId or note.workspaceId != workspaceId) return (false, store);
         m.remove(id);
         (true, toStore(m))
       };
@@ -120,13 +126,14 @@ module {
   public func searchNotes(
     store : [(Common.EntityId, Types.Note)],
     tenantId : Common.TenantId,
+    workspaceId : Common.WorkspaceId,
     searchQuery : Text,
   ) : [Types.Note] {
     let lower = searchQuery.toLower();
     let m = toMap(store);
     m.values().filter(
         func(n : Types.Note) : Bool {
-          n.tenantId == tenantId and (
+          n.tenantId == tenantId and n.workspaceId == workspaceId and (
             n.title.toLower().contains(#text lower) or
             n.content.toLower().contains(#text lower)
           )

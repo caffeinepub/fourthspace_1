@@ -3,98 +3,88 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useQuery } from "@tanstack/react-query";
-import { Link } from "@tanstack/react-router";
-import { BookOpen, Plus, Search, StickyNote, Tag, X } from "lucide-react";
+import { Link, useParams } from "@tanstack/react-router";
+import {
+  BookOpen,
+  FileText,
+  LayoutTemplate,
+  Plus,
+  Search,
+  StickyNote,
+  Tag,
+  X,
+} from "lucide-react";
 import { useMemo, useState } from "react";
 import { useBackend } from "../../hooks/useBackend";
 import { useWorkspace } from "../../hooks/useWorkspace";
 import type { Note } from "../../types";
 
-function NoteCard({ note }: { note: Note }) {
-  const preview = note.content.slice(0, 120).trim();
+function NoteCard({ note, workspaceId }: { note: Note; workspaceId: string }) {
+  const preview = note.content.slice(0, 100).trim();
   const date = new Date(Number(note.updatedAt) / 1_000_000).toLocaleDateString(
     "en-US",
-    { month: "short", day: "numeric", year: "numeric" },
+    { month: "short", day: "numeric" },
   );
 
   return (
     <Link
-      to="/app/notes/$noteId"
-      params={{ noteId: note.id }}
+      to="/app/$workspaceId/notes/$noteId"
+      params={{ workspaceId, noteId: note.id }}
       data-ocid="note-card"
-      className="group block rounded-xl border border-border bg-card p-5 shadow-sm hover:border-primary/40 hover:shadow-md transition-smooth focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+      className="group flex flex-col gap-2.5 rounded-xl border border-border/50 bg-card p-4 shadow-card card-interactive hover:border-primary/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
     >
-      <div className="flex items-start justify-between gap-2 mb-2">
-        <h3 className="font-display font-semibold text-foreground text-base line-clamp-2 min-w-0 group-hover:text-primary transition-colors duration-200">
+      <div className="flex items-start justify-between gap-2">
+        <h3 className="font-display font-semibold text-foreground text-sm line-clamp-2 min-w-0 leading-snug group-hover:text-primary transition-colors">
           {note.title}
         </h3>
-        <BookOpen className="h-4 w-4 text-primary/60 shrink-0 mt-0.5" />
+        <BookOpen className="h-3.5 w-3.5 text-muted-foreground shrink-0 mt-0.5 opacity-60" />
       </div>
 
       {preview && (
-        <p className="text-sm text-muted-foreground line-clamp-3 mb-3 leading-relaxed">
+        <p className="text-xs text-muted-foreground line-clamp-2 leading-relaxed">
           {preview}
-          {note.content.length > 120 && "…"}
+          {note.content.length > 100 && "…"}
         </p>
       )}
 
-      <div className="flex items-center justify-between gap-2 flex-wrap mt-auto">
-        <div className="flex flex-wrap gap-1.5">
-          {note.tags.slice(0, 3).map((tag) => (
-            <Badge
+      <div className="flex items-center justify-between gap-2 mt-auto pt-1 border-t border-border/40">
+        <div className="flex flex-wrap gap-1">
+          {note.tags.slice(0, 2).map((tag) => (
+            <span
               key={tag}
-              variant="secondary"
-              className="text-xs px-2 py-0.5 bg-primary/10 text-primary border-0"
+              className="rounded-full px-2 py-0.5 text-xs font-medium bg-primary/10 text-primary"
             >
               {tag}
-            </Badge>
+            </span>
           ))}
-          {note.tags.length > 3 && (
-            <Badge variant="secondary" className="text-xs px-2 py-0.5">
-              +{note.tags.length - 3}
-            </Badge>
+          {note.tags.length > 2 && (
+            <span className="rounded-full px-2 py-0.5 text-xs font-medium bg-muted text-muted-foreground">
+              +{note.tags.length - 2}
+            </span>
           )}
         </div>
         <span className="text-xs text-muted-foreground shrink-0">{date}</span>
       </div>
-
-      {note.crossLinks.length > 0 && (
-        <div className="mt-3 pt-3 border-t border-border/60">
-          <span className="text-xs text-muted-foreground">
-            {note.crossLinks.length} cross-link
-            {note.crossLinks.length !== 1 ? "s" : ""}
-          </span>
-        </div>
-      )}
     </Link>
   );
 }
 
-const SKELETON_KEYS = [
-  "sk-a",
-  "sk-b",
-  "sk-c",
-  "sk-d",
-  "sk-e",
-  "sk-f",
-  "sk-g",
-  "sk-h",
-];
+const SK = ["a", "b", "c", "d", "e", "f", "g", "h"];
 
-function NotesGridSkeleton() {
+function GridSkeleton() {
   return (
-    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-      {SKELETON_KEYS.map((k) => (
+    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
+      {SK.map((k) => (
         <div
           key={k}
-          className="rounded-xl border border-border bg-card p-5 space-y-3"
+          className="rounded-xl border border-border/50 bg-card p-4 space-y-2.5"
         >
-          <Skeleton className="h-5 w-3/4" />
-          <Skeleton className="h-4 w-full" />
-          <Skeleton className="h-4 w-2/3" />
-          <div className="flex gap-2 pt-1">
-            <Skeleton className="h-5 w-14 rounded-full" />
-            <Skeleton className="h-5 w-16 rounded-full" />
+          <Skeleton className="h-4 w-3/4" />
+          <Skeleton className="h-3 w-full" />
+          <Skeleton className="h-3 w-2/3" />
+          <div className="flex gap-1.5 pt-1">
+            <Skeleton className="h-4 w-12 rounded-full" />
+            <Skeleton className="h-4 w-14 rounded-full" />
           </div>
         </div>
       ))}
@@ -105,36 +95,37 @@ function NotesGridSkeleton() {
 function EmptyState({
   query,
   onClear,
-}: {
-  query: string;
-  onClear: () => void;
-}) {
+  workspaceId,
+}: { query: string; onClear: () => void; workspaceId: string }) {
   return (
     <div
-      className="flex flex-col items-center justify-center py-24 text-center"
+      className="flex flex-col items-center justify-center py-16 sm:py-20 text-center px-4"
       data-ocid="notes-empty-state"
     >
-      <div className="rounded-2xl bg-primary/10 p-6 mb-5">
-        <StickyNote className="h-12 w-12 text-primary" />
+      <div className="rounded-2xl bg-primary/10 p-5 mb-4">
+        <StickyNote className="h-10 w-10 text-primary" />
       </div>
-      <h3 className="font-display text-xl font-semibold text-foreground mb-2">
+      <h3 className="font-display text-lg font-semibold text-foreground mb-1.5">
         {query ? "No matching notes" : "No notes yet"}
       </h3>
-      <p className="text-muted-foreground text-sm max-w-xs mb-6">
+      <p className="text-muted-foreground text-sm max-w-xs mb-5">
         {query
-          ? `No notes match "${query}". Try a different search or clear the filter.`
-          : "Capture your thoughts, ideas, and knowledge. Create your first note to get started."}
+          ? `No notes match "${query}". Try a different search.`
+          : "Capture your thoughts and ideas. Create your first note to get started."}
       </p>
       {query ? (
-        <Button variant="outline" onClick={onClear} className="gap-2">
-          <X className="h-4 w-4" />
-          Clear search
+        <Button variant="outline" onClick={onClear} size="sm" className="gap-2">
+          <X className="h-3.5 w-3.5" /> Clear search
         </Button>
       ) : (
-        <Button asChild className="gap-2" data-ocid="notes-empty-cta">
-          <Link to="/app/notes/new">
-            <Plus className="h-4 w-4" />
-            Create your first note
+        <Button
+          asChild
+          size="sm"
+          className="gap-2 active-press"
+          data-ocid="notes-empty-cta"
+        >
+          <Link to="/app/$workspaceId/notes/new" params={{ workspaceId }}>
+            <Plus className="h-3.5 w-3.5" /> Create your first note
           </Link>
         </Button>
       )}
@@ -143,28 +134,25 @@ function EmptyState({
 }
 
 export default function NotesPage() {
+  const { workspaceId } = useParams({ from: "/app/$workspaceId/notes" });
   const { actor, isFetching } = useBackend();
   const { tenantId } = useWorkspace();
   const [search, setSearch] = useState("");
   const [activeTag, setActiveTag] = useState<string | null>(null);
 
   const { data: notes = [], isLoading } = useQuery<Note[]>({
-    queryKey: ["notes", tenantId],
+    queryKey: ["notes", tenantId, workspaceId],
     queryFn: async () => {
       if (!actor) return [];
-      return actor.listNotes(tenantId);
+      return actor.listNotes(tenantId, workspaceId);
     },
     enabled: !!actor && !isFetching,
   });
 
   const allTags = useMemo(() => {
-    const tagSet = new Set<string>();
-    for (const n of notes) {
-      for (const t of n.tags) {
-        tagSet.add(t);
-      }
-    }
-    return Array.from(tagSet).sort();
+    const s = new Set<string>();
+    for (const n of notes) for (const t of n.tags) s.add(t);
+    return Array.from(s).sort();
   }, [notes]);
 
   const filtered = useMemo(() => {
@@ -180,64 +168,93 @@ export default function NotesPage() {
   }, [notes, search, activeTag]);
 
   return (
-    <div className="p-6 lg:p-8 space-y-6">
+    <div className="animate-fade-in-up p-4 sm:p-6 space-y-4 sm:space-y-5 pb-20 md:pb-6">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+      <div className="flex flex-col gap-3">
         <div>
-          <h1 className="font-display text-2xl font-bold text-foreground">
+          <h1 className="font-display text-xl sm:text-2xl font-bold text-foreground tracking-tight flex items-center gap-2">
+            <StickyNote className="h-5 w-5 text-primary" />
             Notes
           </h1>
           <p className="text-sm text-muted-foreground mt-0.5">
             {notes.length} note{notes.length !== 1 ? "s" : ""} in your workspace
           </p>
         </div>
-        <Button asChild className="gap-2 shrink-0" data-ocid="notes-new-btn">
-          <Link to="/app/notes/new">
-            <Plus className="h-4 w-4" />
-            New Note
-          </Link>
-        </Button>
+        <div className="flex items-center gap-2 flex-wrap">
+          <Button
+            asChild
+            variant="outline"
+            size="sm"
+            className="gap-1.5 h-9 text-xs flex-1 sm:flex-none justify-center"
+            data-ocid="notes-templates-btn"
+          >
+            <Link
+              to="/app/$workspaceId/notes/templates"
+              params={{ workspaceId }}
+            >
+              <LayoutTemplate className="h-3 w-3" /> Templates
+            </Link>
+          </Button>
+          <Button
+            asChild
+            variant="outline"
+            size="sm"
+            className="gap-1.5 h-9 text-xs flex-1 sm:flex-none justify-center"
+            data-ocid="notes-pages-btn"
+          >
+            <Link to="/app/$workspaceId/pages" params={{ workspaceId }}>
+              <FileText className="h-3 w-3" /> Pages
+            </Link>
+          </Button>
+          <Button
+            asChild
+            size="sm"
+            className="gap-1.5 h-9 text-xs flex-1 sm:flex-none justify-center active-press"
+            data-ocid="notes-new-btn"
+          >
+            <Link to="/app/$workspaceId/notes/new" params={{ workspaceId }}>
+              <Plus className="h-3.5 w-3.5" /> New Note
+            </Link>
+          </Button>
+        </div>
       </div>
 
-      {/* Search + Tag filters */}
-      <div className="space-y-3">
-        <div className="relative max-w-md">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
+      {/* Search + tag filters */}
+      <div className="space-y-2.5">
+        <div className="relative w-full">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground pointer-events-none" />
           <Input
-            placeholder="Search notes by title or content…"
+            placeholder="Search notes…"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            className="pl-9"
+            className="pl-9 h-10 text-sm border-border/60 focus:border-primary focus:ring-1 focus:ring-primary/30 w-full"
             data-ocid="notes-search"
           />
           {search && (
             <button
               type="button"
               onClick={() => setSearch("")}
-              className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground min-h-[44px] min-w-[44px] flex items-center justify-center -mr-2"
               aria-label="Clear search"
             >
-              <X className="h-4 w-4" />
+              <X className="h-3.5 w-3.5" />
             </button>
           )}
         </div>
 
         {allTags.length > 0 && (
-          <fieldset
-            className="flex flex-wrap gap-2 items-center border-0 p-0 m-0"
-            aria-label="Filter by tag"
-          >
-            <Tag className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+          <div className="flex flex-wrap gap-1.5 items-center">
+            <Tag className="h-3 w-3 text-muted-foreground shrink-0" />
             {allTags.map((tag) => (
               <button
                 key={tag}
                 type="button"
                 onClick={() => setActiveTag(activeTag === tag ? null : tag)}
                 data-ocid={`tag-filter-${tag}`}
-                className={`rounded-full px-3 py-1 text-xs font-medium transition-smooth border ${
+                className={`rounded-full px-2.5 py-1 text-xs font-medium transition-smooth border min-h-[32px] ${
                   activeTag === tag
                     ? "bg-primary text-primary-foreground border-primary"
-                    : "bg-muted text-muted-foreground border-transparent hover:border-primary/40 hover:text-foreground"
+                    : "bg-muted/60 text-muted-foreground border-transparent hover:border-border hover:text-foreground"
                 }`}
               >
                 {tag}
@@ -247,19 +264,18 @@ export default function NotesPage() {
               <button
                 type="button"
                 onClick={() => setActiveTag(null)}
-                className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-1"
+                className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-0.5 min-h-[32px]"
               >
-                <X className="h-3 w-3" />
-                Clear
+                <X className="h-3 w-3" /> Clear
               </button>
             )}
-          </fieldset>
+          </div>
         )}
       </div>
 
       {/* Grid */}
       {isLoading ? (
-        <NotesGridSkeleton />
+        <GridSkeleton />
       ) : filtered.length === 0 ? (
         <EmptyState
           query={search || activeTag || ""}
@@ -267,11 +283,12 @@ export default function NotesPage() {
             setSearch("");
             setActiveTag(null);
           }}
+          workspaceId={workspaceId}
         />
       ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
           {filtered.map((note) => (
-            <NoteCard key={note.id} note={note} />
+            <NoteCard key={note.id} note={note} workspaceId={workspaceId} />
           ))}
         </div>
       )}

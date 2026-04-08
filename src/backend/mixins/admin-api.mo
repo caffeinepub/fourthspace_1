@@ -12,19 +12,21 @@ module {
   public func createBackup(
     store : [(Common.EntityId, AdmTypes.Backup)],
     tenantId : Common.TenantId,
+    workspaceId : Common.WorkspaceId,
     caller : Common.UserId,
     backupLabel : Text,
   ) : { #ok : (AdmTypes.Backup, [(Common.EntityId, AdmTypes.Backup)]); #err : Text } {
-    let (backup, updated) = AdminLib.createBackup(store, tenantId, caller, backupLabel);
+    let (backup, updated) = AdminLib.createBackup(store, tenantId, workspaceId, caller, backupLabel);
     #ok((backup, updated))
   };
 
   public func getBackup(
     store : [(Common.EntityId, AdmTypes.Backup)],
     tenantId : Common.TenantId,
+    workspaceId : Common.WorkspaceId,
     id : Common.EntityId,
   ) : { #ok : AdmTypes.Backup; #err : Text } {
-    switch (AdminLib.getBackup(store, tenantId, id)) {
+    switch (AdminLib.getBackup(store, tenantId, workspaceId, id)) {
       case (?b) #ok(b);
       case null #err("Backup not found");
     }
@@ -33,44 +35,49 @@ module {
   public func listBackups(
     store : [(Common.EntityId, AdmTypes.Backup)],
     tenantId : Common.TenantId,
+    workspaceId : Common.WorkspaceId,
   ) : [AdmTypes.Backup] {
-    AdminLib.listBackups(store, tenantId)
+    AdminLib.listBackups(store, tenantId, workspaceId)
   };
 
   public func listAuditLogs(
     store : [(Common.EntityId, AdmTypes.AuditLog)],
     tenantId : Common.TenantId,
+    workspaceId : Common.WorkspaceId,
     limit : Nat,
   ) : [AdmTypes.AuditLog] {
-    AdminLib.listAuditLogs(store, tenantId, null, limit)
+    AdminLib.listAuditLogs(store, tenantId, workspaceId, null, limit)
   };
 
   public func createAutomationRule(
     store : [(Common.EntityId, AdmTypes.AutomationRule)],
     tenantId : Common.TenantId,
+    workspaceId : Common.WorkspaceId,
     caller : Common.UserId,
     name : Text,
     description : Text,
     trigger : AdmTypes.AutomationTrigger,
     action : AdmTypes.AutomationAction,
   ) : { #ok : (AdmTypes.AutomationRule, [(Common.EntityId, AdmTypes.AutomationRule)]); #err : Text } {
-    let (rule, updated) = AdminLib.createAutomationRule(store, tenantId, caller, name, description, trigger, action);
+    let (rule, updated) = AdminLib.createAutomationRule(store, tenantId, workspaceId, caller, name, description, trigger, action);
     #ok((rule, updated))
   };
 
   public func listAutomationRules(
     store : [(Common.EntityId, AdmTypes.AutomationRule)],
     tenantId : Common.TenantId,
+    workspaceId : Common.WorkspaceId,
   ) : [AdmTypes.AutomationRule] {
-    AdminLib.listAutomationRules(store, tenantId)
+    AdminLib.listAutomationRules(store, tenantId, workspaceId)
   };
 
   public func toggleAutomationRule(
     store : [(Common.EntityId, AdmTypes.AutomationRule)],
     tenantId : Common.TenantId,
+    workspaceId : Common.WorkspaceId,
     id : Common.EntityId,
   ) : { #ok : (AdmTypes.AutomationRule, [(Common.EntityId, AdmTypes.AutomationRule)]); #err : Text } {
-    let (result, updated) = AdminLib.toggleAutomationRule(store, tenantId, id);
+    let (result, updated) = AdminLib.toggleAutomationRule(store, tenantId, workspaceId, id);
     switch (result) {
       case (?rule) #ok((rule, updated));
       case null #err("Automation rule not found");
@@ -79,6 +86,7 @@ module {
 
   public func getWorkspaceStats(
     _tenantId : Common.TenantId,
+    _workspaceId : Common.WorkspaceId,
     notes : [(Common.EntityId, NTypes.Note)],
     projects : [(Common.EntityId, PTypes.Project)],
     employees : [(Common.EntityId, PayTypes.Employee)],

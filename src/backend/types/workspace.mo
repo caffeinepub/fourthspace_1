@@ -1,12 +1,29 @@
 import C "common";
 
 module {
+  public type WorkspaceRole = {
+    #Admin;
+    #Manager;
+    #TeamMember;
+    #Guest;
+  };
+
+  public type WorkspaceMember = {
+    workspaceId : C.WorkspaceId;
+    userId : C.UserId;
+    role : WorkspaceRole;
+    joinedAt : C.Timestamp;
+    displayName : Text;
+    email : Text;
+  };
+
   public type Workspace = {
     id : C.EntityId;
     tenantId : C.TenantId;
     name : Text;
     ownerId : C.UserId;
     createdAt : C.Timestamp;
+    members : [(C.UserId, WorkspaceMember)];
   };
 
   public type UserProfile = {

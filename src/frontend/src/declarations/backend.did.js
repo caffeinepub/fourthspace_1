@@ -9,26 +9,172 @@
 import { IDL } from '@icp-sdk/core/candid';
 
 export const TenantId = IDL.Text;
+export const WorkspaceId = IDL.Text;
+export const EntityId = IDL.Text;
+export const GuestStatus = IDL.Variant({
+  'Active' : IDL.Null,
+  'Revoked' : IDL.Null,
+  'Pending' : IDL.Null,
+});
 export const UserId = IDL.Principal;
+export const Timestamp = IDL.Int;
+export const GuestUser = IDL.Record({
+  'id' : EntityId,
+  'status' : GuestStatus,
+  'principal' : IDL.Opt(UserId),
+  'createdAt' : Timestamp,
+  'email' : IDL.Text,
+  'tenantId' : TenantId,
+  'workspaceId' : WorkspaceId,
+  'projectIds' : IDL.Vec(EntityId),
+});
+export const BenefitInput = IDL.Record({
+  'endDate' : IDL.Opt(IDL.Text),
+  'name' : IDL.Text,
+  'employeeId' : EntityId,
+  'monthlyCost' : IDL.Float64,
+  'startDate' : IDL.Text,
+});
+export const Benefit = IDL.Record({
+  'id' : EntityId,
+  'endDate' : IDL.Opt(IDL.Text),
+  'name' : IDL.Text,
+  'isActive' : IDL.Bool,
+  'tenantId' : TenantId,
+  'employeeId' : EntityId,
+  'workspaceId' : WorkspaceId,
+  'monthlyCost' : IDL.Float64,
+  'startDate' : IDL.Text,
+});
+export const ChecklistItemInput = IDL.Record({
+  'content' : IDL.Text,
+  'order' : IDL.Nat,
+  'completed' : IDL.Bool,
+  'taskId' : EntityId,
+});
+export const ChecklistItem = IDL.Record({
+  'id' : EntityId,
+  'content' : IDL.Text,
+  'order' : IDL.Nat,
+  'createdAt' : Timestamp,
+  'completed' : IDL.Bool,
+  'tenantId' : TenantId,
+  'updatedAt' : Timestamp,
+  'taskId' : EntityId,
+  'workspaceId' : WorkspaceId,
+});
+export const TaskCommentInput = IDL.Record({
+  'content' : IDL.Text,
+  'taskId' : EntityId,
+});
+export const TaskComment = IDL.Record({
+  'id' : EntityId,
+  'content' : IDL.Text,
+  'authorId' : UserId,
+  'createdAt' : Timestamp,
+  'tenantId' : TenantId,
+  'updatedAt' : Timestamp,
+  'taskId' : EntityId,
+  'workspaceId' : WorkspaceId,
+  'editedAt' : IDL.Opt(Timestamp),
+});
+export const ContractorInput = IDL.Record({
+  'taxId' : IDL.Text,
+  'name' : IDL.Text,
+  'rate' : IDL.Float64,
+  'email' : IDL.Text,
+  'currency' : IDL.Text,
+});
+export const Contractor = IDL.Record({
+  'id' : EntityId,
+  'taxId' : IDL.Text,
+  'name' : IDL.Text,
+  'createdAt' : Timestamp,
+  'rate' : IDL.Float64,
+  'isActive' : IDL.Bool,
+  'email' : IDL.Text,
+  'tenantId' : TenantId,
+  'currency' : IDL.Text,
+  'workspaceId' : WorkspaceId,
+});
+export const ContractorPaymentReason = IDL.Variant({
+  'projectMilestone' : IDL.Null,
+  'other' : IDL.Null,
+  'freelanceInvoice' : IDL.Null,
+  'reimbursement' : IDL.Null,
+});
+export const ContractorPaymentInput = IDL.Record({
+  'contractorId' : EntityId,
+  'notes' : IDL.Text,
+  'paymentDate' : IDL.Text,
+  'amount' : IDL.Float64,
+  'reason' : ContractorPaymentReason,
+});
+export const ContractorPaymentStatus = IDL.Variant({
+  'pending' : IDL.Null,
+  'processed' : IDL.Null,
+});
+export const ContractorPayment = IDL.Record({
+  'id' : EntityId,
+  'status' : ContractorPaymentStatus,
+  'createdAt' : Timestamp,
+  'contractorId' : EntityId,
+  'tenantId' : TenantId,
+  'processedAt' : IDL.Opt(Timestamp),
+  'notes' : IDL.Text,
+  'paymentDate' : IDL.Text,
+  'workspaceId' : WorkspaceId,
+  'amount' : IDL.Float64,
+  'reason' : ContractorPaymentReason,
+});
+export const DeductionFrequency = IDL.Variant({
+  'perRun' : IDL.Null,
+  'annual' : IDL.Null,
+});
+export const DeductionType = IDL.Variant({
+  'postTax' : IDL.Null,
+  'preTax' : IDL.Null,
+});
+export const DeductionInput = IDL.Record({
+  'name' : IDL.Text,
+  'employeeId' : EntityId,
+  'frequency' : DeductionFrequency,
+  'amount' : IDL.Float64,
+  'deductionType' : DeductionType,
+});
+export const Deduction = IDL.Record({
+  'id' : EntityId,
+  'name' : IDL.Text,
+  'createdAt' : Timestamp,
+  'isActive' : IDL.Bool,
+  'tenantId' : TenantId,
+  'employeeId' : EntityId,
+  'workspaceId' : WorkspaceId,
+  'frequency' : DeductionFrequency,
+  'amount' : IDL.Float64,
+  'deductionType' : DeductionType,
+});
 export const PayFrequency = IDL.Variant({
   'BiWeekly' : IDL.Null,
   'Weekly' : IDL.Null,
   'Quarterly' : IDL.Null,
+  'SemiMonthly' : IDL.Null,
   'Monthly' : IDL.Null,
 });
-export const Timestamp = IDL.Int;
 export const EmployeeInput = IDL.Record({
   'salary' : IDL.Nat,
   'userId' : UserId,
   'email' : IDL.Text,
+  'payScheduleId' : IDL.Text,
   'currency' : IDL.Text,
   'payFrequency' : PayFrequency,
   'lastName' : IDL.Text,
+  'contractorFlag' : IDL.Bool,
   'taxRate' : IDL.Nat,
+  'timeZone' : IDL.Text,
   'startDate' : Timestamp,
   'firstName' : IDL.Text,
 });
-export const EntityId = IDL.Text;
 export const Employee = IDL.Record({
   'id' : EntityId,
   'salary' : IDL.Nat,
@@ -37,24 +183,252 @@ export const Employee = IDL.Record({
   'isActive' : IDL.Bool,
   'email' : IDL.Text,
   'tenantId' : TenantId,
+  'payScheduleId' : IDL.Text,
   'currency' : IDL.Text,
+  'workspaceId' : WorkspaceId,
   'payFrequency' : PayFrequency,
   'lastName' : IDL.Text,
+  'contractorFlag' : IDL.Bool,
   'taxRate' : IDL.Nat,
+  'timeZone' : IDL.Text,
   'startDate' : Timestamp,
   'firstName' : IDL.Text,
 });
-export const ProjectStatus = IDL.Variant({
-  'OnHold' : IDL.Null,
-  'Active' : IDL.Null,
-  'Archived' : IDL.Null,
+export const EscrowMilestoneInput = IDL.Record({
+  'title' : IDL.Text,
+  'description' : IDL.Text,
+  'amount' : IDL.Nat,
+});
+export const MilestoneStatus__1 = IDL.Variant({
+  'Releasing' : IDL.Null,
+  'Released' : IDL.Null,
+  'Approved' : IDL.Null,
+  'Pending' : IDL.Null,
+});
+export const EscrowMilestone = IDL.Record({
+  'id' : EntityId,
+  'status' : MilestoneStatus__1,
+  'title' : IDL.Text,
+  'createdAt' : Timestamp,
+  'description' : IDL.Text,
+  'tenantId' : TenantId,
+  'updatedAt' : Timestamp,
+  'ledgerBlockHeight' : IDL.Opt(IDL.Nat),
+  'workspaceId' : WorkspaceId,
+  'escrowId' : EntityId,
+  'amount' : IDL.Nat,
+});
+export const IntegrationEvent = IDL.Record({
+  'id' : EntityId,
+  'integrationId' : EntityId,
+  'triggerAction' : IDL.Opt(IDL.Text),
+  'tenantId' : TenantId,
+  'timestamp' : Timestamp,
+  'workspaceId' : WorkspaceId,
+  'payload' : IDL.Text,
+  'eventType' : IDL.Text,
+});
+export const KeyResultInput = IDL.Record({
+  'title' : IDL.Text,
+  'unit' : IDL.Text,
+  'goalId' : EntityId,
+  'description' : IDL.Opt(IDL.Text),
+  'targetValue' : IDL.Float64,
+});
+export const KRStatus = IDL.Variant({
+  'OnTrack' : IDL.Null,
+  'Behind' : IDL.Null,
   'Completed' : IDL.Null,
+  'AtRisk' : IDL.Null,
+});
+export const KeyResult = IDL.Record({
+  'id' : EntityId,
+  'status' : KRStatus,
+  'title' : IDL.Text,
+  'createdAt' : Timestamp,
+  'unit' : IDL.Text,
+  'goalId' : EntityId,
+  'description' : IDL.Opt(IDL.Text),
+  'tenantId' : TenantId,
+  'currentValue' : IDL.Float64,
+  'updatedAt' : Timestamp,
+  'linkedTaskIds' : IDL.Vec(EntityId),
+  'workspaceId' : WorkspaceId,
+  'targetValue' : IDL.Float64,
+});
+export const OffCycleReason = IDL.Variant({
+  'adjustment' : IDL.Null,
+  'reimbursement' : IDL.Null,
+  'bonus' : IDL.Null,
+});
+export const OffCyclePaymentInput = IDL.Record({
+  'processImmediately' : IDL.Bool,
+  'employeeId' : EntityId,
+  'notes' : IDL.Text,
+  'amount' : IDL.Float64,
+  'reason' : OffCycleReason,
+});
+export const OffCycleStatus = IDL.Variant({
+  'pending' : IDL.Null,
+  'processed' : IDL.Null,
+});
+export const OffCyclePayment = IDL.Record({
+  'id' : EntityId,
+  'status' : OffCycleStatus,
+  'createdAt' : Timestamp,
+  'processImmediately' : IDL.Bool,
+  'tenantId' : TenantId,
+  'employeeId' : EntityId,
+  'notes' : IDL.Text,
+  'workspaceId' : WorkspaceId,
+  'amount' : IDL.Float64,
+  'reason' : OffCycleReason,
+});
+export const PayScheduleInput = IDL.Record({
+  'name' : IDL.Text,
+  'description' : IDL.Text,
+  'isDefault' : IDL.Bool,
+  'frequency' : PayFrequency,
+});
+export const PaySchedule = IDL.Record({
+  'id' : EntityId,
+  'name' : IDL.Text,
+  'createdAt' : Timestamp,
+  'description' : IDL.Text,
+  'tenantId' : TenantId,
+  'isDefault' : IDL.Bool,
+  'workspaceId' : WorkspaceId,
+  'frequency' : PayFrequency,
 });
 export const CrossLink = IDL.Record({
   'linkLabel' : IDL.Text,
   'tenantId' : TenantId,
   'entityId' : EntityId,
   'entityType' : IDL.Text,
+});
+export const Reaction = IDL.Record({
+  'userIds' : IDL.Vec(IDL.Principal),
+  'emoji' : IDL.Text,
+});
+export const Message = IDL.Record({
+  'id' : EntityId,
+  'content' : IDL.Text,
+  'channelId' : EntityId,
+  'isThreadReply' : IDL.Opt(IDL.Bool),
+  'createdAt' : Timestamp,
+  'tenantId' : TenantId,
+  'updatedAt' : Timestamp,
+  'threadCount' : IDL.Opt(IDL.Nat),
+  'workspaceId' : WorkspaceId,
+  'replyToId' : IDL.Opt(EntityId),
+  'crossLinks' : IDL.Vec(CrossLink),
+  'reactions' : IDL.Opt(IDL.Vec(Reaction)),
+  'senderId' : UserId,
+});
+export const TaskRelationshipType = IDL.Variant({
+  'blockedBy' : IDL.Null,
+  'duplicateOf' : IDL.Null,
+  'blocks' : IDL.Null,
+  'relatedTo' : IDL.Null,
+});
+export const TaskRelationship = IDL.Record({
+  'id' : EntityId,
+  'targetTaskId' : EntityId,
+  'createdAt' : Timestamp,
+  'createdBy' : UserId,
+  'tenantId' : TenantId,
+  'sourceTaskId' : EntityId,
+  'workspaceId' : WorkspaceId,
+  'relationshipType' : TaskRelationshipType,
+});
+export const SprintStatus = IDL.Variant({
+  'active' : IDL.Null,
+  'completed' : IDL.Null,
+  'planned' : IDL.Null,
+});
+export const Sprint = IDL.Record({
+  'id' : EntityId,
+  'status' : SprintStatus,
+  'taskIds' : IDL.Vec(EntityId),
+  'endDate' : Timestamp,
+  'goal' : IDL.Text,
+  'name' : IDL.Text,
+  'createdAt' : Timestamp,
+  'tenantId' : TenantId,
+  'updatedAt' : Timestamp,
+  'projectId' : EntityId,
+  'workspaceId' : WorkspaceId,
+  'startDate' : Timestamp,
+});
+export const TaskWatcher = IDL.Record({
+  'userId' : UserId,
+  'tenantId' : TenantId,
+  'taskId' : EntityId,
+  'addedAt' : Timestamp,
+  'workspaceId' : WorkspaceId,
+});
+export const WorkspaceRole = IDL.Variant({
+  'Guest' : IDL.Null,
+  'Admin' : IDL.Null,
+  'Manager' : IDL.Null,
+  'TeamMember' : IDL.Null,
+});
+export const WorkspaceMember = IDL.Record({
+  'displayName' : IDL.Text,
+  'userId' : UserId,
+  'joinedAt' : Timestamp,
+  'role' : WorkspaceRole,
+  'email' : IDL.Text,
+  'workspaceId' : WorkspaceId,
+});
+export const TransactionStatus = IDL.Variant({
+  'Failed' : IDL.Null,
+  'Cancelled' : IDL.Null,
+  'AwaitingApproval' : IDL.Null,
+  'Completed' : IDL.Null,
+  'Pending' : IDL.Null,
+});
+export const AssetType = IDL.Variant({ 'BTC' : IDL.Null, 'ICP' : IDL.Null });
+export const TransactionType = IDL.Variant({
+  'Stake' : IDL.Null,
+  'Send' : IDL.Null,
+  'Swap' : IDL.Null,
+  'Unstake' : IDL.Null,
+  'Receive' : IDL.Null,
+});
+export const TransactionApproval = IDL.Record({
+  'id' : EntityId,
+  'txId' : EntityId,
+  'tenantId' : TenantId,
+  'approved' : IDL.Bool,
+  'approver' : IDL.Principal,
+  'timestamp' : Timestamp,
+  'workspaceId' : WorkspaceId,
+});
+export const WalletTransaction = IDL.Record({
+  'id' : EntityId,
+  'status' : TransactionStatus,
+  'requiredApprovals' : IDL.Nat,
+  'asset' : AssetType,
+  'accountId' : EntityId,
+  'fromAddress' : IDL.Opt(IDL.Text),
+  'memoValue' : IDL.Opt(IDL.Nat64),
+  'memo' : IDL.Opt(IDL.Text),
+  'createdAt' : Timestamp,
+  'tenantId' : TenantId,
+  'ledgerTxHash' : IDL.Opt(IDL.Text),
+  'ledgerBlockHeight' : IDL.Opt(IDL.Nat),
+  'workspaceId' : WorkspaceId,
+  'txType' : TransactionType,
+  'toAddress' : IDL.Opt(IDL.Text),
+  'amount' : IDL.Nat,
+  'approvals' : IDL.Vec(TransactionApproval),
+});
+export const ProjectStatus = IDL.Variant({
+  'OnHold' : IDL.Null,
+  'Active' : IDL.Null,
+  'Archived' : IDL.Null,
+  'Completed' : IDL.Null,
 });
 export const Project = IDL.Record({
   'id' : EntityId,
@@ -65,8 +439,26 @@ export const Project = IDL.Record({
   'description' : IDL.Text,
   'tenantId' : TenantId,
   'updatedAt' : Timestamp,
+  'workspaceId' : WorkspaceId,
   'memberIds' : IDL.Vec(UserId),
   'crossLinks' : IDL.Vec(CrossLink),
+});
+export const DisputeStatus = IDL.Variant({
+  'Open' : IDL.Null,
+  'Resolved' : IDL.Null,
+});
+export const EscrowDispute = IDL.Record({
+  'id' : EntityId,
+  'status' : DisputeStatus,
+  'arbiter' : IDL.Opt(IDL.Principal),
+  'createdAt' : Timestamp,
+  'resolution' : IDL.Opt(IDL.Text),
+  'tenantId' : TenantId,
+  'updatedAt' : Timestamp,
+  'raisedBy' : IDL.Principal,
+  'workspaceId' : WorkspaceId,
+  'escrowId' : EntityId,
+  'reason' : IDL.Text,
 });
 export const EscrowStatus = IDL.Variant({
   'Disputed' : IDL.Null,
@@ -75,6 +467,12 @@ export const EscrowStatus = IDL.Variant({
   'Cancelled' : IDL.Null,
   'Pending' : IDL.Null,
 });
+export const StatusHistoryEntry = IDL.Record({
+  'status' : EscrowStatus,
+  'changedBy' : IDL.Principal,
+  'note' : IDL.Opt(IDL.Text),
+  'timestamp' : Timestamp,
+});
 export const EscrowContract = IDL.Record({
   'id' : EntityId,
   'status' : EscrowStatus,
@@ -82,16 +480,19 @@ export const EscrowContract = IDL.Record({
   'createdAt' : Timestamp,
   'dueDate' : IDL.Opt(Timestamp),
   'description' : IDL.Text,
+  'statusHistory' : IDL.Vec(StatusHistoryEntry),
   'tenantId' : TenantId,
   'updatedAt' : Timestamp,
   'currency' : IDL.Text,
+  'workspaceId' : WorkspaceId,
   'conditions' : IDL.Vec(IDL.Text),
+  'fundingBlockHeight' : IDL.Opt(IDL.Nat),
   'crossLinks' : IDL.Vec(CrossLink),
   'amount' : IDL.Nat,
   'payeeId' : UserId,
   'payerId' : UserId,
+  'fundedAmount' : IDL.Opt(IDL.Nat),
 });
-export const AssetType = IDL.Variant({ 'BTC' : IDL.Null, 'ICP' : IDL.Null });
 export const RecurringPayment = IDL.Record({
   'id' : EntityId,
   'asset' : AssetType,
@@ -100,9 +501,56 @@ export const RecurringPayment = IDL.Record({
   'isActive' : IDL.Bool,
   'tenantId' : TenantId,
   'nextRunAt' : Timestamp,
+  'workspaceId' : WorkspaceId,
   'frequency' : PayFrequency,
   'toAddress' : IDL.Text,
   'amount' : IDL.Nat,
+});
+export const Role = IDL.Variant({
+  'Admin' : IDL.Null,
+  'Manager' : IDL.Null,
+  'TeamMember' : IDL.Null,
+});
+export const DrawingTool = IDL.Variant({
+  'Pen' : IDL.Null,
+  'Line' : IDL.Null,
+  'Text' : IDL.Null,
+  'Sticky' : IDL.Null,
+  'Connector' : IDL.Null,
+  'Image' : IDL.Null,
+  'Eraser' : IDL.Null,
+  'Circle' : IDL.Null,
+  'Rectangle' : IDL.Null,
+});
+export const WhiteboardElement = IDL.Record({
+  'x' : IDL.Float64,
+  'y' : IDL.Float64,
+  'id' : EntityId,
+  'height' : IDL.Float64,
+  'color' : IDL.Text,
+  'text' : IDL.Text,
+  'tool' : DrawingTool,
+  'connectorTo' : IDL.Opt(IDL.Text),
+  'imageUrl' : IDL.Opt(IDL.Text),
+  'width' : IDL.Float64,
+  'connectorFrom' : IDL.Opt(IDL.Text),
+  'converted' : IDL.Bool,
+  'strokeWidth' : IDL.Float64,
+  'linkedTaskId' : IDL.Opt(IDL.Text),
+  'points' : IDL.Vec(IDL.Float64),
+});
+export const Whiteboard = IDL.Record({
+  'id' : EntityId,
+  'title' : IDL.Text,
+  'templateId' : IDL.Opt(IDL.Text),
+  'createdAt' : Timestamp,
+  'createdBy' : UserId,
+  'templateName' : IDL.Opt(IDL.Text),
+  'tenantId' : TenantId,
+  'updatedAt' : Timestamp,
+  'elements' : IDL.Vec(WhiteboardElement),
+  'projectId' : IDL.Opt(EntityId),
+  'workspaceId' : WorkspaceId,
 });
 export const AutomationTrigger = IDL.Variant({
   'OnTaskStatusChange' : IDL.Null,
@@ -128,6 +576,7 @@ export const AutomationRule = IDL.Record({
   'description' : IDL.Text,
   'isActive' : IDL.Bool,
   'tenantId' : TenantId,
+  'workspaceId' : WorkspaceId,
 });
 export const BackupStatus = IDL.Variant({
   'Failed' : IDL.Null,
@@ -143,7 +592,33 @@ export const Backup = IDL.Record({
   'createdBy' : UserId,
   'tenantId' : TenantId,
   'backupLabel' : IDL.Text,
+  'workspaceId' : WorkspaceId,
   'sizeBytes' : IDL.Opt(IDL.Nat),
+});
+export const CalendarType = IDL.Variant({
+  'team' : IDL.Null,
+  'company' : IDL.Null,
+  'personal' : IDL.Null,
+  'project' : IDL.Null,
+});
+export const CalendarDefInput = IDL.Record({
+  'calendarType' : CalendarType,
+  'name' : IDL.Text,
+  'color' : IDL.Text,
+  'projectId' : IDL.Opt(IDL.Text),
+  'isVisible' : IDL.Bool,
+});
+export const CalendarDef = IDL.Record({
+  'id' : EntityId,
+  'calendarType' : CalendarType,
+  'ownerId' : UserId,
+  'name' : IDL.Text,
+  'createdAt' : Timestamp,
+  'color' : IDL.Text,
+  'tenantId' : TenantId,
+  'projectId' : IDL.Opt(IDL.Text),
+  'isVisible' : IDL.Bool,
+  'workspaceId' : WorkspaceId,
 });
 export const ChannelInput = IDL.Record({
   'name' : IDL.Text,
@@ -151,15 +626,28 @@ export const ChannelInput = IDL.Record({
   'memberIds' : IDL.Vec(UserId),
   'isPublic' : IDL.Bool,
 });
+export const MentionEntry = IDL.Record({
+  'userId' : IDL.Principal,
+  'hasMention' : IDL.Bool,
+});
+export const UnreadEntry = IDL.Record({
+  'userId' : IDL.Principal,
+  'count' : IDL.Nat,
+});
 export const Channel = IDL.Record({
   'id' : EntityId,
+  'topic' : IDL.Opt(IDL.Text),
+  'mentionFlags' : IDL.Opt(IDL.Vec(MentionEntry)),
+  'unreadCounts' : IDL.Opt(IDL.Vec(UnreadEntry)),
   'name' : IDL.Text,
   'createdAt' : Timestamp,
   'createdBy' : UserId,
   'description' : IDL.Text,
   'tenantId' : TenantId,
+  'workspaceId' : WorkspaceId,
   'memberIds' : IDL.Vec(UserId),
   'isPublic' : IDL.Bool,
+  'pinnedMessageIds' : IDL.Opt(IDL.Vec(IDL.Text)),
 });
 export const EscrowInput = IDL.Record({
   'title' : IDL.Text,
@@ -178,6 +666,14 @@ export const RecurrenceRule = IDL.Variant({
   'Monthly' : IDL.Null,
   'Yearly' : IDL.Null,
 });
+export const EventCategory = IDL.Variant({
+  'pto' : IDL.Null,
+  'internal' : IDL.Null,
+  'other' : IDL.Null,
+  'deadline' : IDL.Null,
+  'meeting' : IDL.Null,
+  'external' : IDL.Null,
+});
 export const EventInput = IDL.Record({
   'startTime' : Timestamp,
   'title' : IDL.Text,
@@ -185,21 +681,193 @@ export const EventInput = IDL.Record({
   'description' : IDL.Text,
   'attendeeIds' : IDL.Vec(UserId),
   'recurrence' : RecurrenceRule,
+  'categoryColor' : IDL.Opt(IDL.Text),
+  'projectId' : IDL.Opt(IDL.Text),
+  'linkedNoteId' : IDL.Opt(IDL.Text),
+  'rsvpRequired' : IDL.Opt(IDL.Bool),
+  'calendarId' : IDL.Opt(IDL.Text),
+  'category' : IDL.Opt(EventCategory),
   'crossLinks' : IDL.Vec(CrossLink),
+  'isProjectDeadline' : IDL.Opt(IDL.Bool),
+  'timeZone' : IDL.Opt(IDL.Text),
 });
 export const Event = IDL.Record({
   'id' : EntityId,
   'startTime' : Timestamp,
   'title' : IDL.Text,
   'endTime' : Timestamp,
+  'isRecurringSeries' : IDL.Bool,
   'createdAt' : Timestamp,
   'createdBy' : UserId,
   'description' : IDL.Text,
   'attendeeIds' : IDL.Vec(UserId),
+  'seriesId' : IDL.Opt(IDL.Text),
   'tenantId' : TenantId,
   'recurrence' : RecurrenceRule,
   'updatedAt' : Timestamp,
+  'categoryColor' : IDL.Text,
+  'projectId' : IDL.Opt(IDL.Text),
+  'linkedNoteId' : IDL.Opt(IDL.Text),
+  'rsvpRequired' : IDL.Bool,
+  'calendarId' : IDL.Text,
+  'category' : EventCategory,
+  'workspaceId' : WorkspaceId,
   'crossLinks' : IDL.Vec(CrossLink),
+  'isProjectDeadline' : IDL.Bool,
+  'timeZone' : IDL.Text,
+});
+export const ExceptionType = IDL.Variant({
+  'deleted' : IDL.Null,
+  'modified' : IDL.Null,
+});
+export const EventExceptionInput = IDL.Record({
+  'eventId' : IDL.Text,
+  'originalDate' : IDL.Text,
+  'exceptionType' : ExceptionType,
+  'overrideData' : IDL.Opt(EventInput),
+});
+export const EventException = IDL.Record({
+  'id' : EntityId,
+  'eventId' : IDL.Text,
+  'originalDate' : IDL.Text,
+  'exceptionType' : ExceptionType,
+  'createdAt' : Timestamp,
+  'tenantId' : TenantId,
+  'overrideData' : IDL.Opt(EventInput),
+  'workspaceId' : WorkspaceId,
+});
+export const ConditionalLogic = IDL.Record({
+  'value' : IDL.Text,
+  'operator' : IDL.Text,
+  'fieldId' : IDL.Text,
+});
+export const FormFieldType = IDL.Variant({
+  'Email' : IDL.Null,
+  'Date' : IDL.Null,
+  'Textarea' : IDL.Null,
+  'Text' : IDL.Null,
+  'Checkbox' : IDL.Null,
+  'Dropdown' : IDL.Null,
+});
+export const FormField = IDL.Record({
+  'id' : EntityId,
+  'fieldLabel' : IDL.Text,
+  'required' : IDL.Bool,
+  'conditionalLogic' : IDL.Opt(ConditionalLogic),
+  'options' : IDL.Vec(IDL.Text),
+  'fieldType' : FormFieldType,
+});
+export const AutoCreateTaskConfig = IDL.Record({
+  'assigneeId' : IDL.Opt(IDL.Principal),
+  'taskTitle' : IDL.Text,
+  'projectId' : IDL.Text,
+});
+export const FormBranding = IDL.Record({
+  'backgroundColor' : IDL.Opt(IDL.Text),
+  'primaryColor' : IDL.Opt(IDL.Text),
+  'logoUrl' : IDL.Opt(IDL.Text),
+});
+export const FormInput = IDL.Record({
+  'title' : IDL.Text,
+  'formTemplateId' : IDL.Opt(IDL.Text),
+  'description' : IDL.Text,
+  'fields' : IDL.Vec(FormField),
+  'autoCreateTask' : IDL.Opt(AutoCreateTaskConfig),
+  'branding' : IDL.Opt(FormBranding),
+});
+export const FormStatus = IDL.Variant({
+  'Draft' : IDL.Null,
+  'Published' : IDL.Null,
+});
+export const Form = IDL.Record({
+  'id' : EntityId,
+  'status' : FormStatus,
+  'title' : IDL.Text,
+  'formTemplateId' : IDL.Opt(IDL.Text),
+  'publicUrl' : IDL.Text,
+  'createdAt' : Timestamp,
+  'createdBy' : UserId,
+  'description' : IDL.Text,
+  'tenantId' : TenantId,
+  'fields' : IDL.Vec(FormField),
+  'updatedAt' : Timestamp,
+  'autoCreateTask' : IDL.Opt(AutoCreateTaskConfig),
+  'workspaceId' : WorkspaceId,
+  'branding' : IDL.Opt(FormBranding),
+});
+export const GoalInput = IDL.Record({
+  'title' : IDL.Text,
+  'endDate' : Timestamp,
+  'period' : IDL.Text,
+  'description' : IDL.Opt(IDL.Text),
+  'contributorIds' : IDL.Vec(UserId),
+  'startDate' : Timestamp,
+});
+export const GoalStatus = IDL.Variant({
+  'OnHold' : IDL.Null,
+  'Active' : IDL.Null,
+  'Cancelled' : IDL.Null,
+  'Completed' : IDL.Null,
+});
+export const Goal = IDL.Record({
+  'id' : EntityId,
+  'status' : GoalStatus,
+  'title' : IDL.Text,
+  'endDate' : Timestamp,
+  'ownerId' : UserId,
+  'period' : IDL.Text,
+  'createdAt' : Timestamp,
+  'description' : IDL.Opt(IDL.Text),
+  'tenantId' : TenantId,
+  'updatedAt' : Timestamp,
+  'progress' : IDL.Float64,
+  'workspaceId' : WorkspaceId,
+  'isPublic' : IDL.Bool,
+  'contributorIds' : IDL.Vec(UserId),
+  'keyResults' : IDL.Vec(EntityId),
+  'startDate' : Timestamp,
+});
+export const GuestInvitationInput = IDL.Record({
+  'expiresAt' : Timestamp,
+  'inviteeEmail' : IDL.Text,
+  'projectId' : EntityId,
+});
+export const GuestInvitation = IDL.Record({
+  'id' : EntityId,
+  'inviteToken' : IDL.Text,
+  'expiresAt' : Timestamp,
+  'inviteeEmail' : IDL.Text,
+  'createdAt' : Timestamp,
+  'invitedBy' : UserId,
+  'tenantId' : TenantId,
+  'projectId' : EntityId,
+  'workspaceId' : WorkspaceId,
+  'accepted' : IDL.Bool,
+});
+export const MilestoneInput = IDL.Record({
+  'title' : IDL.Text,
+  'dueDate' : Timestamp,
+  'description' : IDL.Text,
+  'projectId' : EntityId,
+  'linkedTaskIds' : IDL.Vec(EntityId),
+});
+export const MilestoneStatus = IDL.Variant({
+  'reached' : IDL.Null,
+  'upcoming' : IDL.Null,
+  'missed' : IDL.Null,
+});
+export const Milestone = IDL.Record({
+  'id' : EntityId,
+  'status' : MilestoneStatus,
+  'title' : IDL.Text,
+  'createdAt' : Timestamp,
+  'dueDate' : Timestamp,
+  'description' : IDL.Text,
+  'tenantId' : TenantId,
+  'updatedAt' : Timestamp,
+  'projectId' : EntityId,
+  'linkedTaskIds' : IDL.Vec(EntityId),
+  'workspaceId' : WorkspaceId,
 });
 export const NoteInput = IDL.Record({
   'title' : IDL.Text,
@@ -216,18 +884,137 @@ export const Note = IDL.Record({
   'tags' : IDL.Vec(IDL.Text),
   'tenantId' : TenantId,
   'updatedAt' : Timestamp,
+  'workspaceId' : WorkspaceId,
   'crossLinks' : IDL.Vec(CrossLink),
+});
+export const NoteTemplateInput = IDL.Record({
+  'icon' : IDL.Text,
+  'name' : IDL.Text,
+  'description' : IDL.Text,
+  'blocksJson' : IDL.Text,
+});
+export const NoteTemplate = IDL.Record({
+  'id' : EntityId,
+  'authorId' : UserId,
+  'icon' : IDL.Text,
+  'name' : IDL.Text,
+  'createdAt' : Timestamp,
+  'description' : IDL.Text,
+  'tenantId' : TenantId,
+  'blocksJson' : IDL.Text,
+  'workspaceId' : WorkspaceId,
+});
+export const PageInput = IDL.Record({
+  'title' : IDL.Text,
+  'icon' : IDL.Text,
+  'blocks' : IDL.Vec(IDL.Text),
+  'coverUrl' : IDL.Opt(IDL.Text),
+  'parentPageId' : IDL.Opt(EntityId),
+});
+export const BlockTypeTag = IDL.Text;
+export const Block = IDL.Record({
+  'id' : EntityId,
+  'content' : IDL.Text,
+  'order' : IDL.Nat,
+  'metadata' : IDL.Text,
+  'blockType' : BlockTypeTag,
+  'parentId' : IDL.Opt(EntityId),
+});
+export const PageNode = IDL.Record({
+  'id' : EntityId,
+  'title' : IDL.Text,
+  'authorId' : UserId,
+  'icon' : IDL.Text,
+  'createdAt' : Timestamp,
+  'tenantId' : TenantId,
+  'updatedAt' : Timestamp,
+  'blocks' : IDL.Vec(Block),
+  'workspaceId' : WorkspaceId,
+  'coverUrl' : IDL.Opt(IDL.Text),
+  'crossLinks' : IDL.Vec(CrossLink),
+  'parentPageId' : IDL.Opt(EntityId),
+  'watchers' : IDL.Vec(UserId),
 });
 export const ProjectInput = IDL.Record({
   'name' : IDL.Text,
   'description' : IDL.Text,
   'memberIds' : IDL.Vec(UserId),
 });
+export const RecurrenceType = IDL.Variant({
+  'monthly' : IDL.Null,
+  'daily' : IDL.Null,
+  'weekly' : IDL.Null,
+});
 export const TaskPriority = IDL.Variant({
   'Low' : IDL.Null,
   'High' : IDL.Null,
   'Medium' : IDL.Null,
   'Critical' : IDL.Null,
+});
+export const RecurringTaskInput = IDL.Record({
+  'title' : IDL.Text,
+  'assigneeId' : IDL.Opt(UserId),
+  'description' : IDL.Text,
+  'recurrenceType' : RecurrenceType,
+  'projectId' : EntityId,
+  'priority' : TaskPriority,
+  'startDate' : Timestamp,
+});
+export const RecurringTask = IDL.Record({
+  'id' : EntityId,
+  'title' : IDL.Text,
+  'assigneeId' : IDL.Opt(UserId),
+  'lastCreatedAt' : IDL.Opt(Timestamp),
+  'createdAt' : Timestamp,
+  'description' : IDL.Text,
+  'tenantId' : TenantId,
+  'recurrenceType' : RecurrenceType,
+  'updatedAt' : Timestamp,
+  'nextDueAt' : Timestamp,
+  'projectId' : EntityId,
+  'workspaceId' : WorkspaceId,
+  'priority' : TaskPriority,
+});
+export const SprintInput = IDL.Record({
+  'taskIds' : IDL.Vec(EntityId),
+  'endDate' : Timestamp,
+  'goal' : IDL.Text,
+  'name' : IDL.Text,
+  'projectId' : EntityId,
+  'startDate' : Timestamp,
+});
+export const TaskStatus = IDL.Variant({
+  'Blocked' : IDL.Null,
+  'Done' : IDL.Null,
+  'Todo' : IDL.Null,
+  'InProgress' : IDL.Null,
+});
+export const SubtaskInput = IDL.Record({
+  'status' : TaskStatus,
+  'title' : IDL.Text,
+  'assigneeId' : IDL.Opt(UserId),
+  'order' : IDL.Nat,
+  'dueDate' : IDL.Opt(Timestamp),
+  'description' : IDL.Text,
+  'projectId' : EntityId,
+  'parentTaskId' : EntityId,
+  'priority' : TaskPriority,
+});
+export const Subtask = IDL.Record({
+  'id' : EntityId,
+  'status' : TaskStatus,
+  'title' : IDL.Text,
+  'assigneeId' : IDL.Opt(UserId),
+  'order' : IDL.Nat,
+  'createdAt' : Timestamp,
+  'dueDate' : IDL.Opt(Timestamp),
+  'description' : IDL.Text,
+  'tenantId' : TenantId,
+  'updatedAt' : Timestamp,
+  'projectId' : EntityId,
+  'parentTaskId' : EntityId,
+  'workspaceId' : WorkspaceId,
+  'priority' : TaskPriority,
 });
 export const TaskInput = IDL.Record({
   'title' : IDL.Text,
@@ -237,12 +1024,6 @@ export const TaskInput = IDL.Record({
   'projectId' : EntityId,
   'priority' : TaskPriority,
   'crossLinks' : IDL.Vec(CrossLink),
-});
-export const TaskStatus = IDL.Variant({
-  'Blocked' : IDL.Null,
-  'Done' : IDL.Null,
-  'Todo' : IDL.Null,
-  'InProgress' : IDL.Null,
 });
 export const Task = IDL.Record({
   'id' : EntityId,
@@ -255,8 +1036,57 @@ export const Task = IDL.Record({
   'tenantId' : TenantId,
   'updatedAt' : Timestamp,
   'projectId' : EntityId,
+  'workspaceId' : WorkspaceId,
   'priority' : TaskPriority,
   'crossLinks' : IDL.Vec(CrossLink),
+});
+export const TaskTemplateInput = IDL.Record({
+  'name' : IDL.Text,
+  'description' : IDL.Text,
+  'projectId' : IDL.Opt(EntityId),
+  'checklistItems' : IDL.Vec(IDL.Text),
+  'defaultPriority' : TaskPriority,
+  'defaultAssigneeId' : IDL.Opt(UserId),
+});
+export const TaskTemplate = IDL.Record({
+  'id' : EntityId,
+  'name' : IDL.Text,
+  'createdAt' : Timestamp,
+  'description' : IDL.Text,
+  'tenantId' : TenantId,
+  'updatedAt' : Timestamp,
+  'projectId' : IDL.Opt(EntityId),
+  'checklistItems' : IDL.Vec(IDL.Text),
+  'workspaceId' : WorkspaceId,
+  'defaultPriority' : TaskPriority,
+  'defaultAssigneeId' : IDL.Opt(UserId),
+});
+export const TimeEntryInput = IDL.Record({
+  'startTime' : Timestamp,
+  'endTime' : IDL.Opt(Timestamp),
+  'taskId' : IDL.Opt(EntityId),
+  'billable' : IDL.Bool,
+  'durationMinutes' : IDL.Nat,
+  'projectId' : EntityId,
+  'notes' : IDL.Text,
+});
+export const TimeEntry = IDL.Record({
+  'id' : EntityId,
+  'startTime' : Timestamp,
+  'endTime' : IDL.Opt(Timestamp),
+  'userId' : UserId,
+  'createdAt' : Timestamp,
+  'tenantId' : TenantId,
+  'taskId' : IDL.Opt(EntityId),
+  'billable' : IDL.Bool,
+  'durationMinutes' : IDL.Nat,
+  'projectId' : EntityId,
+  'notes' : IDL.Text,
+  'workspaceId' : WorkspaceId,
+});
+export const AccountType = IDL.Variant({
+  'personal' : IDL.Null,
+  'treasury' : IDL.Null,
 });
 export const WalletAccount = IDL.Record({
   'id' : EntityId,
@@ -265,34 +1095,142 @@ export const WalletAccount = IDL.Record({
   'btcBalance' : IDL.Nat,
   'userId' : UserId,
   'createdAt' : Timestamp,
+  'icrc1Account' : IDL.Text,
   'icpBalance' : IDL.Nat,
   'tenantId' : TenantId,
   'updatedAt' : Timestamp,
+  'accountType' : AccountType,
+  'workspaceId' : WorkspaceId,
   'principalId' : IDL.Text,
+});
+export const WhiteboardInput = IDL.Record({
+  'title' : IDL.Text,
+  'templateId' : IDL.Opt(IDL.Text),
+  'templateName' : IDL.Opt(IDL.Text),
+  'projectId' : IDL.Opt(EntityId),
 });
 export const WorkspaceInput = IDL.Record({ 'name' : IDL.Text });
 export const Workspace = IDL.Record({
   'id' : EntityId,
+  'members' : IDL.Vec(IDL.Tuple(UserId, WorkspaceMember)),
   'ownerId' : UserId,
   'name' : IDL.Text,
   'createdAt' : Timestamp,
   'tenantId' : TenantId,
 });
-export const Message = IDL.Record({
+export const TimeReportFilter = IDL.Record({
+  'userId' : IDL.Opt(UserId),
+  'toDate' : IDL.Opt(Timestamp),
+  'billable' : IDL.Opt(IDL.Bool),
+  'projectId' : IDL.Opt(EntityId),
+  'fromDate' : IDL.Opt(Timestamp),
+});
+export const TxFilter = IDL.Record({
+  'maxAmount' : IDL.Opt(IDL.Float64),
+  'status' : IDL.Opt(TransactionStatus),
+  'minAmount' : IDL.Opt(IDL.Float64),
+  'toDate' : IDL.Opt(Timestamp),
+  'fromDate' : IDL.Opt(Timestamp),
+  'txType' : IDL.Opt(TransactionType),
+});
+export const AIProvider = IDL.Variant({
+  'OpenAI' : IDL.Null,
+  'Anthropic' : IDL.Null,
+});
+export const AIConfig = IDL.Record({
   'id' : EntityId,
+  'model' : IDL.Text,
+  'provider' : AIProvider,
+  'createdAt' : Timestamp,
+  'tenantId' : TenantId,
+  'apiKey' : IDL.Text,
+  'workspaceId' : WorkspaceId,
+});
+export const AIResponse = IDL.Record({
+  'id' : EntityId,
+  'model' : IDL.Text,
   'content' : IDL.Text,
-  'channelId' : EntityId,
+  'createdAt' : Timestamp,
+  'tokensUsed' : IDL.Nat,
+  'tenantId' : TenantId,
+  'workspaceId' : WorkspaceId,
+  'promptId' : EntityId,
+});
+export const AvailabilitySlot = IDL.Record({
+  'userId' : UserId,
+  'date' : IDL.Text,
+  'busyPeriods' : IDL.Vec(IDL.Tuple(IDL.Text, IDL.Text)),
+  'timeZone' : IDL.Text,
+});
+export const EscrowSummary = IDL.Record({
+  'id' : EntityId,
+  'status' : EscrowStatus,
+  'title' : IDL.Text,
+  'createdAt' : Timestamp,
+  'statusHistory' : IDL.Vec(StatusHistoryEntry),
+  'currency' : IDL.Text,
+  'conditions' : IDL.Vec(IDL.Text),
+  'amount' : IDL.Nat,
+  'payeeId' : IDL.Text,
+  'payerId' : IDL.Text,
+  'milestoneCount' : IDL.Nat,
+});
+export const RsvpStatus = IDL.Variant({
+  'tentative' : IDL.Null,
+  'noResponse' : IDL.Null,
+  'accepted' : IDL.Null,
+  'declined' : IDL.Null,
+});
+export const EventRsvp = IDL.Record({
+  'id' : EntityId,
+  'status' : RsvpStatus,
+  'eventId' : IDL.Text,
+  'userId' : UserId,
+  'tenantId' : TenantId,
+  'workspaceId' : WorkspaceId,
+  'respondedAt' : IDL.Opt(Timestamp),
+});
+export const FormSubmission = IDL.Record({
+  'id' : EntityId,
+  'data' : IDL.Vec(IDL.Tuple(IDL.Text, IDL.Text)),
+  'submittedAt' : Timestamp,
+  'tenantId' : TenantId,
+  'workspaceId' : WorkspaceId,
+  'submitterEmail' : IDL.Text,
+  'formId' : EntityId,
+});
+export const FieldCompletionRate = IDL.Record({
+  'completionRate' : IDL.Float64,
+  'fieldId' : IDL.Text,
+});
+export const FormAnalytics = IDL.Record({
+  'recentSubmissions' : IDL.Vec(FormSubmission),
+  'fieldCompletionRates' : IDL.Vec(FieldCompletionRate),
+  'submissionCount' : IDL.Nat,
+});
+export const IntegrationProvider = IDL.Variant({
+  'Slack' : IDL.Null,
+  'GitHub' : IDL.Null,
+  'GoogleDrive' : IDL.Null,
+});
+export const IntegrationStatus = IDL.Variant({
+  'Error' : IDL.Null,
+  'Connected' : IDL.Null,
+  'Disconnected' : IDL.Null,
+});
+export const Integration = IDL.Record({
+  'id' : EntityId,
+  'status' : IntegrationStatus,
+  'provider' : IntegrationProvider,
   'createdAt' : Timestamp,
   'tenantId' : TenantId,
   'updatedAt' : Timestamp,
-  'replyToId' : IDL.Opt(EntityId),
-  'crossLinks' : IDL.Vec(CrossLink),
-  'senderId' : UserId,
-});
-export const Role = IDL.Variant({
-  'Admin' : IDL.Null,
-  'Manager' : IDL.Null,
-  'TeamMember' : IDL.Null,
+  'oauthToken' : IDL.Opt(IDL.Text),
+  'accessToken' : IDL.Text,
+  'workspaceId' : WorkspaceId,
+  'lastSyncAt' : IDL.Opt(Timestamp),
+  'config' : IDL.Text,
+  'syncStatus' : IDL.Opt(IDL.Text),
 });
 export const UserProfile = IDL.Record({
   'displayName' : IDL.Text,
@@ -303,6 +1241,125 @@ export const UserProfile = IDL.Record({
   'tenantId' : TenantId,
   'workspaceId' : EntityId,
 });
+export const AIPromptType = IDL.Variant({
+  'SuggestPriorities' : IDL.Null,
+  'MeetingSummary' : IDL.Null,
+  'Custom' : IDL.Null,
+  'WorkspaceQA' : IDL.Null,
+  'Analyze' : IDL.Null,
+  'Generate' : IDL.Null,
+  'Translate' : IDL.Null,
+  'Summarize' : IDL.Null,
+  'GenerateTasks' : IDL.Null,
+});
+export const AIPrompt = IDL.Record({
+  'id' : EntityId,
+  'model' : IDL.Text,
+  'content' : IDL.Text,
+  'userId' : UserId,
+  'createdAt' : Timestamp,
+  'promptType' : AIPromptType,
+  'tenantId' : TenantId,
+  'workspaceId' : WorkspaceId,
+});
+export const PublicKeyResult = IDL.Record({
+  'id' : EntityId,
+  'status' : KRStatus,
+  'title' : IDL.Text,
+  'unit' : IDL.Text,
+  'description' : IDL.Opt(IDL.Text),
+  'currentValue' : IDL.Float64,
+  'targetValue' : IDL.Float64,
+});
+export const PublicGoal = IDL.Record({
+  'id' : EntityId,
+  'status' : GoalStatus,
+  'title' : IDL.Text,
+  'endDate' : Timestamp,
+  'period' : IDL.Text,
+  'description' : IDL.Opt(IDL.Text),
+  'progress' : IDL.Float64,
+  'checkInCount' : IDL.Nat,
+  'keyResults' : IDL.Vec(PublicKeyResult),
+  'startDate' : Timestamp,
+});
+export const WorkspaceSpendingLimit = IDL.Record({
+  'id' : EntityId,
+  'maxAmount' : IDL.Float64,
+  'createdAt' : Timestamp,
+  'role' : Role,
+  'tenantId' : TenantId,
+  'updatedAt' : Timestamp,
+  'currency' : IDL.Text,
+  'workspaceId' : WorkspaceId,
+});
+export const TimeReport = IDL.Record({
+  'byUser' : IDL.Vec(IDL.Tuple(UserId, IDL.Float64)),
+  'totalHours' : IDL.Float64,
+  'entries' : IDL.Vec(TimeEntry),
+  'byProject' : IDL.Vec(IDL.Tuple(EntityId, IDL.Float64)),
+  'billableHours' : IDL.Float64,
+  'nonBillableHours' : IDL.Float64,
+});
+export const UserStatus = IDL.Record({
+  'id' : IDL.Principal,
+  'customStatus' : IDL.Text,
+  'status' : IDL.Variant({
+    'away' : IDL.Null,
+    'offline' : IDL.Null,
+    'online' : IDL.Null,
+  }),
+  'tenantId' : TenantId,
+  'workspaceId' : WorkspaceId,
+  'lastSeen' : IDL.Int,
+});
+export const DailyTimesheetEntry = IDL.Record({
+  'totalHours' : IDL.Float64,
+  'date' : Timestamp,
+  'entries' : IDL.Vec(TimeEntry),
+});
+export const DashboardStats = IDL.Record({
+  'memberCount' : IDL.Nat,
+  'goalCount' : IDL.Nat,
+  'noteCount' : IDL.Nat,
+  'taskCount' : IDL.Nat,
+  'projectCount' : IDL.Nat,
+});
+export const ActivityEntry = IDL.Record({
+  'action' : IDL.Text,
+  'entityTitle' : IDL.Text,
+  'actorId' : IDL.Text,
+  'timestamp' : IDL.Int,
+  'entityType' : IDL.Text,
+});
+export const ActivityEventType = IDL.Variant({
+  'watcherAdded' : IDL.Null,
+  'checklistItemAdded' : IDL.Null,
+  'checklistItemCompleted' : IDL.Null,
+  'taskAssigned' : IDL.Null,
+  'taskStatusChanged' : IDL.Null,
+  'commentEdited' : IDL.Null,
+  'taskUpdated' : IDL.Null,
+  'subtaskAdded' : IDL.Null,
+  'commentAdded' : IDL.Null,
+  'sprintCompleted' : IDL.Null,
+  'taskCreated' : IDL.Null,
+  'dependencyAdded' : IDL.Null,
+  'sprintStarted' : IDL.Null,
+  'milestoneCreated' : IDL.Null,
+});
+export const ActivityEvent = IDL.Record({
+  'id' : EntityId,
+  'metadata' : IDL.Text,
+  'createdAt' : Timestamp,
+  'description' : IDL.Text,
+  'actorId' : UserId,
+  'tenantId' : TenantId,
+  'taskId' : EntityId,
+  'projectId' : EntityId,
+  'workspaceId' : WorkspaceId,
+  'eventType' : ActivityEventType,
+});
 export const AuditLog = IDL.Record({
   'id' : EntityId,
   'action' : IDL.Text,
@@ -311,55 +1368,125 @@ export const AuditLog = IDL.Record({
   'entityId' : EntityId,
   'timestamp' : Timestamp,
   'details' : IDL.Text,
+  'workspaceId' : WorkspaceId,
+  'entityType' : IDL.Text,
+});
+export const GoalCheckIn = IDL.Record({
+  'id' : EntityId,
+  'userId' : UserId,
+  'krId' : IDL.Opt(EntityId),
+  'note' : IDL.Text,
+  'newValue' : IDL.Float64,
+  'goalId' : EntityId,
+  'previousValue' : IDL.Float64,
+  'tenantId' : TenantId,
+  'timestamp' : Timestamp,
+  'workspaceId' : WorkspaceId,
+});
+export const EscrowFilter = IDL.Record({
+  'status' : IDL.Opt(EscrowStatus),
+  'toDate' : IDL.Opt(Timestamp),
+  'fromDate' : IDL.Opt(Timestamp),
+});
+export const PayStub = IDL.Record({
+  'id' : EntityId,
+  'taxDeductions' : IDL.Float64,
+  'period' : IDL.Text,
+  'generatedAt' : Timestamp,
+  'grossPay' : IDL.Float64,
+  'netPay' : IDL.Float64,
+  'tenantId' : TenantId,
+  'employeeId' : EntityId,
+  'details' : IDL.Text,
+  'workspaceId' : WorkspaceId,
+  'payrollRecordId' : EntityId,
+  'otherDeductions' : IDL.Float64,
+});
+export const AuditLogEntry = IDL.Record({
+  'id' : EntityId,
+  'action' : IDL.Text,
+  'tenantId' : TenantId,
+  'entityId' : EntityId,
+  'performedBy' : UserId,
+  'timestamp' : Timestamp,
+  'details' : IDL.Text,
+  'workspaceId' : WorkspaceId,
   'entityType' : IDL.Text,
 });
 export const PayrollStatus = IDL.Variant({
   'Paused' : IDL.Null,
   'Active' : IDL.Null,
+  'Approved' : IDL.Null,
+  'Processed' : IDL.Null,
+  'Rejected' : IDL.Null,
+  'PendingApproval' : IDL.Null,
   'Completed' : IDL.Null,
 });
 export const PayrollRecord = IDL.Record({
   'id' : EntityId,
   'status' : PayrollStatus,
+  'netAmount' : IDL.Float64,
   'period' : IDL.Text,
+  'approvedAt' : IDL.Opt(Timestamp),
+  'approvedBy' : IDL.Opt(UserId),
   'createdAt' : Timestamp,
+  'rejectionReason' : IDL.Opt(IDL.Text),
+  'grossAmount' : IDL.Float64,
   'tenantId' : TenantId,
   'processedAt' : IDL.Opt(Timestamp),
+  'deductionAmount' : IDL.Float64,
   'employeeId' : EntityId,
   'currency' : IDL.Text,
+  'workspaceId' : WorkspaceId,
+  'taxAmount' : IDL.Float64,
   'amount' : IDL.Nat,
 });
-export const TransactionStatus = IDL.Variant({
-  'Failed' : IDL.Null,
-  'Cancelled' : IDL.Null,
-  'Completed' : IDL.Null,
-  'Pending' : IDL.Null,
+export const WhiteboardTemplate = IDL.Record({
+  'id' : IDL.Text,
+  'name' : IDL.Text,
+  'description' : IDL.Text,
+  'category' : IDL.Text,
+  'definition' : IDL.Text,
 });
-export const TransactionType = IDL.Variant({
-  'Stake' : IDL.Null,
-  'Send' : IDL.Null,
-  'Swap' : IDL.Null,
-  'Unstake' : IDL.Null,
-  'Receive' : IDL.Null,
+export const CheckInInput = IDL.Record({
+  'krId' : IDL.Opt(EntityId),
+  'note' : IDL.Text,
+  'newValue' : IDL.Float64,
+  'goalId' : EntityId,
 });
-export const WalletTransaction = IDL.Record({
-  'id' : EntityId,
-  'status' : TransactionStatus,
-  'asset' : AssetType,
-  'accountId' : EntityId,
-  'fromAddress' : IDL.Opt(IDL.Text),
-  'memo' : IDL.Opt(IDL.Text),
-  'createdAt' : Timestamp,
-  'tenantId' : TenantId,
-  'txType' : TransactionType,
-  'toAddress' : IDL.Opt(IDL.Text),
-  'amount' : IDL.Nat,
+export const EventRsvpInput = IDL.Record({
+  'status' : RsvpStatus,
+  'eventId' : IDL.Text,
+});
+export const AIConfigInput = IDL.Record({
+  'model' : IDL.Text,
+  'provider' : AIProvider,
+  'apiKey' : IDL.Text,
+});
+export const IntegrationInput = IDL.Record({
+  'provider' : IntegrationProvider,
+  'oauthToken' : IDL.Opt(IDL.Text),
+  'accessToken' : IDL.Text,
+  'config' : IDL.Text,
 });
 export const MessageInput = IDL.Record({
   'content' : IDL.Text,
   'channelId' : EntityId,
   'replyToId' : IDL.Opt(EntityId),
   'crossLinks' : IDL.Vec(CrossLink),
+});
+export const AIPromptInput = IDL.Record({
+  'model' : IDL.Text,
+  'content' : IDL.Text,
+  'contextData' : IDL.Opt(IDL.Text),
+  'promptType' : AIPromptType,
+  'contextEntityType' : IDL.Opt(IDL.Text),
+  'contextEntityId' : IDL.Opt(EntityId),
+});
+export const FormSubmissionInput = IDL.Record({
+  'data' : IDL.Vec(IDL.Tuple(IDL.Text, IDL.Text)),
+  'submitterEmail' : IDL.Text,
+  'formId' : EntityId,
 });
 export const UserProfileInput = IDL.Record({
   'displayName' : IDL.Text,
@@ -369,170 +1496,678 @@ export const UserProfileInput = IDL.Record({
 });
 
 export const idlService = IDL.Service({
+  'acceptGuestInvitation' : IDL.Func(
+      [TenantId, WorkspaceId, IDL.Text],
+      [IDL.Variant({ 'ok' : GuestUser, 'err' : IDL.Text })],
+      [],
+    ),
+  'addBenefit' : IDL.Func(
+      [TenantId, WorkspaceId, BenefitInput],
+      [IDL.Variant({ 'ok' : Benefit, 'err' : IDL.Text })],
+      [],
+    ),
+  'addChecklistItem' : IDL.Func(
+      [TenantId, WorkspaceId, ChecklistItemInput],
+      [IDL.Variant({ 'ok' : ChecklistItem, 'err' : IDL.Text })],
+      [],
+    ),
+  'addComment' : IDL.Func(
+      [TenantId, WorkspaceId, EntityId, TaskCommentInput],
+      [IDL.Variant({ 'ok' : TaskComment, 'err' : IDL.Text })],
+      [],
+    ),
+  'addContractor' : IDL.Func(
+      [TenantId, WorkspaceId, ContractorInput],
+      [IDL.Variant({ 'ok' : Contractor, 'err' : IDL.Text })],
+      [],
+    ),
+  'addContractorPayment' : IDL.Func(
+      [TenantId, WorkspaceId, ContractorPaymentInput],
+      [IDL.Variant({ 'ok' : ContractorPayment, 'err' : IDL.Text })],
+      [],
+    ),
+  'addDeduction' : IDL.Func(
+      [TenantId, WorkspaceId, DeductionInput],
+      [IDL.Variant({ 'ok' : Deduction, 'err' : IDL.Text })],
+      [],
+    ),
   'addEmployee' : IDL.Func(
-      [TenantId, EmployeeInput],
+      [TenantId, WorkspaceId, EmployeeInput],
       [IDL.Variant({ 'ok' : Employee, 'err' : IDL.Text })],
       [],
     ),
+  'addEscrowMilestone' : IDL.Func(
+      [TenantId, WorkspaceId, EntityId, EscrowMilestoneInput],
+      [IDL.Variant({ 'ok' : EscrowMilestone, 'err' : IDL.Text })],
+      [],
+    ),
+  'addIntegrationEvent' : IDL.Func(
+      [TenantId, WorkspaceId, EntityId, IDL.Text, IDL.Text],
+      [IDL.Variant({ 'ok' : IntegrationEvent, 'err' : IDL.Text })],
+      [],
+    ),
+  'addKeyResult' : IDL.Func(
+      [TenantId, WorkspaceId, KeyResultInput],
+      [IDL.Variant({ 'ok' : KeyResult, 'err' : IDL.Text })],
+      [],
+    ),
+  'addOffCyclePayment' : IDL.Func(
+      [TenantId, WorkspaceId, OffCyclePaymentInput],
+      [IDL.Variant({ 'ok' : OffCyclePayment, 'err' : IDL.Text })],
+      [],
+    ),
+  'addPaySchedule' : IDL.Func(
+      [TenantId, WorkspaceId, PayScheduleInput],
+      [IDL.Variant({ 'ok' : PaySchedule, 'err' : IDL.Text })],
+      [],
+    ),
+  'addReaction' : IDL.Func(
+      [TenantId, WorkspaceId, EntityId, IDL.Text],
+      [IDL.Variant({ 'ok' : Message, 'err' : IDL.Text })],
+      [],
+    ),
+  'addTaskRelationship' : IDL.Func(
+      [TenantId, WorkspaceId, EntityId, EntityId, TaskRelationshipType],
+      [IDL.Variant({ 'ok' : TaskRelationship, 'err' : IDL.Text })],
+      [],
+    ),
+  'addTaskToSprint' : IDL.Func(
+      [TenantId, WorkspaceId, EntityId, EntityId],
+      [IDL.Variant({ 'ok' : Sprint, 'err' : IDL.Text })],
+      [],
+    ),
+  'addTaskWatcher' : IDL.Func(
+      [TenantId, WorkspaceId, EntityId, UserId],
+      [IDL.Variant({ 'ok' : TaskWatcher, 'err' : IDL.Text })],
+      [],
+    ),
+  'addWorkspaceMember' : IDL.Func(
+      [TenantId, EntityId, UserId, WorkspaceRole, IDL.Text, IDL.Text],
+      [IDL.Variant({ 'ok' : WorkspaceMember, 'err' : IDL.Text })],
+      [],
+    ),
+  'approveMilestone' : IDL.Func(
+      [TenantId, WorkspaceId, EntityId],
+      [IDL.Variant({ 'ok' : EscrowMilestone, 'err' : IDL.Text })],
+      [],
+    ),
+  'approveTransaction' : IDL.Func(
+      [TenantId, WorkspaceId, EntityId, IDL.Bool],
+      [IDL.Variant({ 'ok' : WalletTransaction, 'err' : IDL.Text })],
+      [],
+    ),
   'archiveProject' : IDL.Func(
-      [TenantId, EntityId],
+      [TenantId, WorkspaceId, EntityId],
       [IDL.Variant({ 'ok' : Project, 'err' : IDL.Text })],
       [],
     ),
+  'assignArbiter' : IDL.Func(
+      [TenantId, WorkspaceId, EntityId, IDL.Principal],
+      [IDL.Variant({ 'ok' : EscrowDispute, 'err' : IDL.Text })],
+      [],
+    ),
+  'bulkApprovePayroll' : IDL.Func(
+      [TenantId, WorkspaceId, IDL.Vec(EntityId)],
+      [IDL.Variant({ 'ok' : IDL.Bool, 'err' : IDL.Text })],
+      [],
+    ),
   'cancelEscrow' : IDL.Func(
-      [TenantId, EntityId],
+      [TenantId, WorkspaceId, EntityId],
       [IDL.Variant({ 'ok' : EscrowContract, 'err' : IDL.Text })],
       [],
     ),
   'cancelRecurringPayment' : IDL.Func(
-      [TenantId, EntityId],
+      [TenantId, WorkspaceId, EntityId],
       [IDL.Variant({ 'ok' : RecurringPayment, 'err' : IDL.Text })],
       [],
     ),
+  'checkSpendingLimit' : IDL.Func(
+      [TenantId, WorkspaceId, Role, IDL.Float64],
+      [IDL.Bool],
+      ['query'],
+    ),
+  'convertWhiteboardElementToTask' : IDL.Func(
+      [TenantId, WorkspaceId, EntityId, EntityId, EntityId],
+      [IDL.Variant({ 'ok' : Whiteboard, 'err' : IDL.Text })],
+      [],
+    ),
   'createAutomationRule' : IDL.Func(
-      [TenantId, IDL.Text, IDL.Text, AutomationTrigger, AutomationAction],
+      [
+        TenantId,
+        WorkspaceId,
+        IDL.Text,
+        IDL.Text,
+        AutomationTrigger,
+        AutomationAction,
+      ],
       [IDL.Variant({ 'ok' : AutomationRule, 'err' : IDL.Text })],
       [],
     ),
   'createBackup' : IDL.Func(
-      [TenantId, IDL.Text],
+      [TenantId, WorkspaceId, IDL.Text],
       [IDL.Variant({ 'ok' : Backup, 'err' : IDL.Text })],
       [],
     ),
+  'createCalendar' : IDL.Func(
+      [TenantId, WorkspaceId, CalendarDefInput],
+      [IDL.Variant({ 'ok' : CalendarDef, 'err' : IDL.Text })],
+      [],
+    ),
   'createChannel' : IDL.Func(
-      [TenantId, ChannelInput],
+      [TenantId, WorkspaceId, ChannelInput],
       [IDL.Variant({ 'ok' : Channel, 'err' : IDL.Text })],
       [],
     ),
   'createEscrow' : IDL.Func(
-      [TenantId, EscrowInput],
+      [TenantId, WorkspaceId, EscrowInput],
       [IDL.Variant({ 'ok' : EscrowContract, 'err' : IDL.Text })],
       [],
     ),
   'createEvent' : IDL.Func(
-      [TenantId, EventInput],
+      [TenantId, WorkspaceId, EventInput],
       [IDL.Variant({ 'ok' : Event, 'err' : IDL.Text })],
       [],
     ),
+  'createEventException' : IDL.Func(
+      [TenantId, WorkspaceId, EventExceptionInput],
+      [IDL.Variant({ 'ok' : EventException, 'err' : IDL.Text })],
+      [],
+    ),
+  'createForm' : IDL.Func(
+      [TenantId, WorkspaceId, FormInput],
+      [IDL.Variant({ 'ok' : Form, 'err' : IDL.Text })],
+      [],
+    ),
+  'createGoal' : IDL.Func(
+      [TenantId, WorkspaceId, GoalInput],
+      [IDL.Variant({ 'ok' : Goal, 'err' : IDL.Text })],
+      [],
+    ),
+  'createGuestInvitation' : IDL.Func(
+      [TenantId, WorkspaceId, GuestInvitationInput],
+      [IDL.Variant({ 'ok' : GuestInvitation, 'err' : IDL.Text })],
+      [],
+    ),
+  'createMilestone' : IDL.Func(
+      [TenantId, WorkspaceId, MilestoneInput],
+      [IDL.Variant({ 'ok' : Milestone, 'err' : IDL.Text })],
+      [],
+    ),
   'createNote' : IDL.Func(
-      [TenantId, NoteInput],
+      [TenantId, WorkspaceId, NoteInput],
       [IDL.Variant({ 'ok' : Note, 'err' : IDL.Text })],
       [],
     ),
+  'createNoteTemplate' : IDL.Func(
+      [TenantId, WorkspaceId, NoteTemplateInput],
+      [IDL.Variant({ 'ok' : NoteTemplate, 'err' : IDL.Text })],
+      [],
+    ),
+  'createPage' : IDL.Func(
+      [TenantId, WorkspaceId, PageInput],
+      [IDL.Variant({ 'ok' : PageNode, 'err' : IDL.Text })],
+      [],
+    ),
   'createProject' : IDL.Func(
-      [TenantId, ProjectInput],
+      [TenantId, WorkspaceId, ProjectInput],
       [IDL.Variant({ 'ok' : Project, 'err' : IDL.Text })],
       [],
     ),
+  'createProjectFromTemplate' : IDL.Func(
+      [TenantId, WorkspaceId, IDL.Text, IDL.Text, IDL.Text],
+      [IDL.Variant({ 'ok' : EntityId, 'err' : IDL.Text })],
+      [],
+    ),
   'createRecurringPayment' : IDL.Func(
-      [TenantId, EntityId, IDL.Text, IDL.Nat, AssetType, PayFrequency],
+      [
+        TenantId,
+        WorkspaceId,
+        EntityId,
+        IDL.Text,
+        IDL.Nat,
+        AssetType,
+        PayFrequency,
+      ],
       [IDL.Variant({ 'ok' : RecurringPayment, 'err' : IDL.Text })],
       [],
     ),
+  'createRecurringTask' : IDL.Func(
+      [TenantId, WorkspaceId, RecurringTaskInput],
+      [IDL.Variant({ 'ok' : RecurringTask, 'err' : IDL.Text })],
+      [],
+    ),
+  'createSprint' : IDL.Func(
+      [TenantId, WorkspaceId, SprintInput],
+      [IDL.Variant({ 'ok' : Sprint, 'err' : IDL.Text })],
+      [],
+    ),
+  'createSubtask' : IDL.Func(
+      [TenantId, WorkspaceId, SubtaskInput],
+      [IDL.Variant({ 'ok' : Subtask, 'err' : IDL.Text })],
+      [],
+    ),
   'createTask' : IDL.Func(
-      [TenantId, TaskInput],
+      [TenantId, WorkspaceId, TaskInput],
       [IDL.Variant({ 'ok' : Task, 'err' : IDL.Text })],
       [],
     ),
+  'createTaskTemplate' : IDL.Func(
+      [TenantId, WorkspaceId, TaskTemplateInput],
+      [IDL.Variant({ 'ok' : TaskTemplate, 'err' : IDL.Text })],
+      [],
+    ),
+  'createTimeEntry' : IDL.Func(
+      [TenantId, WorkspaceId, TimeEntryInput],
+      [IDL.Variant({ 'ok' : TimeEntry, 'err' : IDL.Text })],
+      [],
+    ),
   'createWalletAccount' : IDL.Func(
-      [TenantId, IDL.Text],
+      [TenantId, WorkspaceId, IDL.Text],
       [IDL.Variant({ 'ok' : WalletAccount, 'err' : IDL.Text })],
       [],
     ),
+  'createWhiteboard' : IDL.Func(
+      [TenantId, WorkspaceId, WhiteboardInput],
+      [IDL.Variant({ 'ok' : Whiteboard, 'err' : IDL.Text })],
+      [],
+    ),
   'createWorkspace' : IDL.Func(
-      [TenantId, WorkspaceInput],
+      [TenantId, WorkspaceInput, IDL.Text, IDL.Text],
       [IDL.Variant({ 'ok' : Workspace, 'err' : IDL.Text })],
       [],
     ),
+  'createWorkspaceTreasury' : IDL.Func(
+      [TenantId, WorkspaceId],
+      [IDL.Variant({ 'ok' : WalletAccount, 'err' : IDL.Text })],
+      [],
+    ),
   'deactivateEmployee' : IDL.Func(
-      [TenantId, EntityId],
+      [TenantId, WorkspaceId, EntityId],
       [IDL.Variant({ 'ok' : Employee, 'err' : IDL.Text })],
       [],
     ),
+  'deleteCalendar' : IDL.Func(
+      [TenantId, WorkspaceId, EntityId],
+      [IDL.Variant({ 'ok' : IDL.Bool, 'err' : IDL.Text })],
+      [],
+    ),
+  'deleteChannel' : IDL.Func(
+      [TenantId, WorkspaceId, EntityId],
+      [IDL.Variant({ 'ok' : IDL.Bool, 'err' : IDL.Text })],
+      [],
+    ),
+  'deleteChecklistItem' : IDL.Func(
+      [TenantId, WorkspaceId, EntityId],
+      [IDL.Variant({ 'ok' : IDL.Bool, 'err' : IDL.Text })],
+      [],
+    ),
+  'deleteComment' : IDL.Func(
+      [TenantId, WorkspaceId, EntityId],
+      [IDL.Variant({ 'ok' : IDL.Bool, 'err' : IDL.Text })],
+      [],
+    ),
   'deleteEvent' : IDL.Func(
-      [TenantId, EntityId],
+      [TenantId, WorkspaceId, EntityId],
+      [IDL.Variant({ 'ok' : IDL.Bool, 'err' : IDL.Text })],
+      [],
+    ),
+  'deleteForm' : IDL.Func(
+      [TenantId, WorkspaceId, EntityId],
+      [IDL.Variant({ 'ok' : IDL.Bool, 'err' : IDL.Text })],
+      [],
+    ),
+  'deleteGoal' : IDL.Func(
+      [TenantId, WorkspaceId, EntityId],
+      [IDL.Variant({ 'ok' : IDL.Bool, 'err' : IDL.Text })],
+      [],
+    ),
+  'deleteIntegration' : IDL.Func(
+      [TenantId, WorkspaceId, EntityId],
+      [IDL.Variant({ 'ok' : IDL.Bool, 'err' : IDL.Text })],
+      [],
+    ),
+  'deleteKeyResult' : IDL.Func(
+      [TenantId, WorkspaceId, EntityId],
       [IDL.Variant({ 'ok' : IDL.Bool, 'err' : IDL.Text })],
       [],
     ),
   'deleteMessage' : IDL.Func(
-      [TenantId, EntityId],
+      [TenantId, WorkspaceId, EntityId],
+      [IDL.Variant({ 'ok' : IDL.Bool, 'err' : IDL.Text })],
+      [],
+    ),
+  'deleteMilestone' : IDL.Func(
+      [TenantId, WorkspaceId, EntityId],
       [IDL.Variant({ 'ok' : IDL.Bool, 'err' : IDL.Text })],
       [],
     ),
   'deleteNote' : IDL.Func(
-      [TenantId, EntityId],
+      [TenantId, WorkspaceId, EntityId],
+      [IDL.Variant({ 'ok' : IDL.Bool, 'err' : IDL.Text })],
+      [],
+    ),
+  'deleteNoteTemplate' : IDL.Func(
+      [TenantId, WorkspaceId, EntityId],
+      [IDL.Variant({ 'ok' : IDL.Bool, 'err' : IDL.Text })],
+      [],
+    ),
+  'deletePage' : IDL.Func(
+      [TenantId, WorkspaceId, EntityId],
+      [IDL.Variant({ 'ok' : IDL.Bool, 'err' : IDL.Text })],
+      [],
+    ),
+  'deleteRecurringTask' : IDL.Func(
+      [TenantId, WorkspaceId, EntityId],
+      [IDL.Variant({ 'ok' : IDL.Bool, 'err' : IDL.Text })],
+      [],
+    ),
+  'deleteSprint' : IDL.Func(
+      [TenantId, WorkspaceId, EntityId],
+      [IDL.Variant({ 'ok' : IDL.Bool, 'err' : IDL.Text })],
+      [],
+    ),
+  'deleteSubtask' : IDL.Func(
+      [TenantId, WorkspaceId, EntityId],
       [IDL.Variant({ 'ok' : IDL.Bool, 'err' : IDL.Text })],
       [],
     ),
   'deleteTask' : IDL.Func(
-      [TenantId, EntityId],
+      [TenantId, WorkspaceId, EntityId],
       [IDL.Variant({ 'ok' : IDL.Bool, 'err' : IDL.Text })],
       [],
     ),
-  'disputeEscrow' : IDL.Func(
-      [TenantId, EntityId],
+  'deleteTaskTemplate' : IDL.Func(
+      [TenantId, WorkspaceId, EntityId],
+      [IDL.Variant({ 'ok' : IDL.Bool, 'err' : IDL.Text })],
+      [],
+    ),
+  'deleteTimeEntry' : IDL.Func(
+      [TenantId, WorkspaceId, EntityId],
+      [IDL.Variant({ 'ok' : IDL.Bool, 'err' : IDL.Text })],
+      [],
+    ),
+  'deleteWhiteboard' : IDL.Func(
+      [TenantId, WorkspaceId, EntityId],
+      [IDL.Variant({ 'ok' : IDL.Bool, 'err' : IDL.Text })],
+      [],
+    ),
+  'depositEscrow' : IDL.Func(
+      [TenantId, WorkspaceId, EntityId],
       [IDL.Variant({ 'ok' : EscrowContract, 'err' : IDL.Text })],
       [],
+    ),
+  'disputeEscrow' : IDL.Func(
+      [TenantId, WorkspaceId, EntityId],
+      [IDL.Variant({ 'ok' : EscrowContract, 'err' : IDL.Text })],
+      [],
+    ),
+  'editComment' : IDL.Func(
+      [TenantId, WorkspaceId, EntityId, IDL.Text],
+      [IDL.Variant({ 'ok' : TaskComment, 'err' : IDL.Text })],
+      [],
+    ),
+  'exportTimeEntries' : IDL.Func(
+      [WorkspaceId, TenantId, TimeReportFilter],
+      [IDL.Text],
+      ['query'],
+    ),
+  'exportTransactions' : IDL.Func(
+      [TenantId, WorkspaceId, EntityId, IDL.Opt(TxFilter)],
+      [IDL.Text],
+      ['query'],
     ),
   'fundEscrow' : IDL.Func(
-      [TenantId, EntityId],
+      [TenantId, WorkspaceId, EntityId],
       [IDL.Variant({ 'ok' : EscrowContract, 'err' : IDL.Text })],
       [],
     ),
+  'getAIConfig' : IDL.Func(
+      [TenantId, WorkspaceId],
+      [IDL.Opt(AIConfig)],
+      ['query'],
+    ),
+  'getAIResponses' : IDL.Func(
+      [TenantId, WorkspaceId, IDL.Opt(EntityId), IDL.Nat],
+      [IDL.Vec(AIResponse)],
+      ['query'],
+    ),
+  'getAvailability' : IDL.Func(
+      [TenantId, WorkspaceId, IDL.Vec(UserId), IDL.Text, IDL.Text],
+      [IDL.Vec(AvailabilitySlot)],
+      ['query'],
+    ),
+  'getBacklinks' : IDL.Func(
+      [TenantId, WorkspaceId, EntityId],
+      [IDL.Vec(PageNode)],
+      ['query'],
+    ),
   'getBackup' : IDL.Func(
-      [TenantId, EntityId],
+      [TenantId, WorkspaceId, EntityId],
       [IDL.Variant({ 'ok' : Backup, 'err' : IDL.Text })],
       ['query'],
     ),
+  'getCalendar' : IDL.Func(
+      [TenantId, WorkspaceId, EntityId],
+      [IDL.Variant({ 'ok' : CalendarDef, 'err' : IDL.Text })],
+      ['query'],
+    ),
   'getChannel' : IDL.Func(
-      [TenantId, EntityId],
+      [TenantId, WorkspaceId, EntityId],
       [IDL.Variant({ 'ok' : Channel, 'err' : IDL.Text })],
       ['query'],
     ),
+  'getChannelPins' : IDL.Func(
+      [TenantId, WorkspaceId, EntityId],
+      [IDL.Vec(Message)],
+      ['query'],
+    ),
+  'getContractor' : IDL.Func(
+      [TenantId, WorkspaceId, EntityId],
+      [IDL.Variant({ 'ok' : Contractor, 'err' : IDL.Text })],
+      ['query'],
+    ),
   'getEmployee' : IDL.Func(
-      [TenantId, EntityId],
+      [TenantId, WorkspaceId, EntityId],
       [IDL.Variant({ 'ok' : Employee, 'err' : IDL.Text })],
       ['query'],
     ),
   'getEscrow' : IDL.Func(
-      [TenantId, EntityId],
+      [TenantId, WorkspaceId, EntityId],
       [IDL.Variant({ 'ok' : EscrowContract, 'err' : IDL.Text })],
       ['query'],
     ),
+  'getEscrowDispute' : IDL.Func(
+      [TenantId, WorkspaceId, EntityId],
+      [IDL.Variant({ 'ok' : EscrowDispute, 'err' : IDL.Text })],
+      ['query'],
+    ),
+  'getEscrowSummary' : IDL.Func(
+      [TenantId, WorkspaceId, EntityId],
+      [IDL.Variant({ 'ok' : EscrowSummary, 'err' : IDL.Text })],
+      ['query'],
+    ),
   'getEvent' : IDL.Func(
-      [TenantId, EntityId],
+      [TenantId, WorkspaceId, EntityId],
       [IDL.Variant({ 'ok' : Event, 'err' : IDL.Text })],
       ['query'],
     ),
+  'getEventException' : IDL.Func(
+      [TenantId, WorkspaceId, EntityId],
+      [IDL.Variant({ 'ok' : EventException, 'err' : IDL.Text })],
+      ['query'],
+    ),
+  'getEventRsvps' : IDL.Func(
+      [TenantId, WorkspaceId, IDL.Text],
+      [IDL.Vec(EventRsvp)],
+      ['query'],
+    ),
+  'getForm' : IDL.Func(
+      [TenantId, WorkspaceId, EntityId],
+      [IDL.Variant({ 'ok' : Form, 'err' : IDL.Text })],
+      ['query'],
+    ),
+  'getFormAnalytics' : IDL.Func(
+      [TenantId, WorkspaceId, EntityId],
+      [FormAnalytics],
+      ['query'],
+    ),
+  'getGoal' : IDL.Func(
+      [TenantId, WorkspaceId, EntityId],
+      [IDL.Variant({ 'ok' : Goal, 'err' : IDL.Text })],
+      ['query'],
+    ),
+  'getGuestUser' : IDL.Func(
+      [TenantId, WorkspaceId, EntityId],
+      [IDL.Opt(GuestUser)],
+      ['query'],
+    ),
+  'getIntegrationActivityLog' : IDL.Func(
+      [
+        TenantId,
+        WorkspaceId,
+        IDL.Opt(IntegrationProvider),
+        IDL.Opt(Timestamp),
+        IDL.Opt(Timestamp),
+        IDL.Nat,
+      ],
+      [IDL.Vec(IntegrationEvent)],
+      ['query'],
+    ),
+  'getIntegrationEvents' : IDL.Func(
+      [TenantId, WorkspaceId, EntityId, IDL.Nat],
+      [IDL.Vec(IntegrationEvent)],
+      ['query'],
+    ),
+  'getIntegrations' : IDL.Func(
+      [TenantId, WorkspaceId],
+      [IDL.Vec(Integration)],
+      ['query'],
+    ),
   'getMessages' : IDL.Func(
-      [TenantId, EntityId, IDL.Nat, IDL.Opt(Timestamp)],
+      [TenantId, WorkspaceId, EntityId, IDL.Nat, IDL.Opt(Timestamp)],
       [IDL.Vec(Message)],
       ['query'],
     ),
   'getMyProfile' : IDL.Func([TenantId], [IDL.Opt(UserProfile)], ['query']),
   'getMyWalletAccount' : IDL.Func(
-      [TenantId],
+      [TenantId, WorkspaceId],
       [IDL.Opt(WalletAccount)],
-      ['query'],
+      [],
     ),
   'getNote' : IDL.Func(
-      [TenantId, EntityId],
+      [TenantId, WorkspaceId, EntityId],
       [IDL.Variant({ 'ok' : Note, 'err' : IDL.Text })],
       ['query'],
     ),
+  'getOrCreateWorkspaceShareToken' : IDL.Func(
+      [WorkspaceId, TenantId],
+      [IDL.Text],
+      [],
+    ),
+  'getPage' : IDL.Func(
+      [TenantId, WorkspaceId, EntityId],
+      [IDL.Variant({ 'ok' : PageNode, 'err' : IDL.Text })],
+      ['query'],
+    ),
+  'getPageHierarchy' : IDL.Func(
+      [TenantId, WorkspaceId],
+      [IDL.Vec(PageNode)],
+      ['query'],
+    ),
+  'getPendingApprovals' : IDL.Func(
+      [TenantId, WorkspaceId],
+      [IDL.Vec(WalletTransaction)],
+      ['query'],
+    ),
   'getProject' : IDL.Func(
-      [TenantId, EntityId],
+      [TenantId, WorkspaceId, EntityId],
       [IDL.Variant({ 'ok' : Project, 'err' : IDL.Text })],
       ['query'],
     ),
+  'getProjectTimeEntries' : IDL.Func(
+      [TenantId, WorkspaceId, EntityId],
+      [IDL.Vec(TimeEntry)],
+      ['query'],
+    ),
+  'getPromptHistory' : IDL.Func(
+      [TenantId, WorkspaceId, IDL.Opt(UserId), IDL.Nat],
+      [IDL.Vec(AIPrompt)],
+      ['query'],
+    ),
+  'getPublicForm' : IDL.Func([IDL.Text], [IDL.Opt(Form)], ['query']),
+  'getPublicGoals' : IDL.Func(
+      [IDL.Text],
+      [IDL.Variant({ 'ok' : IDL.Vec(PublicGoal), 'err' : IDL.Text })],
+      ['query'],
+    ),
+  'getReceiveAddress' : IDL.Func(
+      [TenantId, WorkspaceId, EntityId],
+      [IDL.Variant({ 'ok' : IDL.Text, 'err' : IDL.Text })],
+      ['query'],
+    ),
+  'getSpendingLimit' : IDL.Func(
+      [TenantId, WorkspaceId, Role],
+      [IDL.Opt(WorkspaceSpendingLimit)],
+      ['query'],
+    ),
+  'getSprint' : IDL.Func(
+      [TenantId, WorkspaceId, EntityId],
+      [IDL.Variant({ 'ok' : Sprint, 'err' : IDL.Text })],
+      ['query'],
+    ),
   'getTask' : IDL.Func(
-      [TenantId, EntityId],
+      [TenantId, WorkspaceId, EntityId],
       [IDL.Variant({ 'ok' : Task, 'err' : IDL.Text })],
       ['query'],
     ),
+  'getTaskTemplate' : IDL.Func(
+      [TenantId, WorkspaceId, EntityId],
+      [IDL.Variant({ 'ok' : TaskTemplate, 'err' : IDL.Text })],
+      ['query'],
+    ),
+  'getTaskTimeEntries' : IDL.Func(
+      [TenantId, WorkspaceId, EntityId],
+      [IDL.Vec(TimeEntry)],
+      ['query'],
+    ),
+  'getThreadMessages' : IDL.Func(
+      [TenantId, WorkspaceId, EntityId],
+      [IDL.Vec(Message)],
+      ['query'],
+    ),
+  'getTimeReport' : IDL.Func(
+      [WorkspaceId, TenantId, TimeReportFilter],
+      [TimeReport],
+      ['query'],
+    ),
+  'getUnreadCounts' : IDL.Func(
+      [TenantId, WorkspaceId],
+      [IDL.Vec(IDL.Tuple(IDL.Text, IDL.Nat))],
+      ['query'],
+    ),
+  'getUserStatus' : IDL.Func(
+      [TenantId, WorkspaceId, IDL.Principal],
+      [IDL.Opt(UserStatus)],
+      ['query'],
+    ),
+  'getUserTimeEntries' : IDL.Func(
+      [TenantId, WorkspaceId, UserId],
+      [IDL.Vec(TimeEntry)],
+      ['query'],
+    ),
   'getWalletAccount' : IDL.Func(
-      [TenantId, EntityId],
+      [TenantId, WorkspaceId, EntityId],
       [IDL.Variant({ 'ok' : WalletAccount, 'err' : IDL.Text })],
+      ['query'],
+    ),
+  'getWeeklyTimesheet' : IDL.Func(
+      [WorkspaceId, TenantId, UserId, Timestamp],
+      [IDL.Vec(DailyTimesheetEntry)],
+      ['query'],
+    ),
+  'getWhiteboard' : IDL.Func(
+      [TenantId, WorkspaceId, EntityId],
+      [IDL.Variant({ 'ok' : Whiteboard, 'err' : IDL.Text })],
       ['query'],
     ),
   'getWorkspace' : IDL.Func(
@@ -540,8 +2175,23 @@ export const idlService = IDL.Service({
       [IDL.Variant({ 'ok' : Workspace, 'err' : IDL.Text })],
       ['query'],
     ),
+  'getWorkspaceDashboardStats' : IDL.Func(
+      [WorkspaceId, TenantId],
+      [DashboardStats],
+      ['query'],
+    ),
+  'getWorkspaceMember' : IDL.Func(
+      [TenantId, EntityId, UserId],
+      [IDL.Opt(WorkspaceMember)],
+      ['query'],
+    ),
+  'getWorkspaceRecentActivity' : IDL.Func(
+      [WorkspaceId, TenantId, IDL.Nat],
+      [IDL.Vec(ActivityEntry)],
+      ['query'],
+    ),
   'getWorkspaceStats' : IDL.Func(
-      [TenantId],
+      [TenantId, WorkspaceId],
       [
         IDL.Record({
           'walletAccountCount' : IDL.Nat,
@@ -553,100 +2203,598 @@ export const idlService = IDL.Service({
       ],
       ['query'],
     ),
+  'getWorkspaceTreasury' : IDL.Func(
+      [TenantId, WorkspaceId],
+      [IDL.Opt(WalletAccount)],
+      [],
+    ),
+  'isWatching' : IDL.Func(
+      [TenantId, WorkspaceId, EntityId, UserId],
+      [IDL.Bool],
+      ['query'],
+    ),
   'joinChannel' : IDL.Func(
-      [TenantId, EntityId],
+      [TenantId, WorkspaceId, EntityId],
       [IDL.Variant({ 'ok' : Channel, 'err' : IDL.Text })],
       [],
     ),
+  'leaveChannel' : IDL.Func(
+      [TenantId, WorkspaceId, EntityId],
+      [IDL.Variant({ 'ok' : Channel, 'err' : IDL.Text })],
+      [],
+    ),
+  'linkTaskToKR' : IDL.Func(
+      [TenantId, WorkspaceId, EntityId, EntityId],
+      [IDL.Variant({ 'ok' : KeyResult, 'err' : IDL.Text })],
+      [],
+    ),
+  'listActivityEvents' : IDL.Func(
+      [TenantId, WorkspaceId, EntityId],
+      [IDL.Vec(ActivityEvent)],
+      ['query'],
+    ),
   'listAuditLogs' : IDL.Func(
-      [TenantId, IDL.Nat],
+      [TenantId, WorkspaceId, IDL.Nat],
       [IDL.Vec(AuditLog)],
       ['query'],
     ),
   'listAutomationRules' : IDL.Func(
-      [TenantId],
+      [TenantId, WorkspaceId],
       [IDL.Vec(AutomationRule)],
       ['query'],
     ),
-  'listBackups' : IDL.Func([TenantId], [IDL.Vec(Backup)], ['query']),
-  'listChannels' : IDL.Func([TenantId], [IDL.Vec(Channel)], ['query']),
-  'listEmployees' : IDL.Func([TenantId], [IDL.Vec(Employee)], ['query']),
-  'listEscrows' : IDL.Func([TenantId], [IDL.Vec(EscrowContract)], ['query']),
+  'listBackups' : IDL.Func(
+      [TenantId, WorkspaceId],
+      [IDL.Vec(Backup)],
+      ['query'],
+    ),
+  'listBenefits' : IDL.Func(
+      [TenantId, WorkspaceId, IDL.Opt(EntityId)],
+      [IDL.Vec(Benefit)],
+      ['query'],
+    ),
+  'listCalendars' : IDL.Func(
+      [TenantId, WorkspaceId, IDL.Opt(UserId)],
+      [IDL.Vec(CalendarDef)],
+      ['query'],
+    ),
+  'listChannels' : IDL.Func(
+      [TenantId, WorkspaceId],
+      [IDL.Vec(Channel)],
+      ['query'],
+    ),
+  'listCheckIns' : IDL.Func(
+      [TenantId, WorkspaceId, EntityId],
+      [IDL.Vec(GoalCheckIn)],
+      ['query'],
+    ),
+  'listChecklistItems' : IDL.Func(
+      [TenantId, WorkspaceId, EntityId],
+      [IDL.Vec(ChecklistItem)],
+      ['query'],
+    ),
+  'listComments' : IDL.Func(
+      [TenantId, WorkspaceId, EntityId],
+      [IDL.Vec(TaskComment)],
+      ['query'],
+    ),
+  'listContractorPayments' : IDL.Func(
+      [TenantId, WorkspaceId, IDL.Opt(EntityId)],
+      [IDL.Vec(ContractorPayment)],
+      ['query'],
+    ),
+  'listContractors' : IDL.Func(
+      [TenantId, WorkspaceId],
+      [IDL.Vec(Contractor)],
+      ['query'],
+    ),
+  'listDeductions' : IDL.Func(
+      [TenantId, WorkspaceId, IDL.Opt(EntityId)],
+      [IDL.Vec(Deduction)],
+      ['query'],
+    ),
+  'listEmployees' : IDL.Func(
+      [TenantId, WorkspaceId],
+      [IDL.Vec(Employee)],
+      ['query'],
+    ),
+  'listEscrowDisputes' : IDL.Func(
+      [TenantId, WorkspaceId, EntityId],
+      [IDL.Vec(EscrowDispute)],
+      ['query'],
+    ),
+  'listEscrowMilestones' : IDL.Func(
+      [TenantId, WorkspaceId, EntityId],
+      [IDL.Vec(EscrowMilestone)],
+      ['query'],
+    ),
+  'listEscrows' : IDL.Func(
+      [TenantId, WorkspaceId, IDL.Opt(EscrowFilter)],
+      [IDL.Vec(EscrowContract)],
+      ['query'],
+    ),
+  'listEventExceptions' : IDL.Func(
+      [TenantId, WorkspaceId, IDL.Text],
+      [IDL.Vec(EventException)],
+      ['query'],
+    ),
+  'listEventRsvps' : IDL.Func(
+      [TenantId, WorkspaceId, UserId],
+      [IDL.Vec(EventRsvp)],
+      ['query'],
+    ),
   'listEvents' : IDL.Func(
-      [TenantId, Timestamp, Timestamp],
+      [TenantId, WorkspaceId, Timestamp, Timestamp],
       [IDL.Vec(Event)],
       ['query'],
     ),
-  'listMyEvents' : IDL.Func([TenantId], [IDL.Vec(Event)], ['query']),
-  'listNotes' : IDL.Func([TenantId], [IDL.Vec(Note)], ['query']),
+  'listFormSubmissions' : IDL.Func(
+      [TenantId, WorkspaceId, EntityId],
+      [IDL.Vec(FormSubmission)],
+      ['query'],
+    ),
+  'listForms' : IDL.Func([TenantId, WorkspaceId], [IDL.Vec(Form)], ['query']),
+  'listGoals' : IDL.Func([TenantId, WorkspaceId], [IDL.Vec(Goal)], ['query']),
+  'listGuestUsers' : IDL.Func(
+      [TenantId, WorkspaceId],
+      [IDL.Vec(GuestUser)],
+      ['query'],
+    ),
+  'listKeyResults' : IDL.Func(
+      [TenantId, WorkspaceId, EntityId],
+      [IDL.Vec(KeyResult)],
+      ['query'],
+    ),
+  'listMessages' : IDL.Func(
+      [TenantId, WorkspaceId, EntityId, IDL.Nat, IDL.Opt(Timestamp)],
+      [IDL.Vec(Message)],
+      ['query'],
+    ),
+  'listMilestones' : IDL.Func(
+      [TenantId, WorkspaceId, EntityId],
+      [IDL.Vec(Milestone)],
+      ['query'],
+    ),
+  'listMyEvents' : IDL.Func(
+      [TenantId, WorkspaceId],
+      [IDL.Vec(Event)],
+      ['query'],
+    ),
+  'listNoteTemplates' : IDL.Func(
+      [TenantId, WorkspaceId],
+      [IDL.Vec(NoteTemplate)],
+      ['query'],
+    ),
+  'listNotes' : IDL.Func([TenantId, WorkspaceId], [IDL.Vec(Note)], ['query']),
+  'listOffCyclePayments' : IDL.Func(
+      [TenantId, WorkspaceId, IDL.Opt(EntityId)],
+      [IDL.Vec(OffCyclePayment)],
+      ['query'],
+    ),
+  'listPages' : IDL.Func(
+      [TenantId, WorkspaceId, IDL.Opt(EntityId)],
+      [IDL.Vec(PageNode)],
+      ['query'],
+    ),
+  'listPaySchedules' : IDL.Func(
+      [TenantId, WorkspaceId],
+      [IDL.Vec(PaySchedule)],
+      ['query'],
+    ),
+  'listPayStubs' : IDL.Func(
+      [TenantId, WorkspaceId, IDL.Opt(EntityId)],
+      [IDL.Vec(PayStub)],
+      ['query'],
+    ),
+  'listPayrollAuditLog' : IDL.Func(
+      [TenantId, WorkspaceId, IDL.Nat],
+      [IDL.Vec(AuditLogEntry)],
+      ['query'],
+    ),
   'listPayrollRecords' : IDL.Func(
-      [TenantId, IDL.Opt(EntityId)],
+      [TenantId, WorkspaceId, IDL.Opt(EntityId)],
       [IDL.Vec(PayrollRecord)],
       ['query'],
     ),
   'listProfiles' : IDL.Func([TenantId], [IDL.Vec(UserProfile)], ['query']),
-  'listProjects' : IDL.Func([TenantId], [IDL.Vec(Project)], ['query']),
+  'listProjectDeadlines' : IDL.Func(
+      [TenantId, WorkspaceId],
+      [IDL.Vec(Event)],
+      ['query'],
+    ),
+  'listProjects' : IDL.Func(
+      [TenantId, WorkspaceId],
+      [IDL.Vec(Project)],
+      ['query'],
+    ),
   'listRecurringPayments' : IDL.Func(
-      [TenantId, EntityId],
+      [TenantId, WorkspaceId, EntityId],
       [IDL.Vec(RecurringPayment)],
       ['query'],
     ),
-  'listTasks' : IDL.Func([TenantId, EntityId], [IDL.Vec(Task)], ['query']),
+  'listRecurringTasks' : IDL.Func(
+      [TenantId, WorkspaceId, EntityId],
+      [IDL.Vec(RecurringTask)],
+      ['query'],
+    ),
+  'listSprints' : IDL.Func(
+      [TenantId, WorkspaceId, EntityId],
+      [IDL.Vec(Sprint)],
+      ['query'],
+    ),
+  'listSubtasks' : IDL.Func(
+      [TenantId, WorkspaceId, EntityId],
+      [IDL.Vec(Subtask)],
+      ['query'],
+    ),
+  'listTaskRelationships' : IDL.Func(
+      [TenantId, WorkspaceId, EntityId],
+      [IDL.Vec(TaskRelationship)],
+      ['query'],
+    ),
+  'listTaskTemplates' : IDL.Func(
+      [TenantId, WorkspaceId],
+      [IDL.Vec(TaskTemplate)],
+      ['query'],
+    ),
+  'listTaskWatchers' : IDL.Func(
+      [TenantId, WorkspaceId, EntityId],
+      [IDL.Vec(TaskWatcher)],
+      ['query'],
+    ),
+  'listTasks' : IDL.Func(
+      [TenantId, WorkspaceId, EntityId],
+      [IDL.Vec(Task)],
+      ['query'],
+    ),
   'listTransactions' : IDL.Func(
-      [TenantId, EntityId],
+      [TenantId, WorkspaceId, EntityId, IDL.Opt(TxFilter)],
       [IDL.Vec(WalletTransaction)],
       ['query'],
     ),
+  'listWhiteboardTemplates' : IDL.Func(
+      [],
+      [IDL.Vec(WhiteboardTemplate)],
+      ['query'],
+    ),
+  'listWhiteboards' : IDL.Func(
+      [TenantId, WorkspaceId],
+      [IDL.Vec(Whiteboard)],
+      ['query'],
+    ),
+  'listWorkspaceMembers' : IDL.Func(
+      [TenantId, EntityId],
+      [IDL.Vec(WorkspaceMember)],
+      ['query'],
+    ),
   'listWorkspaces' : IDL.Func([TenantId], [IDL.Vec(Workspace)], ['query']),
+  'markChannelRead' : IDL.Func(
+      [TenantId, WorkspaceId, EntityId],
+      [IDL.Variant({ 'ok' : IDL.Bool, 'err' : IDL.Text })],
+      [],
+    ),
+  'pinMessage' : IDL.Func(
+      [TenantId, WorkspaceId, EntityId, IDL.Text],
+      [IDL.Variant({ 'ok' : Channel, 'err' : IDL.Text })],
+      [],
+    ),
+  'processIntegrationTrigger' : IDL.Func(
+      [
+        TenantId,
+        WorkspaceId,
+        IntegrationProvider,
+        IDL.Text,
+        IDL.Text,
+        IDL.Text,
+      ],
+      [IDL.Variant({ 'ok' : IntegrationEvent, 'err' : IDL.Text })],
+      [],
+    ),
   'processPayroll' : IDL.Func(
-      [TenantId, EntityId, IDL.Text],
+      [TenantId, WorkspaceId, EntityId, IDL.Text],
+      [IDL.Variant({ 'ok' : PayrollRecord, 'err' : IDL.Text })],
+      [],
+    ),
+  'raiseEscrowDispute' : IDL.Func(
+      [TenantId, WorkspaceId, EntityId, IDL.Text],
+      [IDL.Variant({ 'ok' : EscrowDispute, 'err' : IDL.Text })],
+      [],
+    ),
+  'recordCheckIn' : IDL.Func(
+      [TenantId, WorkspaceId, CheckInInput],
+      [IDL.Variant({ 'ok' : GoalCheckIn, 'err' : IDL.Text })],
+      [],
+    ),
+  'regenerateWorkspaceShareToken' : IDL.Func(
+      [WorkspaceId, TenantId],
+      [IDL.Text],
+      [],
+    ),
+  'rejectPayrollRecord' : IDL.Func(
+      [TenantId, WorkspaceId, EntityId, IDL.Text],
       [IDL.Variant({ 'ok' : PayrollRecord, 'err' : IDL.Text })],
       [],
     ),
   'releaseEscrow' : IDL.Func(
-      [TenantId, EntityId],
+      [TenantId, WorkspaceId, EntityId],
       [IDL.Variant({ 'ok' : EscrowContract, 'err' : IDL.Text })],
       [],
     ),
-  'searchNotes' : IDL.Func([TenantId, IDL.Text], [IDL.Vec(Note)], ['query']),
+  'releaseMilestoneFunds' : IDL.Func(
+      [TenantId, WorkspaceId, EntityId],
+      [IDL.Variant({ 'ok' : EscrowMilestone, 'err' : IDL.Text })],
+      [],
+    ),
+  'removeReaction' : IDL.Func(
+      [TenantId, WorkspaceId, EntityId, IDL.Text],
+      [IDL.Variant({ 'ok' : Message, 'err' : IDL.Text })],
+      [],
+    ),
+  'removeTaskFromSprint' : IDL.Func(
+      [TenantId, WorkspaceId, EntityId, EntityId],
+      [IDL.Variant({ 'ok' : Sprint, 'err' : IDL.Text })],
+      [],
+    ),
+  'removeTaskRelationship' : IDL.Func(
+      [TenantId, WorkspaceId, EntityId],
+      [IDL.Variant({ 'ok' : IDL.Bool, 'err' : IDL.Text })],
+      [],
+    ),
+  'removeTaskWatcher' : IDL.Func(
+      [TenantId, WorkspaceId, EntityId, UserId],
+      [IDL.Variant({ 'ok' : IDL.Bool, 'err' : IDL.Text })],
+      [],
+    ),
+  'removeWorkspaceMember' : IDL.Func(
+      [TenantId, EntityId, UserId],
+      [IDL.Variant({ 'ok' : IDL.Null, 'err' : IDL.Text })],
+      [],
+    ),
+  'resolveDispute' : IDL.Func(
+      [TenantId, WorkspaceId, EntityId, IDL.Text],
+      [IDL.Variant({ 'ok' : EscrowDispute, 'err' : IDL.Text })],
+      [],
+    ),
+  'respondToEvent' : IDL.Func(
+      [TenantId, WorkspaceId, EventRsvpInput],
+      [IDL.Variant({ 'ok' : EventRsvp, 'err' : IDL.Text })],
+      [],
+    ),
+  'saveAIConfig' : IDL.Func(
+      [TenantId, WorkspaceId, AIConfigInput],
+      [IDL.Variant({ 'ok' : AIConfig, 'err' : IDL.Text })],
+      [],
+    ),
+  'saveIntegration' : IDL.Func(
+      [TenantId, WorkspaceId, IntegrationInput],
+      [IDL.Variant({ 'ok' : Integration, 'err' : IDL.Text })],
+      [],
+    ),
+  'searchMessages' : IDL.Func(
+      [
+        TenantId,
+        WorkspaceId,
+        IDL.Text,
+        IDL.Opt(EntityId),
+        IDL.Opt(IDL.Principal),
+        IDL.Opt(IDL.Int),
+        IDL.Opt(IDL.Int),
+      ],
+      [IDL.Vec(Message)],
+      ['query'],
+    ),
+  'searchNotes' : IDL.Func(
+      [TenantId, WorkspaceId, IDL.Text],
+      [IDL.Vec(Note)],
+      ['query'],
+    ),
   'sendAsset' : IDL.Func(
-      [TenantId, EntityId, AssetType, IDL.Nat, IDL.Text, IDL.Opt(IDL.Text)],
+      [
+        TenantId,
+        WorkspaceId,
+        EntityId,
+        AssetType,
+        IDL.Nat,
+        IDL.Text,
+        IDL.Opt(IDL.Text),
+        IDL.Nat,
+      ],
       [IDL.Variant({ 'ok' : WalletTransaction, 'err' : IDL.Text })],
       [],
     ),
   'sendMessage' : IDL.Func(
-      [TenantId, MessageInput],
+      [TenantId, WorkspaceId, MessageInput],
       [IDL.Variant({ 'ok' : Message, 'err' : IDL.Text })],
       [],
     ),
+  'setSpendingLimit' : IDL.Func(
+      [TenantId, WorkspaceId, Role, IDL.Float64, IDL.Text],
+      [IDL.Variant({ 'ok' : WorkspaceSpendingLimit, 'err' : IDL.Text })],
+      [],
+    ),
+  'setUserStatus' : IDL.Func(
+      [
+        TenantId,
+        WorkspaceId,
+        IDL.Variant({
+          'away' : IDL.Null,
+          'offline' : IDL.Null,
+          'online' : IDL.Null,
+        }),
+        IDL.Text,
+      ],
+      [IDL.Variant({ 'ok' : UserStatus, 'err' : IDL.Text })],
+      [],
+    ),
+  'submitAIPrompt' : IDL.Func(
+      [TenantId, WorkspaceId, AIPromptInput],
+      [IDL.Variant({ 'ok' : AIResponse, 'err' : IDL.Text })],
+      [],
+    ),
+  'submitFormResponse' : IDL.Func(
+      [FormSubmissionInput],
+      [IDL.Variant({ 'ok' : FormSubmission, 'err' : IDL.Text })],
+      [],
+    ),
   'toggleAutomationRule' : IDL.Func(
-      [TenantId, EntityId],
+      [TenantId, WorkspaceId, EntityId],
       [IDL.Variant({ 'ok' : AutomationRule, 'err' : IDL.Text })],
       [],
     ),
+  'toggleGoalPublic' : IDL.Func(
+      [EntityId, WorkspaceId, TenantId],
+      [IDL.Variant({ 'ok' : Goal, 'err' : IDL.Text })],
+      [],
+    ),
+  'unlinkTaskFromKR' : IDL.Func(
+      [TenantId, WorkspaceId, EntityId, EntityId],
+      [IDL.Variant({ 'ok' : KeyResult, 'err' : IDL.Text })],
+      [],
+    ),
+  'unpinMessage' : IDL.Func(
+      [TenantId, WorkspaceId, EntityId, IDL.Text],
+      [IDL.Variant({ 'ok' : Channel, 'err' : IDL.Text })],
+      [],
+    ),
+  'updateCalendar' : IDL.Func(
+      [TenantId, WorkspaceId, EntityId, CalendarDefInput],
+      [IDL.Variant({ 'ok' : CalendarDef, 'err' : IDL.Text })],
+      [],
+    ),
+  'updateChannel' : IDL.Func(
+      [TenantId, WorkspaceId, EntityId, IDL.Text, IDL.Text, IDL.Text],
+      [IDL.Variant({ 'ok' : Channel, 'err' : IDL.Text })],
+      [],
+    ),
+  'updateChannelTopic' : IDL.Func(
+      [TenantId, WorkspaceId, EntityId, IDL.Text],
+      [IDL.Variant({ 'ok' : Channel, 'err' : IDL.Text })],
+      [],
+    ),
+  'updateChecklistItem' : IDL.Func(
+      [TenantId, WorkspaceId, EntityId, IDL.Text, IDL.Bool],
+      [IDL.Variant({ 'ok' : ChecklistItem, 'err' : IDL.Text })],
+      [],
+    ),
+  'updateContractor' : IDL.Func(
+      [TenantId, WorkspaceId, EntityId, ContractorInput],
+      [IDL.Variant({ 'ok' : Contractor, 'err' : IDL.Text })],
+      [],
+    ),
+  'updateDeduction' : IDL.Func(
+      [TenantId, WorkspaceId, EntityId, IDL.Bool, IDL.Float64],
+      [IDL.Variant({ 'ok' : Deduction, 'err' : IDL.Text })],
+      [],
+    ),
   'updateEmployee' : IDL.Func(
-      [TenantId, EntityId, EmployeeInput],
+      [TenantId, WorkspaceId, EntityId, EmployeeInput],
       [IDL.Variant({ 'ok' : Employee, 'err' : IDL.Text })],
       [],
     ),
+  'updateEscrowMilestone' : IDL.Func(
+      [TenantId, WorkspaceId, EntityId, EscrowMilestoneInput],
+      [IDL.Variant({ 'ok' : EscrowMilestone, 'err' : IDL.Text })],
+      [],
+    ),
   'updateEvent' : IDL.Func(
-      [TenantId, EntityId, EventInput],
+      [TenantId, WorkspaceId, EntityId, EventInput],
       [IDL.Variant({ 'ok' : Event, 'err' : IDL.Text })],
       [],
     ),
+  'updateForm' : IDL.Func(
+      [TenantId, WorkspaceId, EntityId, FormInput],
+      [IDL.Variant({ 'ok' : Form, 'err' : IDL.Text })],
+      [],
+    ),
+  'updateGoal' : IDL.Func(
+      [TenantId, WorkspaceId, EntityId, GoalInput, GoalStatus],
+      [IDL.Variant({ 'ok' : Goal, 'err' : IDL.Text })],
+      [],
+    ),
+  'updateGuestStatus' : IDL.Func(
+      [TenantId, WorkspaceId, EntityId, GuestStatus],
+      [IDL.Variant({ 'ok' : GuestUser, 'err' : IDL.Text })],
+      [],
+    ),
+  'updateIntegrationSyncStatus' : IDL.Func(
+      [TenantId, WorkspaceId, EntityId, IDL.Text, Timestamp],
+      [IDL.Variant({ 'ok' : IDL.Bool, 'err' : IDL.Text })],
+      [],
+    ),
+  'updateKeyResult' : IDL.Func(
+      [TenantId, WorkspaceId, EntityId, IDL.Float64, KRStatus],
+      [IDL.Variant({ 'ok' : KeyResult, 'err' : IDL.Text })],
+      [],
+    ),
+  'updateMilestone' : IDL.Func(
+      [TenantId, WorkspaceId, EntityId, IDL.Text, MilestoneStatus, Timestamp],
+      [IDL.Variant({ 'ok' : Milestone, 'err' : IDL.Text })],
+      [],
+    ),
   'updateNote' : IDL.Func(
-      [TenantId, EntityId, NoteInput],
+      [TenantId, WorkspaceId, EntityId, NoteInput],
       [IDL.Variant({ 'ok' : Note, 'err' : IDL.Text })],
       [],
     ),
+  'updatePage' : IDL.Func(
+      [
+        TenantId,
+        WorkspaceId,
+        EntityId,
+        IDL.Text,
+        IDL.Text,
+        IDL.Opt(IDL.Text),
+        IDL.Vec(Block),
+      ],
+      [IDL.Variant({ 'ok' : PageNode, 'err' : IDL.Text })],
+      [],
+    ),
   'updateProject' : IDL.Func(
-      [TenantId, EntityId, ProjectInput],
+      [TenantId, WorkspaceId, EntityId, ProjectInput],
       [IDL.Variant({ 'ok' : Project, 'err' : IDL.Text })],
       [],
     ),
+  'updateSprint' : IDL.Func(
+      [
+        TenantId,
+        WorkspaceId,
+        EntityId,
+        IDL.Text,
+        IDL.Text,
+        SprintStatus,
+        IDL.Vec(EntityId),
+      ],
+      [IDL.Variant({ 'ok' : Sprint, 'err' : IDL.Text })],
+      [],
+    ),
+  'updateSubtask' : IDL.Func(
+      [TenantId, WorkspaceId, EntityId, IDL.Text, TaskStatus],
+      [IDL.Variant({ 'ok' : Subtask, 'err' : IDL.Text })],
+      [],
+    ),
   'updateTask' : IDL.Func(
-      [TenantId, EntityId, TaskInput],
+      [TenantId, WorkspaceId, EntityId, TaskInput],
       [IDL.Variant({ 'ok' : Task, 'err' : IDL.Text })],
+      [],
+    ),
+  'updateTimeEntry' : IDL.Func(
+      [TenantId, WorkspaceId, EntityId, TimeEntryInput],
+      [IDL.Variant({ 'ok' : TimeEntry, 'err' : IDL.Text })],
+      [],
+    ),
+  'updateWhiteboardElements' : IDL.Func(
+      [TenantId, WorkspaceId, EntityId, IDL.Vec(WhiteboardElement)],
+      [IDL.Variant({ 'ok' : Whiteboard, 'err' : IDL.Text })],
+      [],
+    ),
+  'updateWorkspace' : IDL.Func(
+      [TenantId, EntityId, IDL.Text],
+      [IDL.Variant({ 'ok' : Workspace, 'err' : IDL.Text })],
+      [],
+    ),
+  'updateWorkspaceMemberRole' : IDL.Func(
+      [TenantId, EntityId, UserId, WorkspaceRole],
+      [IDL.Variant({ 'ok' : WorkspaceMember, 'err' : IDL.Text })],
       [],
     ),
   'upsertProfile' : IDL.Func(
@@ -660,26 +2808,172 @@ export const idlInitArgs = [];
 
 export const idlFactory = ({ IDL }) => {
   const TenantId = IDL.Text;
+  const WorkspaceId = IDL.Text;
+  const EntityId = IDL.Text;
+  const GuestStatus = IDL.Variant({
+    'Active' : IDL.Null,
+    'Revoked' : IDL.Null,
+    'Pending' : IDL.Null,
+  });
   const UserId = IDL.Principal;
+  const Timestamp = IDL.Int;
+  const GuestUser = IDL.Record({
+    'id' : EntityId,
+    'status' : GuestStatus,
+    'principal' : IDL.Opt(UserId),
+    'createdAt' : Timestamp,
+    'email' : IDL.Text,
+    'tenantId' : TenantId,
+    'workspaceId' : WorkspaceId,
+    'projectIds' : IDL.Vec(EntityId),
+  });
+  const BenefitInput = IDL.Record({
+    'endDate' : IDL.Opt(IDL.Text),
+    'name' : IDL.Text,
+    'employeeId' : EntityId,
+    'monthlyCost' : IDL.Float64,
+    'startDate' : IDL.Text,
+  });
+  const Benefit = IDL.Record({
+    'id' : EntityId,
+    'endDate' : IDL.Opt(IDL.Text),
+    'name' : IDL.Text,
+    'isActive' : IDL.Bool,
+    'tenantId' : TenantId,
+    'employeeId' : EntityId,
+    'workspaceId' : WorkspaceId,
+    'monthlyCost' : IDL.Float64,
+    'startDate' : IDL.Text,
+  });
+  const ChecklistItemInput = IDL.Record({
+    'content' : IDL.Text,
+    'order' : IDL.Nat,
+    'completed' : IDL.Bool,
+    'taskId' : EntityId,
+  });
+  const ChecklistItem = IDL.Record({
+    'id' : EntityId,
+    'content' : IDL.Text,
+    'order' : IDL.Nat,
+    'createdAt' : Timestamp,
+    'completed' : IDL.Bool,
+    'tenantId' : TenantId,
+    'updatedAt' : Timestamp,
+    'taskId' : EntityId,
+    'workspaceId' : WorkspaceId,
+  });
+  const TaskCommentInput = IDL.Record({
+    'content' : IDL.Text,
+    'taskId' : EntityId,
+  });
+  const TaskComment = IDL.Record({
+    'id' : EntityId,
+    'content' : IDL.Text,
+    'authorId' : UserId,
+    'createdAt' : Timestamp,
+    'tenantId' : TenantId,
+    'updatedAt' : Timestamp,
+    'taskId' : EntityId,
+    'workspaceId' : WorkspaceId,
+    'editedAt' : IDL.Opt(Timestamp),
+  });
+  const ContractorInput = IDL.Record({
+    'taxId' : IDL.Text,
+    'name' : IDL.Text,
+    'rate' : IDL.Float64,
+    'email' : IDL.Text,
+    'currency' : IDL.Text,
+  });
+  const Contractor = IDL.Record({
+    'id' : EntityId,
+    'taxId' : IDL.Text,
+    'name' : IDL.Text,
+    'createdAt' : Timestamp,
+    'rate' : IDL.Float64,
+    'isActive' : IDL.Bool,
+    'email' : IDL.Text,
+    'tenantId' : TenantId,
+    'currency' : IDL.Text,
+    'workspaceId' : WorkspaceId,
+  });
+  const ContractorPaymentReason = IDL.Variant({
+    'projectMilestone' : IDL.Null,
+    'other' : IDL.Null,
+    'freelanceInvoice' : IDL.Null,
+    'reimbursement' : IDL.Null,
+  });
+  const ContractorPaymentInput = IDL.Record({
+    'contractorId' : EntityId,
+    'notes' : IDL.Text,
+    'paymentDate' : IDL.Text,
+    'amount' : IDL.Float64,
+    'reason' : ContractorPaymentReason,
+  });
+  const ContractorPaymentStatus = IDL.Variant({
+    'pending' : IDL.Null,
+    'processed' : IDL.Null,
+  });
+  const ContractorPayment = IDL.Record({
+    'id' : EntityId,
+    'status' : ContractorPaymentStatus,
+    'createdAt' : Timestamp,
+    'contractorId' : EntityId,
+    'tenantId' : TenantId,
+    'processedAt' : IDL.Opt(Timestamp),
+    'notes' : IDL.Text,
+    'paymentDate' : IDL.Text,
+    'workspaceId' : WorkspaceId,
+    'amount' : IDL.Float64,
+    'reason' : ContractorPaymentReason,
+  });
+  const DeductionFrequency = IDL.Variant({
+    'perRun' : IDL.Null,
+    'annual' : IDL.Null,
+  });
+  const DeductionType = IDL.Variant({
+    'postTax' : IDL.Null,
+    'preTax' : IDL.Null,
+  });
+  const DeductionInput = IDL.Record({
+    'name' : IDL.Text,
+    'employeeId' : EntityId,
+    'frequency' : DeductionFrequency,
+    'amount' : IDL.Float64,
+    'deductionType' : DeductionType,
+  });
+  const Deduction = IDL.Record({
+    'id' : EntityId,
+    'name' : IDL.Text,
+    'createdAt' : Timestamp,
+    'isActive' : IDL.Bool,
+    'tenantId' : TenantId,
+    'employeeId' : EntityId,
+    'workspaceId' : WorkspaceId,
+    'frequency' : DeductionFrequency,
+    'amount' : IDL.Float64,
+    'deductionType' : DeductionType,
+  });
   const PayFrequency = IDL.Variant({
     'BiWeekly' : IDL.Null,
     'Weekly' : IDL.Null,
     'Quarterly' : IDL.Null,
+    'SemiMonthly' : IDL.Null,
     'Monthly' : IDL.Null,
   });
-  const Timestamp = IDL.Int;
   const EmployeeInput = IDL.Record({
     'salary' : IDL.Nat,
     'userId' : UserId,
     'email' : IDL.Text,
+    'payScheduleId' : IDL.Text,
     'currency' : IDL.Text,
     'payFrequency' : PayFrequency,
     'lastName' : IDL.Text,
+    'contractorFlag' : IDL.Bool,
     'taxRate' : IDL.Nat,
+    'timeZone' : IDL.Text,
     'startDate' : Timestamp,
     'firstName' : IDL.Text,
   });
-  const EntityId = IDL.Text;
   const Employee = IDL.Record({
     'id' : EntityId,
     'salary' : IDL.Nat,
@@ -688,24 +2982,252 @@ export const idlFactory = ({ IDL }) => {
     'isActive' : IDL.Bool,
     'email' : IDL.Text,
     'tenantId' : TenantId,
+    'payScheduleId' : IDL.Text,
     'currency' : IDL.Text,
+    'workspaceId' : WorkspaceId,
     'payFrequency' : PayFrequency,
     'lastName' : IDL.Text,
+    'contractorFlag' : IDL.Bool,
     'taxRate' : IDL.Nat,
+    'timeZone' : IDL.Text,
     'startDate' : Timestamp,
     'firstName' : IDL.Text,
   });
-  const ProjectStatus = IDL.Variant({
-    'OnHold' : IDL.Null,
-    'Active' : IDL.Null,
-    'Archived' : IDL.Null,
+  const EscrowMilestoneInput = IDL.Record({
+    'title' : IDL.Text,
+    'description' : IDL.Text,
+    'amount' : IDL.Nat,
+  });
+  const MilestoneStatus__1 = IDL.Variant({
+    'Releasing' : IDL.Null,
+    'Released' : IDL.Null,
+    'Approved' : IDL.Null,
+    'Pending' : IDL.Null,
+  });
+  const EscrowMilestone = IDL.Record({
+    'id' : EntityId,
+    'status' : MilestoneStatus__1,
+    'title' : IDL.Text,
+    'createdAt' : Timestamp,
+    'description' : IDL.Text,
+    'tenantId' : TenantId,
+    'updatedAt' : Timestamp,
+    'ledgerBlockHeight' : IDL.Opt(IDL.Nat),
+    'workspaceId' : WorkspaceId,
+    'escrowId' : EntityId,
+    'amount' : IDL.Nat,
+  });
+  const IntegrationEvent = IDL.Record({
+    'id' : EntityId,
+    'integrationId' : EntityId,
+    'triggerAction' : IDL.Opt(IDL.Text),
+    'tenantId' : TenantId,
+    'timestamp' : Timestamp,
+    'workspaceId' : WorkspaceId,
+    'payload' : IDL.Text,
+    'eventType' : IDL.Text,
+  });
+  const KeyResultInput = IDL.Record({
+    'title' : IDL.Text,
+    'unit' : IDL.Text,
+    'goalId' : EntityId,
+    'description' : IDL.Opt(IDL.Text),
+    'targetValue' : IDL.Float64,
+  });
+  const KRStatus = IDL.Variant({
+    'OnTrack' : IDL.Null,
+    'Behind' : IDL.Null,
     'Completed' : IDL.Null,
+    'AtRisk' : IDL.Null,
+  });
+  const KeyResult = IDL.Record({
+    'id' : EntityId,
+    'status' : KRStatus,
+    'title' : IDL.Text,
+    'createdAt' : Timestamp,
+    'unit' : IDL.Text,
+    'goalId' : EntityId,
+    'description' : IDL.Opt(IDL.Text),
+    'tenantId' : TenantId,
+    'currentValue' : IDL.Float64,
+    'updatedAt' : Timestamp,
+    'linkedTaskIds' : IDL.Vec(EntityId),
+    'workspaceId' : WorkspaceId,
+    'targetValue' : IDL.Float64,
+  });
+  const OffCycleReason = IDL.Variant({
+    'adjustment' : IDL.Null,
+    'reimbursement' : IDL.Null,
+    'bonus' : IDL.Null,
+  });
+  const OffCyclePaymentInput = IDL.Record({
+    'processImmediately' : IDL.Bool,
+    'employeeId' : EntityId,
+    'notes' : IDL.Text,
+    'amount' : IDL.Float64,
+    'reason' : OffCycleReason,
+  });
+  const OffCycleStatus = IDL.Variant({
+    'pending' : IDL.Null,
+    'processed' : IDL.Null,
+  });
+  const OffCyclePayment = IDL.Record({
+    'id' : EntityId,
+    'status' : OffCycleStatus,
+    'createdAt' : Timestamp,
+    'processImmediately' : IDL.Bool,
+    'tenantId' : TenantId,
+    'employeeId' : EntityId,
+    'notes' : IDL.Text,
+    'workspaceId' : WorkspaceId,
+    'amount' : IDL.Float64,
+    'reason' : OffCycleReason,
+  });
+  const PayScheduleInput = IDL.Record({
+    'name' : IDL.Text,
+    'description' : IDL.Text,
+    'isDefault' : IDL.Bool,
+    'frequency' : PayFrequency,
+  });
+  const PaySchedule = IDL.Record({
+    'id' : EntityId,
+    'name' : IDL.Text,
+    'createdAt' : Timestamp,
+    'description' : IDL.Text,
+    'tenantId' : TenantId,
+    'isDefault' : IDL.Bool,
+    'workspaceId' : WorkspaceId,
+    'frequency' : PayFrequency,
   });
   const CrossLink = IDL.Record({
     'linkLabel' : IDL.Text,
     'tenantId' : TenantId,
     'entityId' : EntityId,
     'entityType' : IDL.Text,
+  });
+  const Reaction = IDL.Record({
+    'userIds' : IDL.Vec(IDL.Principal),
+    'emoji' : IDL.Text,
+  });
+  const Message = IDL.Record({
+    'id' : EntityId,
+    'content' : IDL.Text,
+    'channelId' : EntityId,
+    'isThreadReply' : IDL.Opt(IDL.Bool),
+    'createdAt' : Timestamp,
+    'tenantId' : TenantId,
+    'updatedAt' : Timestamp,
+    'threadCount' : IDL.Opt(IDL.Nat),
+    'workspaceId' : WorkspaceId,
+    'replyToId' : IDL.Opt(EntityId),
+    'crossLinks' : IDL.Vec(CrossLink),
+    'reactions' : IDL.Opt(IDL.Vec(Reaction)),
+    'senderId' : UserId,
+  });
+  const TaskRelationshipType = IDL.Variant({
+    'blockedBy' : IDL.Null,
+    'duplicateOf' : IDL.Null,
+    'blocks' : IDL.Null,
+    'relatedTo' : IDL.Null,
+  });
+  const TaskRelationship = IDL.Record({
+    'id' : EntityId,
+    'targetTaskId' : EntityId,
+    'createdAt' : Timestamp,
+    'createdBy' : UserId,
+    'tenantId' : TenantId,
+    'sourceTaskId' : EntityId,
+    'workspaceId' : WorkspaceId,
+    'relationshipType' : TaskRelationshipType,
+  });
+  const SprintStatus = IDL.Variant({
+    'active' : IDL.Null,
+    'completed' : IDL.Null,
+    'planned' : IDL.Null,
+  });
+  const Sprint = IDL.Record({
+    'id' : EntityId,
+    'status' : SprintStatus,
+    'taskIds' : IDL.Vec(EntityId),
+    'endDate' : Timestamp,
+    'goal' : IDL.Text,
+    'name' : IDL.Text,
+    'createdAt' : Timestamp,
+    'tenantId' : TenantId,
+    'updatedAt' : Timestamp,
+    'projectId' : EntityId,
+    'workspaceId' : WorkspaceId,
+    'startDate' : Timestamp,
+  });
+  const TaskWatcher = IDL.Record({
+    'userId' : UserId,
+    'tenantId' : TenantId,
+    'taskId' : EntityId,
+    'addedAt' : Timestamp,
+    'workspaceId' : WorkspaceId,
+  });
+  const WorkspaceRole = IDL.Variant({
+    'Guest' : IDL.Null,
+    'Admin' : IDL.Null,
+    'Manager' : IDL.Null,
+    'TeamMember' : IDL.Null,
+  });
+  const WorkspaceMember = IDL.Record({
+    'displayName' : IDL.Text,
+    'userId' : UserId,
+    'joinedAt' : Timestamp,
+    'role' : WorkspaceRole,
+    'email' : IDL.Text,
+    'workspaceId' : WorkspaceId,
+  });
+  const TransactionStatus = IDL.Variant({
+    'Failed' : IDL.Null,
+    'Cancelled' : IDL.Null,
+    'AwaitingApproval' : IDL.Null,
+    'Completed' : IDL.Null,
+    'Pending' : IDL.Null,
+  });
+  const AssetType = IDL.Variant({ 'BTC' : IDL.Null, 'ICP' : IDL.Null });
+  const TransactionType = IDL.Variant({
+    'Stake' : IDL.Null,
+    'Send' : IDL.Null,
+    'Swap' : IDL.Null,
+    'Unstake' : IDL.Null,
+    'Receive' : IDL.Null,
+  });
+  const TransactionApproval = IDL.Record({
+    'id' : EntityId,
+    'txId' : EntityId,
+    'tenantId' : TenantId,
+    'approved' : IDL.Bool,
+    'approver' : IDL.Principal,
+    'timestamp' : Timestamp,
+    'workspaceId' : WorkspaceId,
+  });
+  const WalletTransaction = IDL.Record({
+    'id' : EntityId,
+    'status' : TransactionStatus,
+    'requiredApprovals' : IDL.Nat,
+    'asset' : AssetType,
+    'accountId' : EntityId,
+    'fromAddress' : IDL.Opt(IDL.Text),
+    'memoValue' : IDL.Opt(IDL.Nat64),
+    'memo' : IDL.Opt(IDL.Text),
+    'createdAt' : Timestamp,
+    'tenantId' : TenantId,
+    'ledgerTxHash' : IDL.Opt(IDL.Text),
+    'ledgerBlockHeight' : IDL.Opt(IDL.Nat),
+    'workspaceId' : WorkspaceId,
+    'txType' : TransactionType,
+    'toAddress' : IDL.Opt(IDL.Text),
+    'amount' : IDL.Nat,
+    'approvals' : IDL.Vec(TransactionApproval),
+  });
+  const ProjectStatus = IDL.Variant({
+    'OnHold' : IDL.Null,
+    'Active' : IDL.Null,
+    'Archived' : IDL.Null,
+    'Completed' : IDL.Null,
   });
   const Project = IDL.Record({
     'id' : EntityId,
@@ -716,8 +3238,26 @@ export const idlFactory = ({ IDL }) => {
     'description' : IDL.Text,
     'tenantId' : TenantId,
     'updatedAt' : Timestamp,
+    'workspaceId' : WorkspaceId,
     'memberIds' : IDL.Vec(UserId),
     'crossLinks' : IDL.Vec(CrossLink),
+  });
+  const DisputeStatus = IDL.Variant({
+    'Open' : IDL.Null,
+    'Resolved' : IDL.Null,
+  });
+  const EscrowDispute = IDL.Record({
+    'id' : EntityId,
+    'status' : DisputeStatus,
+    'arbiter' : IDL.Opt(IDL.Principal),
+    'createdAt' : Timestamp,
+    'resolution' : IDL.Opt(IDL.Text),
+    'tenantId' : TenantId,
+    'updatedAt' : Timestamp,
+    'raisedBy' : IDL.Principal,
+    'workspaceId' : WorkspaceId,
+    'escrowId' : EntityId,
+    'reason' : IDL.Text,
   });
   const EscrowStatus = IDL.Variant({
     'Disputed' : IDL.Null,
@@ -726,6 +3266,12 @@ export const idlFactory = ({ IDL }) => {
     'Cancelled' : IDL.Null,
     'Pending' : IDL.Null,
   });
+  const StatusHistoryEntry = IDL.Record({
+    'status' : EscrowStatus,
+    'changedBy' : IDL.Principal,
+    'note' : IDL.Opt(IDL.Text),
+    'timestamp' : Timestamp,
+  });
   const EscrowContract = IDL.Record({
     'id' : EntityId,
     'status' : EscrowStatus,
@@ -733,16 +3279,19 @@ export const idlFactory = ({ IDL }) => {
     'createdAt' : Timestamp,
     'dueDate' : IDL.Opt(Timestamp),
     'description' : IDL.Text,
+    'statusHistory' : IDL.Vec(StatusHistoryEntry),
     'tenantId' : TenantId,
     'updatedAt' : Timestamp,
     'currency' : IDL.Text,
+    'workspaceId' : WorkspaceId,
     'conditions' : IDL.Vec(IDL.Text),
+    'fundingBlockHeight' : IDL.Opt(IDL.Nat),
     'crossLinks' : IDL.Vec(CrossLink),
     'amount' : IDL.Nat,
     'payeeId' : UserId,
     'payerId' : UserId,
+    'fundedAmount' : IDL.Opt(IDL.Nat),
   });
-  const AssetType = IDL.Variant({ 'BTC' : IDL.Null, 'ICP' : IDL.Null });
   const RecurringPayment = IDL.Record({
     'id' : EntityId,
     'asset' : AssetType,
@@ -751,9 +3300,56 @@ export const idlFactory = ({ IDL }) => {
     'isActive' : IDL.Bool,
     'tenantId' : TenantId,
     'nextRunAt' : Timestamp,
+    'workspaceId' : WorkspaceId,
     'frequency' : PayFrequency,
     'toAddress' : IDL.Text,
     'amount' : IDL.Nat,
+  });
+  const Role = IDL.Variant({
+    'Admin' : IDL.Null,
+    'Manager' : IDL.Null,
+    'TeamMember' : IDL.Null,
+  });
+  const DrawingTool = IDL.Variant({
+    'Pen' : IDL.Null,
+    'Line' : IDL.Null,
+    'Text' : IDL.Null,
+    'Sticky' : IDL.Null,
+    'Connector' : IDL.Null,
+    'Image' : IDL.Null,
+    'Eraser' : IDL.Null,
+    'Circle' : IDL.Null,
+    'Rectangle' : IDL.Null,
+  });
+  const WhiteboardElement = IDL.Record({
+    'x' : IDL.Float64,
+    'y' : IDL.Float64,
+    'id' : EntityId,
+    'height' : IDL.Float64,
+    'color' : IDL.Text,
+    'text' : IDL.Text,
+    'tool' : DrawingTool,
+    'connectorTo' : IDL.Opt(IDL.Text),
+    'imageUrl' : IDL.Opt(IDL.Text),
+    'width' : IDL.Float64,
+    'connectorFrom' : IDL.Opt(IDL.Text),
+    'converted' : IDL.Bool,
+    'strokeWidth' : IDL.Float64,
+    'linkedTaskId' : IDL.Opt(IDL.Text),
+    'points' : IDL.Vec(IDL.Float64),
+  });
+  const Whiteboard = IDL.Record({
+    'id' : EntityId,
+    'title' : IDL.Text,
+    'templateId' : IDL.Opt(IDL.Text),
+    'createdAt' : Timestamp,
+    'createdBy' : UserId,
+    'templateName' : IDL.Opt(IDL.Text),
+    'tenantId' : TenantId,
+    'updatedAt' : Timestamp,
+    'elements' : IDL.Vec(WhiteboardElement),
+    'projectId' : IDL.Opt(EntityId),
+    'workspaceId' : WorkspaceId,
   });
   const AutomationTrigger = IDL.Variant({
     'OnTaskStatusChange' : IDL.Null,
@@ -779,6 +3375,7 @@ export const idlFactory = ({ IDL }) => {
     'description' : IDL.Text,
     'isActive' : IDL.Bool,
     'tenantId' : TenantId,
+    'workspaceId' : WorkspaceId,
   });
   const BackupStatus = IDL.Variant({
     'Failed' : IDL.Null,
@@ -794,7 +3391,33 @@ export const idlFactory = ({ IDL }) => {
     'createdBy' : UserId,
     'tenantId' : TenantId,
     'backupLabel' : IDL.Text,
+    'workspaceId' : WorkspaceId,
     'sizeBytes' : IDL.Opt(IDL.Nat),
+  });
+  const CalendarType = IDL.Variant({
+    'team' : IDL.Null,
+    'company' : IDL.Null,
+    'personal' : IDL.Null,
+    'project' : IDL.Null,
+  });
+  const CalendarDefInput = IDL.Record({
+    'calendarType' : CalendarType,
+    'name' : IDL.Text,
+    'color' : IDL.Text,
+    'projectId' : IDL.Opt(IDL.Text),
+    'isVisible' : IDL.Bool,
+  });
+  const CalendarDef = IDL.Record({
+    'id' : EntityId,
+    'calendarType' : CalendarType,
+    'ownerId' : UserId,
+    'name' : IDL.Text,
+    'createdAt' : Timestamp,
+    'color' : IDL.Text,
+    'tenantId' : TenantId,
+    'projectId' : IDL.Opt(IDL.Text),
+    'isVisible' : IDL.Bool,
+    'workspaceId' : WorkspaceId,
   });
   const ChannelInput = IDL.Record({
     'name' : IDL.Text,
@@ -802,15 +3425,28 @@ export const idlFactory = ({ IDL }) => {
     'memberIds' : IDL.Vec(UserId),
     'isPublic' : IDL.Bool,
   });
+  const MentionEntry = IDL.Record({
+    'userId' : IDL.Principal,
+    'hasMention' : IDL.Bool,
+  });
+  const UnreadEntry = IDL.Record({
+    'userId' : IDL.Principal,
+    'count' : IDL.Nat,
+  });
   const Channel = IDL.Record({
     'id' : EntityId,
+    'topic' : IDL.Opt(IDL.Text),
+    'mentionFlags' : IDL.Opt(IDL.Vec(MentionEntry)),
+    'unreadCounts' : IDL.Opt(IDL.Vec(UnreadEntry)),
     'name' : IDL.Text,
     'createdAt' : Timestamp,
     'createdBy' : UserId,
     'description' : IDL.Text,
     'tenantId' : TenantId,
+    'workspaceId' : WorkspaceId,
     'memberIds' : IDL.Vec(UserId),
     'isPublic' : IDL.Bool,
+    'pinnedMessageIds' : IDL.Opt(IDL.Vec(IDL.Text)),
   });
   const EscrowInput = IDL.Record({
     'title' : IDL.Text,
@@ -829,6 +3465,14 @@ export const idlFactory = ({ IDL }) => {
     'Monthly' : IDL.Null,
     'Yearly' : IDL.Null,
   });
+  const EventCategory = IDL.Variant({
+    'pto' : IDL.Null,
+    'internal' : IDL.Null,
+    'other' : IDL.Null,
+    'deadline' : IDL.Null,
+    'meeting' : IDL.Null,
+    'external' : IDL.Null,
+  });
   const EventInput = IDL.Record({
     'startTime' : Timestamp,
     'title' : IDL.Text,
@@ -836,21 +3480,193 @@ export const idlFactory = ({ IDL }) => {
     'description' : IDL.Text,
     'attendeeIds' : IDL.Vec(UserId),
     'recurrence' : RecurrenceRule,
+    'categoryColor' : IDL.Opt(IDL.Text),
+    'projectId' : IDL.Opt(IDL.Text),
+    'linkedNoteId' : IDL.Opt(IDL.Text),
+    'rsvpRequired' : IDL.Opt(IDL.Bool),
+    'calendarId' : IDL.Opt(IDL.Text),
+    'category' : IDL.Opt(EventCategory),
     'crossLinks' : IDL.Vec(CrossLink),
+    'isProjectDeadline' : IDL.Opt(IDL.Bool),
+    'timeZone' : IDL.Opt(IDL.Text),
   });
   const Event = IDL.Record({
     'id' : EntityId,
     'startTime' : Timestamp,
     'title' : IDL.Text,
     'endTime' : Timestamp,
+    'isRecurringSeries' : IDL.Bool,
     'createdAt' : Timestamp,
     'createdBy' : UserId,
     'description' : IDL.Text,
     'attendeeIds' : IDL.Vec(UserId),
+    'seriesId' : IDL.Opt(IDL.Text),
     'tenantId' : TenantId,
     'recurrence' : RecurrenceRule,
     'updatedAt' : Timestamp,
+    'categoryColor' : IDL.Text,
+    'projectId' : IDL.Opt(IDL.Text),
+    'linkedNoteId' : IDL.Opt(IDL.Text),
+    'rsvpRequired' : IDL.Bool,
+    'calendarId' : IDL.Text,
+    'category' : EventCategory,
+    'workspaceId' : WorkspaceId,
     'crossLinks' : IDL.Vec(CrossLink),
+    'isProjectDeadline' : IDL.Bool,
+    'timeZone' : IDL.Text,
+  });
+  const ExceptionType = IDL.Variant({
+    'deleted' : IDL.Null,
+    'modified' : IDL.Null,
+  });
+  const EventExceptionInput = IDL.Record({
+    'eventId' : IDL.Text,
+    'originalDate' : IDL.Text,
+    'exceptionType' : ExceptionType,
+    'overrideData' : IDL.Opt(EventInput),
+  });
+  const EventException = IDL.Record({
+    'id' : EntityId,
+    'eventId' : IDL.Text,
+    'originalDate' : IDL.Text,
+    'exceptionType' : ExceptionType,
+    'createdAt' : Timestamp,
+    'tenantId' : TenantId,
+    'overrideData' : IDL.Opt(EventInput),
+    'workspaceId' : WorkspaceId,
+  });
+  const ConditionalLogic = IDL.Record({
+    'value' : IDL.Text,
+    'operator' : IDL.Text,
+    'fieldId' : IDL.Text,
+  });
+  const FormFieldType = IDL.Variant({
+    'Email' : IDL.Null,
+    'Date' : IDL.Null,
+    'Textarea' : IDL.Null,
+    'Text' : IDL.Null,
+    'Checkbox' : IDL.Null,
+    'Dropdown' : IDL.Null,
+  });
+  const FormField = IDL.Record({
+    'id' : EntityId,
+    'fieldLabel' : IDL.Text,
+    'required' : IDL.Bool,
+    'conditionalLogic' : IDL.Opt(ConditionalLogic),
+    'options' : IDL.Vec(IDL.Text),
+    'fieldType' : FormFieldType,
+  });
+  const AutoCreateTaskConfig = IDL.Record({
+    'assigneeId' : IDL.Opt(IDL.Principal),
+    'taskTitle' : IDL.Text,
+    'projectId' : IDL.Text,
+  });
+  const FormBranding = IDL.Record({
+    'backgroundColor' : IDL.Opt(IDL.Text),
+    'primaryColor' : IDL.Opt(IDL.Text),
+    'logoUrl' : IDL.Opt(IDL.Text),
+  });
+  const FormInput = IDL.Record({
+    'title' : IDL.Text,
+    'formTemplateId' : IDL.Opt(IDL.Text),
+    'description' : IDL.Text,
+    'fields' : IDL.Vec(FormField),
+    'autoCreateTask' : IDL.Opt(AutoCreateTaskConfig),
+    'branding' : IDL.Opt(FormBranding),
+  });
+  const FormStatus = IDL.Variant({
+    'Draft' : IDL.Null,
+    'Published' : IDL.Null,
+  });
+  const Form = IDL.Record({
+    'id' : EntityId,
+    'status' : FormStatus,
+    'title' : IDL.Text,
+    'formTemplateId' : IDL.Opt(IDL.Text),
+    'publicUrl' : IDL.Text,
+    'createdAt' : Timestamp,
+    'createdBy' : UserId,
+    'description' : IDL.Text,
+    'tenantId' : TenantId,
+    'fields' : IDL.Vec(FormField),
+    'updatedAt' : Timestamp,
+    'autoCreateTask' : IDL.Opt(AutoCreateTaskConfig),
+    'workspaceId' : WorkspaceId,
+    'branding' : IDL.Opt(FormBranding),
+  });
+  const GoalInput = IDL.Record({
+    'title' : IDL.Text,
+    'endDate' : Timestamp,
+    'period' : IDL.Text,
+    'description' : IDL.Opt(IDL.Text),
+    'contributorIds' : IDL.Vec(UserId),
+    'startDate' : Timestamp,
+  });
+  const GoalStatus = IDL.Variant({
+    'OnHold' : IDL.Null,
+    'Active' : IDL.Null,
+    'Cancelled' : IDL.Null,
+    'Completed' : IDL.Null,
+  });
+  const Goal = IDL.Record({
+    'id' : EntityId,
+    'status' : GoalStatus,
+    'title' : IDL.Text,
+    'endDate' : Timestamp,
+    'ownerId' : UserId,
+    'period' : IDL.Text,
+    'createdAt' : Timestamp,
+    'description' : IDL.Opt(IDL.Text),
+    'tenantId' : TenantId,
+    'updatedAt' : Timestamp,
+    'progress' : IDL.Float64,
+    'workspaceId' : WorkspaceId,
+    'isPublic' : IDL.Bool,
+    'contributorIds' : IDL.Vec(UserId),
+    'keyResults' : IDL.Vec(EntityId),
+    'startDate' : Timestamp,
+  });
+  const GuestInvitationInput = IDL.Record({
+    'expiresAt' : Timestamp,
+    'inviteeEmail' : IDL.Text,
+    'projectId' : EntityId,
+  });
+  const GuestInvitation = IDL.Record({
+    'id' : EntityId,
+    'inviteToken' : IDL.Text,
+    'expiresAt' : Timestamp,
+    'inviteeEmail' : IDL.Text,
+    'createdAt' : Timestamp,
+    'invitedBy' : UserId,
+    'tenantId' : TenantId,
+    'projectId' : EntityId,
+    'workspaceId' : WorkspaceId,
+    'accepted' : IDL.Bool,
+  });
+  const MilestoneInput = IDL.Record({
+    'title' : IDL.Text,
+    'dueDate' : Timestamp,
+    'description' : IDL.Text,
+    'projectId' : EntityId,
+    'linkedTaskIds' : IDL.Vec(EntityId),
+  });
+  const MilestoneStatus = IDL.Variant({
+    'reached' : IDL.Null,
+    'upcoming' : IDL.Null,
+    'missed' : IDL.Null,
+  });
+  const Milestone = IDL.Record({
+    'id' : EntityId,
+    'status' : MilestoneStatus,
+    'title' : IDL.Text,
+    'createdAt' : Timestamp,
+    'dueDate' : Timestamp,
+    'description' : IDL.Text,
+    'tenantId' : TenantId,
+    'updatedAt' : Timestamp,
+    'projectId' : EntityId,
+    'linkedTaskIds' : IDL.Vec(EntityId),
+    'workspaceId' : WorkspaceId,
   });
   const NoteInput = IDL.Record({
     'title' : IDL.Text,
@@ -867,18 +3683,137 @@ export const idlFactory = ({ IDL }) => {
     'tags' : IDL.Vec(IDL.Text),
     'tenantId' : TenantId,
     'updatedAt' : Timestamp,
+    'workspaceId' : WorkspaceId,
     'crossLinks' : IDL.Vec(CrossLink),
+  });
+  const NoteTemplateInput = IDL.Record({
+    'icon' : IDL.Text,
+    'name' : IDL.Text,
+    'description' : IDL.Text,
+    'blocksJson' : IDL.Text,
+  });
+  const NoteTemplate = IDL.Record({
+    'id' : EntityId,
+    'authorId' : UserId,
+    'icon' : IDL.Text,
+    'name' : IDL.Text,
+    'createdAt' : Timestamp,
+    'description' : IDL.Text,
+    'tenantId' : TenantId,
+    'blocksJson' : IDL.Text,
+    'workspaceId' : WorkspaceId,
+  });
+  const PageInput = IDL.Record({
+    'title' : IDL.Text,
+    'icon' : IDL.Text,
+    'blocks' : IDL.Vec(IDL.Text),
+    'coverUrl' : IDL.Opt(IDL.Text),
+    'parentPageId' : IDL.Opt(EntityId),
+  });
+  const BlockTypeTag = IDL.Text;
+  const Block = IDL.Record({
+    'id' : EntityId,
+    'content' : IDL.Text,
+    'order' : IDL.Nat,
+    'metadata' : IDL.Text,
+    'blockType' : BlockTypeTag,
+    'parentId' : IDL.Opt(EntityId),
+  });
+  const PageNode = IDL.Record({
+    'id' : EntityId,
+    'title' : IDL.Text,
+    'authorId' : UserId,
+    'icon' : IDL.Text,
+    'createdAt' : Timestamp,
+    'tenantId' : TenantId,
+    'updatedAt' : Timestamp,
+    'blocks' : IDL.Vec(Block),
+    'workspaceId' : WorkspaceId,
+    'coverUrl' : IDL.Opt(IDL.Text),
+    'crossLinks' : IDL.Vec(CrossLink),
+    'parentPageId' : IDL.Opt(EntityId),
+    'watchers' : IDL.Vec(UserId),
   });
   const ProjectInput = IDL.Record({
     'name' : IDL.Text,
     'description' : IDL.Text,
     'memberIds' : IDL.Vec(UserId),
   });
+  const RecurrenceType = IDL.Variant({
+    'monthly' : IDL.Null,
+    'daily' : IDL.Null,
+    'weekly' : IDL.Null,
+  });
   const TaskPriority = IDL.Variant({
     'Low' : IDL.Null,
     'High' : IDL.Null,
     'Medium' : IDL.Null,
     'Critical' : IDL.Null,
+  });
+  const RecurringTaskInput = IDL.Record({
+    'title' : IDL.Text,
+    'assigneeId' : IDL.Opt(UserId),
+    'description' : IDL.Text,
+    'recurrenceType' : RecurrenceType,
+    'projectId' : EntityId,
+    'priority' : TaskPriority,
+    'startDate' : Timestamp,
+  });
+  const RecurringTask = IDL.Record({
+    'id' : EntityId,
+    'title' : IDL.Text,
+    'assigneeId' : IDL.Opt(UserId),
+    'lastCreatedAt' : IDL.Opt(Timestamp),
+    'createdAt' : Timestamp,
+    'description' : IDL.Text,
+    'tenantId' : TenantId,
+    'recurrenceType' : RecurrenceType,
+    'updatedAt' : Timestamp,
+    'nextDueAt' : Timestamp,
+    'projectId' : EntityId,
+    'workspaceId' : WorkspaceId,
+    'priority' : TaskPriority,
+  });
+  const SprintInput = IDL.Record({
+    'taskIds' : IDL.Vec(EntityId),
+    'endDate' : Timestamp,
+    'goal' : IDL.Text,
+    'name' : IDL.Text,
+    'projectId' : EntityId,
+    'startDate' : Timestamp,
+  });
+  const TaskStatus = IDL.Variant({
+    'Blocked' : IDL.Null,
+    'Done' : IDL.Null,
+    'Todo' : IDL.Null,
+    'InProgress' : IDL.Null,
+  });
+  const SubtaskInput = IDL.Record({
+    'status' : TaskStatus,
+    'title' : IDL.Text,
+    'assigneeId' : IDL.Opt(UserId),
+    'order' : IDL.Nat,
+    'dueDate' : IDL.Opt(Timestamp),
+    'description' : IDL.Text,
+    'projectId' : EntityId,
+    'parentTaskId' : EntityId,
+    'priority' : TaskPriority,
+  });
+  const Subtask = IDL.Record({
+    'id' : EntityId,
+    'status' : TaskStatus,
+    'title' : IDL.Text,
+    'assigneeId' : IDL.Opt(UserId),
+    'order' : IDL.Nat,
+    'createdAt' : Timestamp,
+    'dueDate' : IDL.Opt(Timestamp),
+    'description' : IDL.Text,
+    'tenantId' : TenantId,
+    'updatedAt' : Timestamp,
+    'projectId' : EntityId,
+    'parentTaskId' : EntityId,
+    'workspaceId' : WorkspaceId,
+    'priority' : TaskPriority,
   });
   const TaskInput = IDL.Record({
     'title' : IDL.Text,
@@ -888,12 +3823,6 @@ export const idlFactory = ({ IDL }) => {
     'projectId' : EntityId,
     'priority' : TaskPriority,
     'crossLinks' : IDL.Vec(CrossLink),
-  });
-  const TaskStatus = IDL.Variant({
-    'Blocked' : IDL.Null,
-    'Done' : IDL.Null,
-    'Todo' : IDL.Null,
-    'InProgress' : IDL.Null,
   });
   const Task = IDL.Record({
     'id' : EntityId,
@@ -906,8 +3835,57 @@ export const idlFactory = ({ IDL }) => {
     'tenantId' : TenantId,
     'updatedAt' : Timestamp,
     'projectId' : EntityId,
+    'workspaceId' : WorkspaceId,
     'priority' : TaskPriority,
     'crossLinks' : IDL.Vec(CrossLink),
+  });
+  const TaskTemplateInput = IDL.Record({
+    'name' : IDL.Text,
+    'description' : IDL.Text,
+    'projectId' : IDL.Opt(EntityId),
+    'checklistItems' : IDL.Vec(IDL.Text),
+    'defaultPriority' : TaskPriority,
+    'defaultAssigneeId' : IDL.Opt(UserId),
+  });
+  const TaskTemplate = IDL.Record({
+    'id' : EntityId,
+    'name' : IDL.Text,
+    'createdAt' : Timestamp,
+    'description' : IDL.Text,
+    'tenantId' : TenantId,
+    'updatedAt' : Timestamp,
+    'projectId' : IDL.Opt(EntityId),
+    'checklistItems' : IDL.Vec(IDL.Text),
+    'workspaceId' : WorkspaceId,
+    'defaultPriority' : TaskPriority,
+    'defaultAssigneeId' : IDL.Opt(UserId),
+  });
+  const TimeEntryInput = IDL.Record({
+    'startTime' : Timestamp,
+    'endTime' : IDL.Opt(Timestamp),
+    'taskId' : IDL.Opt(EntityId),
+    'billable' : IDL.Bool,
+    'durationMinutes' : IDL.Nat,
+    'projectId' : EntityId,
+    'notes' : IDL.Text,
+  });
+  const TimeEntry = IDL.Record({
+    'id' : EntityId,
+    'startTime' : Timestamp,
+    'endTime' : IDL.Opt(Timestamp),
+    'userId' : UserId,
+    'createdAt' : Timestamp,
+    'tenantId' : TenantId,
+    'taskId' : IDL.Opt(EntityId),
+    'billable' : IDL.Bool,
+    'durationMinutes' : IDL.Nat,
+    'projectId' : EntityId,
+    'notes' : IDL.Text,
+    'workspaceId' : WorkspaceId,
+  });
+  const AccountType = IDL.Variant({
+    'personal' : IDL.Null,
+    'treasury' : IDL.Null,
   });
   const WalletAccount = IDL.Record({
     'id' : EntityId,
@@ -916,34 +3894,142 @@ export const idlFactory = ({ IDL }) => {
     'btcBalance' : IDL.Nat,
     'userId' : UserId,
     'createdAt' : Timestamp,
+    'icrc1Account' : IDL.Text,
     'icpBalance' : IDL.Nat,
     'tenantId' : TenantId,
     'updatedAt' : Timestamp,
+    'accountType' : AccountType,
+    'workspaceId' : WorkspaceId,
     'principalId' : IDL.Text,
+  });
+  const WhiteboardInput = IDL.Record({
+    'title' : IDL.Text,
+    'templateId' : IDL.Opt(IDL.Text),
+    'templateName' : IDL.Opt(IDL.Text),
+    'projectId' : IDL.Opt(EntityId),
   });
   const WorkspaceInput = IDL.Record({ 'name' : IDL.Text });
   const Workspace = IDL.Record({
     'id' : EntityId,
+    'members' : IDL.Vec(IDL.Tuple(UserId, WorkspaceMember)),
     'ownerId' : UserId,
     'name' : IDL.Text,
     'createdAt' : Timestamp,
     'tenantId' : TenantId,
   });
-  const Message = IDL.Record({
+  const TimeReportFilter = IDL.Record({
+    'userId' : IDL.Opt(UserId),
+    'toDate' : IDL.Opt(Timestamp),
+    'billable' : IDL.Opt(IDL.Bool),
+    'projectId' : IDL.Opt(EntityId),
+    'fromDate' : IDL.Opt(Timestamp),
+  });
+  const TxFilter = IDL.Record({
+    'maxAmount' : IDL.Opt(IDL.Float64),
+    'status' : IDL.Opt(TransactionStatus),
+    'minAmount' : IDL.Opt(IDL.Float64),
+    'toDate' : IDL.Opt(Timestamp),
+    'fromDate' : IDL.Opt(Timestamp),
+    'txType' : IDL.Opt(TransactionType),
+  });
+  const AIProvider = IDL.Variant({
+    'OpenAI' : IDL.Null,
+    'Anthropic' : IDL.Null,
+  });
+  const AIConfig = IDL.Record({
     'id' : EntityId,
+    'model' : IDL.Text,
+    'provider' : AIProvider,
+    'createdAt' : Timestamp,
+    'tenantId' : TenantId,
+    'apiKey' : IDL.Text,
+    'workspaceId' : WorkspaceId,
+  });
+  const AIResponse = IDL.Record({
+    'id' : EntityId,
+    'model' : IDL.Text,
     'content' : IDL.Text,
-    'channelId' : EntityId,
+    'createdAt' : Timestamp,
+    'tokensUsed' : IDL.Nat,
+    'tenantId' : TenantId,
+    'workspaceId' : WorkspaceId,
+    'promptId' : EntityId,
+  });
+  const AvailabilitySlot = IDL.Record({
+    'userId' : UserId,
+    'date' : IDL.Text,
+    'busyPeriods' : IDL.Vec(IDL.Tuple(IDL.Text, IDL.Text)),
+    'timeZone' : IDL.Text,
+  });
+  const EscrowSummary = IDL.Record({
+    'id' : EntityId,
+    'status' : EscrowStatus,
+    'title' : IDL.Text,
+    'createdAt' : Timestamp,
+    'statusHistory' : IDL.Vec(StatusHistoryEntry),
+    'currency' : IDL.Text,
+    'conditions' : IDL.Vec(IDL.Text),
+    'amount' : IDL.Nat,
+    'payeeId' : IDL.Text,
+    'payerId' : IDL.Text,
+    'milestoneCount' : IDL.Nat,
+  });
+  const RsvpStatus = IDL.Variant({
+    'tentative' : IDL.Null,
+    'noResponse' : IDL.Null,
+    'accepted' : IDL.Null,
+    'declined' : IDL.Null,
+  });
+  const EventRsvp = IDL.Record({
+    'id' : EntityId,
+    'status' : RsvpStatus,
+    'eventId' : IDL.Text,
+    'userId' : UserId,
+    'tenantId' : TenantId,
+    'workspaceId' : WorkspaceId,
+    'respondedAt' : IDL.Opt(Timestamp),
+  });
+  const FormSubmission = IDL.Record({
+    'id' : EntityId,
+    'data' : IDL.Vec(IDL.Tuple(IDL.Text, IDL.Text)),
+    'submittedAt' : Timestamp,
+    'tenantId' : TenantId,
+    'workspaceId' : WorkspaceId,
+    'submitterEmail' : IDL.Text,
+    'formId' : EntityId,
+  });
+  const FieldCompletionRate = IDL.Record({
+    'completionRate' : IDL.Float64,
+    'fieldId' : IDL.Text,
+  });
+  const FormAnalytics = IDL.Record({
+    'recentSubmissions' : IDL.Vec(FormSubmission),
+    'fieldCompletionRates' : IDL.Vec(FieldCompletionRate),
+    'submissionCount' : IDL.Nat,
+  });
+  const IntegrationProvider = IDL.Variant({
+    'Slack' : IDL.Null,
+    'GitHub' : IDL.Null,
+    'GoogleDrive' : IDL.Null,
+  });
+  const IntegrationStatus = IDL.Variant({
+    'Error' : IDL.Null,
+    'Connected' : IDL.Null,
+    'Disconnected' : IDL.Null,
+  });
+  const Integration = IDL.Record({
+    'id' : EntityId,
+    'status' : IntegrationStatus,
+    'provider' : IntegrationProvider,
     'createdAt' : Timestamp,
     'tenantId' : TenantId,
     'updatedAt' : Timestamp,
-    'replyToId' : IDL.Opt(EntityId),
-    'crossLinks' : IDL.Vec(CrossLink),
-    'senderId' : UserId,
-  });
-  const Role = IDL.Variant({
-    'Admin' : IDL.Null,
-    'Manager' : IDL.Null,
-    'TeamMember' : IDL.Null,
+    'oauthToken' : IDL.Opt(IDL.Text),
+    'accessToken' : IDL.Text,
+    'workspaceId' : WorkspaceId,
+    'lastSyncAt' : IDL.Opt(Timestamp),
+    'config' : IDL.Text,
+    'syncStatus' : IDL.Opt(IDL.Text),
   });
   const UserProfile = IDL.Record({
     'displayName' : IDL.Text,
@@ -954,6 +4040,125 @@ export const idlFactory = ({ IDL }) => {
     'tenantId' : TenantId,
     'workspaceId' : EntityId,
   });
+  const AIPromptType = IDL.Variant({
+    'SuggestPriorities' : IDL.Null,
+    'MeetingSummary' : IDL.Null,
+    'Custom' : IDL.Null,
+    'WorkspaceQA' : IDL.Null,
+    'Analyze' : IDL.Null,
+    'Generate' : IDL.Null,
+    'Translate' : IDL.Null,
+    'Summarize' : IDL.Null,
+    'GenerateTasks' : IDL.Null,
+  });
+  const AIPrompt = IDL.Record({
+    'id' : EntityId,
+    'model' : IDL.Text,
+    'content' : IDL.Text,
+    'userId' : UserId,
+    'createdAt' : Timestamp,
+    'promptType' : AIPromptType,
+    'tenantId' : TenantId,
+    'workspaceId' : WorkspaceId,
+  });
+  const PublicKeyResult = IDL.Record({
+    'id' : EntityId,
+    'status' : KRStatus,
+    'title' : IDL.Text,
+    'unit' : IDL.Text,
+    'description' : IDL.Opt(IDL.Text),
+    'currentValue' : IDL.Float64,
+    'targetValue' : IDL.Float64,
+  });
+  const PublicGoal = IDL.Record({
+    'id' : EntityId,
+    'status' : GoalStatus,
+    'title' : IDL.Text,
+    'endDate' : Timestamp,
+    'period' : IDL.Text,
+    'description' : IDL.Opt(IDL.Text),
+    'progress' : IDL.Float64,
+    'checkInCount' : IDL.Nat,
+    'keyResults' : IDL.Vec(PublicKeyResult),
+    'startDate' : Timestamp,
+  });
+  const WorkspaceSpendingLimit = IDL.Record({
+    'id' : EntityId,
+    'maxAmount' : IDL.Float64,
+    'createdAt' : Timestamp,
+    'role' : Role,
+    'tenantId' : TenantId,
+    'updatedAt' : Timestamp,
+    'currency' : IDL.Text,
+    'workspaceId' : WorkspaceId,
+  });
+  const TimeReport = IDL.Record({
+    'byUser' : IDL.Vec(IDL.Tuple(UserId, IDL.Float64)),
+    'totalHours' : IDL.Float64,
+    'entries' : IDL.Vec(TimeEntry),
+    'byProject' : IDL.Vec(IDL.Tuple(EntityId, IDL.Float64)),
+    'billableHours' : IDL.Float64,
+    'nonBillableHours' : IDL.Float64,
+  });
+  const UserStatus = IDL.Record({
+    'id' : IDL.Principal,
+    'customStatus' : IDL.Text,
+    'status' : IDL.Variant({
+      'away' : IDL.Null,
+      'offline' : IDL.Null,
+      'online' : IDL.Null,
+    }),
+    'tenantId' : TenantId,
+    'workspaceId' : WorkspaceId,
+    'lastSeen' : IDL.Int,
+  });
+  const DailyTimesheetEntry = IDL.Record({
+    'totalHours' : IDL.Float64,
+    'date' : Timestamp,
+    'entries' : IDL.Vec(TimeEntry),
+  });
+  const DashboardStats = IDL.Record({
+    'memberCount' : IDL.Nat,
+    'goalCount' : IDL.Nat,
+    'noteCount' : IDL.Nat,
+    'taskCount' : IDL.Nat,
+    'projectCount' : IDL.Nat,
+  });
+  const ActivityEntry = IDL.Record({
+    'action' : IDL.Text,
+    'entityTitle' : IDL.Text,
+    'actorId' : IDL.Text,
+    'timestamp' : IDL.Int,
+    'entityType' : IDL.Text,
+  });
+  const ActivityEventType = IDL.Variant({
+    'watcherAdded' : IDL.Null,
+    'checklistItemAdded' : IDL.Null,
+    'checklistItemCompleted' : IDL.Null,
+    'taskAssigned' : IDL.Null,
+    'taskStatusChanged' : IDL.Null,
+    'commentEdited' : IDL.Null,
+    'taskUpdated' : IDL.Null,
+    'subtaskAdded' : IDL.Null,
+    'commentAdded' : IDL.Null,
+    'sprintCompleted' : IDL.Null,
+    'taskCreated' : IDL.Null,
+    'dependencyAdded' : IDL.Null,
+    'sprintStarted' : IDL.Null,
+    'milestoneCreated' : IDL.Null,
+  });
+  const ActivityEvent = IDL.Record({
+    'id' : EntityId,
+    'metadata' : IDL.Text,
+    'createdAt' : Timestamp,
+    'description' : IDL.Text,
+    'actorId' : UserId,
+    'tenantId' : TenantId,
+    'taskId' : EntityId,
+    'projectId' : EntityId,
+    'workspaceId' : WorkspaceId,
+    'eventType' : ActivityEventType,
+  });
   const AuditLog = IDL.Record({
     'id' : EntityId,
     'action' : IDL.Text,
@@ -962,55 +4167,125 @@ export const idlFactory = ({ IDL }) => {
     'entityId' : EntityId,
     'timestamp' : Timestamp,
     'details' : IDL.Text,
+    'workspaceId' : WorkspaceId,
+    'entityType' : IDL.Text,
+  });
+  const GoalCheckIn = IDL.Record({
+    'id' : EntityId,
+    'userId' : UserId,
+    'krId' : IDL.Opt(EntityId),
+    'note' : IDL.Text,
+    'newValue' : IDL.Float64,
+    'goalId' : EntityId,
+    'previousValue' : IDL.Float64,
+    'tenantId' : TenantId,
+    'timestamp' : Timestamp,
+    'workspaceId' : WorkspaceId,
+  });
+  const EscrowFilter = IDL.Record({
+    'status' : IDL.Opt(EscrowStatus),
+    'toDate' : IDL.Opt(Timestamp),
+    'fromDate' : IDL.Opt(Timestamp),
+  });
+  const PayStub = IDL.Record({
+    'id' : EntityId,
+    'taxDeductions' : IDL.Float64,
+    'period' : IDL.Text,
+    'generatedAt' : Timestamp,
+    'grossPay' : IDL.Float64,
+    'netPay' : IDL.Float64,
+    'tenantId' : TenantId,
+    'employeeId' : EntityId,
+    'details' : IDL.Text,
+    'workspaceId' : WorkspaceId,
+    'payrollRecordId' : EntityId,
+    'otherDeductions' : IDL.Float64,
+  });
+  const AuditLogEntry = IDL.Record({
+    'id' : EntityId,
+    'action' : IDL.Text,
+    'tenantId' : TenantId,
+    'entityId' : EntityId,
+    'performedBy' : UserId,
+    'timestamp' : Timestamp,
+    'details' : IDL.Text,
+    'workspaceId' : WorkspaceId,
     'entityType' : IDL.Text,
   });
   const PayrollStatus = IDL.Variant({
     'Paused' : IDL.Null,
     'Active' : IDL.Null,
+    'Approved' : IDL.Null,
+    'Processed' : IDL.Null,
+    'Rejected' : IDL.Null,
+    'PendingApproval' : IDL.Null,
     'Completed' : IDL.Null,
   });
   const PayrollRecord = IDL.Record({
     'id' : EntityId,
     'status' : PayrollStatus,
+    'netAmount' : IDL.Float64,
     'period' : IDL.Text,
+    'approvedAt' : IDL.Opt(Timestamp),
+    'approvedBy' : IDL.Opt(UserId),
     'createdAt' : Timestamp,
+    'rejectionReason' : IDL.Opt(IDL.Text),
+    'grossAmount' : IDL.Float64,
     'tenantId' : TenantId,
     'processedAt' : IDL.Opt(Timestamp),
+    'deductionAmount' : IDL.Float64,
     'employeeId' : EntityId,
     'currency' : IDL.Text,
+    'workspaceId' : WorkspaceId,
+    'taxAmount' : IDL.Float64,
     'amount' : IDL.Nat,
   });
-  const TransactionStatus = IDL.Variant({
-    'Failed' : IDL.Null,
-    'Cancelled' : IDL.Null,
-    'Completed' : IDL.Null,
-    'Pending' : IDL.Null,
+  const WhiteboardTemplate = IDL.Record({
+    'id' : IDL.Text,
+    'name' : IDL.Text,
+    'description' : IDL.Text,
+    'category' : IDL.Text,
+    'definition' : IDL.Text,
   });
-  const TransactionType = IDL.Variant({
-    'Stake' : IDL.Null,
-    'Send' : IDL.Null,
-    'Swap' : IDL.Null,
-    'Unstake' : IDL.Null,
-    'Receive' : IDL.Null,
+  const CheckInInput = IDL.Record({
+    'krId' : IDL.Opt(EntityId),
+    'note' : IDL.Text,
+    'newValue' : IDL.Float64,
+    'goalId' : EntityId,
   });
-  const WalletTransaction = IDL.Record({
-    'id' : EntityId,
-    'status' : TransactionStatus,
-    'asset' : AssetType,
-    'accountId' : EntityId,
-    'fromAddress' : IDL.Opt(IDL.Text),
-    'memo' : IDL.Opt(IDL.Text),
-    'createdAt' : Timestamp,
-    'tenantId' : TenantId,
-    'txType' : TransactionType,
-    'toAddress' : IDL.Opt(IDL.Text),
-    'amount' : IDL.Nat,
+  const EventRsvpInput = IDL.Record({
+    'status' : RsvpStatus,
+    'eventId' : IDL.Text,
+  });
+  const AIConfigInput = IDL.Record({
+    'model' : IDL.Text,
+    'provider' : AIProvider,
+    'apiKey' : IDL.Text,
+  });
+  const IntegrationInput = IDL.Record({
+    'provider' : IntegrationProvider,
+    'oauthToken' : IDL.Opt(IDL.Text),
+    'accessToken' : IDL.Text,
+    'config' : IDL.Text,
   });
   const MessageInput = IDL.Record({
     'content' : IDL.Text,
     'channelId' : EntityId,
     'replyToId' : IDL.Opt(EntityId),
     'crossLinks' : IDL.Vec(CrossLink),
+  });
+  const AIPromptInput = IDL.Record({
+    'model' : IDL.Text,
+    'content' : IDL.Text,
+    'contextData' : IDL.Opt(IDL.Text),
+    'promptType' : AIPromptType,
+    'contextEntityType' : IDL.Opt(IDL.Text),
+    'contextEntityId' : IDL.Opt(EntityId),
+  });
+  const FormSubmissionInput = IDL.Record({
+    'data' : IDL.Vec(IDL.Tuple(IDL.Text, IDL.Text)),
+    'submitterEmail' : IDL.Text,
+    'formId' : EntityId,
   });
   const UserProfileInput = IDL.Record({
     'displayName' : IDL.Text,
@@ -1020,170 +4295,678 @@ export const idlFactory = ({ IDL }) => {
   });
   
   return IDL.Service({
+    'acceptGuestInvitation' : IDL.Func(
+        [TenantId, WorkspaceId, IDL.Text],
+        [IDL.Variant({ 'ok' : GuestUser, 'err' : IDL.Text })],
+        [],
+      ),
+    'addBenefit' : IDL.Func(
+        [TenantId, WorkspaceId, BenefitInput],
+        [IDL.Variant({ 'ok' : Benefit, 'err' : IDL.Text })],
+        [],
+      ),
+    'addChecklistItem' : IDL.Func(
+        [TenantId, WorkspaceId, ChecklistItemInput],
+        [IDL.Variant({ 'ok' : ChecklistItem, 'err' : IDL.Text })],
+        [],
+      ),
+    'addComment' : IDL.Func(
+        [TenantId, WorkspaceId, EntityId, TaskCommentInput],
+        [IDL.Variant({ 'ok' : TaskComment, 'err' : IDL.Text })],
+        [],
+      ),
+    'addContractor' : IDL.Func(
+        [TenantId, WorkspaceId, ContractorInput],
+        [IDL.Variant({ 'ok' : Contractor, 'err' : IDL.Text })],
+        [],
+      ),
+    'addContractorPayment' : IDL.Func(
+        [TenantId, WorkspaceId, ContractorPaymentInput],
+        [IDL.Variant({ 'ok' : ContractorPayment, 'err' : IDL.Text })],
+        [],
+      ),
+    'addDeduction' : IDL.Func(
+        [TenantId, WorkspaceId, DeductionInput],
+        [IDL.Variant({ 'ok' : Deduction, 'err' : IDL.Text })],
+        [],
+      ),
     'addEmployee' : IDL.Func(
-        [TenantId, EmployeeInput],
+        [TenantId, WorkspaceId, EmployeeInput],
         [IDL.Variant({ 'ok' : Employee, 'err' : IDL.Text })],
         [],
       ),
+    'addEscrowMilestone' : IDL.Func(
+        [TenantId, WorkspaceId, EntityId, EscrowMilestoneInput],
+        [IDL.Variant({ 'ok' : EscrowMilestone, 'err' : IDL.Text })],
+        [],
+      ),
+    'addIntegrationEvent' : IDL.Func(
+        [TenantId, WorkspaceId, EntityId, IDL.Text, IDL.Text],
+        [IDL.Variant({ 'ok' : IntegrationEvent, 'err' : IDL.Text })],
+        [],
+      ),
+    'addKeyResult' : IDL.Func(
+        [TenantId, WorkspaceId, KeyResultInput],
+        [IDL.Variant({ 'ok' : KeyResult, 'err' : IDL.Text })],
+        [],
+      ),
+    'addOffCyclePayment' : IDL.Func(
+        [TenantId, WorkspaceId, OffCyclePaymentInput],
+        [IDL.Variant({ 'ok' : OffCyclePayment, 'err' : IDL.Text })],
+        [],
+      ),
+    'addPaySchedule' : IDL.Func(
+        [TenantId, WorkspaceId, PayScheduleInput],
+        [IDL.Variant({ 'ok' : PaySchedule, 'err' : IDL.Text })],
+        [],
+      ),
+    'addReaction' : IDL.Func(
+        [TenantId, WorkspaceId, EntityId, IDL.Text],
+        [IDL.Variant({ 'ok' : Message, 'err' : IDL.Text })],
+        [],
+      ),
+    'addTaskRelationship' : IDL.Func(
+        [TenantId, WorkspaceId, EntityId, EntityId, TaskRelationshipType],
+        [IDL.Variant({ 'ok' : TaskRelationship, 'err' : IDL.Text })],
+        [],
+      ),
+    'addTaskToSprint' : IDL.Func(
+        [TenantId, WorkspaceId, EntityId, EntityId],
+        [IDL.Variant({ 'ok' : Sprint, 'err' : IDL.Text })],
+        [],
+      ),
+    'addTaskWatcher' : IDL.Func(
+        [TenantId, WorkspaceId, EntityId, UserId],
+        [IDL.Variant({ 'ok' : TaskWatcher, 'err' : IDL.Text })],
+        [],
+      ),
+    'addWorkspaceMember' : IDL.Func(
+        [TenantId, EntityId, UserId, WorkspaceRole, IDL.Text, IDL.Text],
+        [IDL.Variant({ 'ok' : WorkspaceMember, 'err' : IDL.Text })],
+        [],
+      ),
+    'approveMilestone' : IDL.Func(
+        [TenantId, WorkspaceId, EntityId],
+        [IDL.Variant({ 'ok' : EscrowMilestone, 'err' : IDL.Text })],
+        [],
+      ),
+    'approveTransaction' : IDL.Func(
+        [TenantId, WorkspaceId, EntityId, IDL.Bool],
+        [IDL.Variant({ 'ok' : WalletTransaction, 'err' : IDL.Text })],
+        [],
+      ),
     'archiveProject' : IDL.Func(
-        [TenantId, EntityId],
+        [TenantId, WorkspaceId, EntityId],
         [IDL.Variant({ 'ok' : Project, 'err' : IDL.Text })],
         [],
       ),
+    'assignArbiter' : IDL.Func(
+        [TenantId, WorkspaceId, EntityId, IDL.Principal],
+        [IDL.Variant({ 'ok' : EscrowDispute, 'err' : IDL.Text })],
+        [],
+      ),
+    'bulkApprovePayroll' : IDL.Func(
+        [TenantId, WorkspaceId, IDL.Vec(EntityId)],
+        [IDL.Variant({ 'ok' : IDL.Bool, 'err' : IDL.Text })],
+        [],
+      ),
     'cancelEscrow' : IDL.Func(
-        [TenantId, EntityId],
+        [TenantId, WorkspaceId, EntityId],
         [IDL.Variant({ 'ok' : EscrowContract, 'err' : IDL.Text })],
         [],
       ),
     'cancelRecurringPayment' : IDL.Func(
-        [TenantId, EntityId],
+        [TenantId, WorkspaceId, EntityId],
         [IDL.Variant({ 'ok' : RecurringPayment, 'err' : IDL.Text })],
         [],
       ),
+    'checkSpendingLimit' : IDL.Func(
+        [TenantId, WorkspaceId, Role, IDL.Float64],
+        [IDL.Bool],
+        ['query'],
+      ),
+    'convertWhiteboardElementToTask' : IDL.Func(
+        [TenantId, WorkspaceId, EntityId, EntityId, EntityId],
+        [IDL.Variant({ 'ok' : Whiteboard, 'err' : IDL.Text })],
+        [],
+      ),
     'createAutomationRule' : IDL.Func(
-        [TenantId, IDL.Text, IDL.Text, AutomationTrigger, AutomationAction],
+        [
+          TenantId,
+          WorkspaceId,
+          IDL.Text,
+          IDL.Text,
+          AutomationTrigger,
+          AutomationAction,
+        ],
         [IDL.Variant({ 'ok' : AutomationRule, 'err' : IDL.Text })],
         [],
       ),
     'createBackup' : IDL.Func(
-        [TenantId, IDL.Text],
+        [TenantId, WorkspaceId, IDL.Text],
         [IDL.Variant({ 'ok' : Backup, 'err' : IDL.Text })],
         [],
       ),
+    'createCalendar' : IDL.Func(
+        [TenantId, WorkspaceId, CalendarDefInput],
+        [IDL.Variant({ 'ok' : CalendarDef, 'err' : IDL.Text })],
+        [],
+      ),
     'createChannel' : IDL.Func(
-        [TenantId, ChannelInput],
+        [TenantId, WorkspaceId, ChannelInput],
         [IDL.Variant({ 'ok' : Channel, 'err' : IDL.Text })],
         [],
       ),
     'createEscrow' : IDL.Func(
-        [TenantId, EscrowInput],
+        [TenantId, WorkspaceId, EscrowInput],
         [IDL.Variant({ 'ok' : EscrowContract, 'err' : IDL.Text })],
         [],
       ),
     'createEvent' : IDL.Func(
-        [TenantId, EventInput],
+        [TenantId, WorkspaceId, EventInput],
         [IDL.Variant({ 'ok' : Event, 'err' : IDL.Text })],
         [],
       ),
+    'createEventException' : IDL.Func(
+        [TenantId, WorkspaceId, EventExceptionInput],
+        [IDL.Variant({ 'ok' : EventException, 'err' : IDL.Text })],
+        [],
+      ),
+    'createForm' : IDL.Func(
+        [TenantId, WorkspaceId, FormInput],
+        [IDL.Variant({ 'ok' : Form, 'err' : IDL.Text })],
+        [],
+      ),
+    'createGoal' : IDL.Func(
+        [TenantId, WorkspaceId, GoalInput],
+        [IDL.Variant({ 'ok' : Goal, 'err' : IDL.Text })],
+        [],
+      ),
+    'createGuestInvitation' : IDL.Func(
+        [TenantId, WorkspaceId, GuestInvitationInput],
+        [IDL.Variant({ 'ok' : GuestInvitation, 'err' : IDL.Text })],
+        [],
+      ),
+    'createMilestone' : IDL.Func(
+        [TenantId, WorkspaceId, MilestoneInput],
+        [IDL.Variant({ 'ok' : Milestone, 'err' : IDL.Text })],
+        [],
+      ),
     'createNote' : IDL.Func(
-        [TenantId, NoteInput],
+        [TenantId, WorkspaceId, NoteInput],
         [IDL.Variant({ 'ok' : Note, 'err' : IDL.Text })],
         [],
       ),
+    'createNoteTemplate' : IDL.Func(
+        [TenantId, WorkspaceId, NoteTemplateInput],
+        [IDL.Variant({ 'ok' : NoteTemplate, 'err' : IDL.Text })],
+        [],
+      ),
+    'createPage' : IDL.Func(
+        [TenantId, WorkspaceId, PageInput],
+        [IDL.Variant({ 'ok' : PageNode, 'err' : IDL.Text })],
+        [],
+      ),
     'createProject' : IDL.Func(
-        [TenantId, ProjectInput],
+        [TenantId, WorkspaceId, ProjectInput],
         [IDL.Variant({ 'ok' : Project, 'err' : IDL.Text })],
         [],
       ),
+    'createProjectFromTemplate' : IDL.Func(
+        [TenantId, WorkspaceId, IDL.Text, IDL.Text, IDL.Text],
+        [IDL.Variant({ 'ok' : EntityId, 'err' : IDL.Text })],
+        [],
+      ),
     'createRecurringPayment' : IDL.Func(
-        [TenantId, EntityId, IDL.Text, IDL.Nat, AssetType, PayFrequency],
+        [
+          TenantId,
+          WorkspaceId,
+          EntityId,
+          IDL.Text,
+          IDL.Nat,
+          AssetType,
+          PayFrequency,
+        ],
         [IDL.Variant({ 'ok' : RecurringPayment, 'err' : IDL.Text })],
         [],
       ),
+    'createRecurringTask' : IDL.Func(
+        [TenantId, WorkspaceId, RecurringTaskInput],
+        [IDL.Variant({ 'ok' : RecurringTask, 'err' : IDL.Text })],
+        [],
+      ),
+    'createSprint' : IDL.Func(
+        [TenantId, WorkspaceId, SprintInput],
+        [IDL.Variant({ 'ok' : Sprint, 'err' : IDL.Text })],
+        [],
+      ),
+    'createSubtask' : IDL.Func(
+        [TenantId, WorkspaceId, SubtaskInput],
+        [IDL.Variant({ 'ok' : Subtask, 'err' : IDL.Text })],
+        [],
+      ),
     'createTask' : IDL.Func(
-        [TenantId, TaskInput],
+        [TenantId, WorkspaceId, TaskInput],
         [IDL.Variant({ 'ok' : Task, 'err' : IDL.Text })],
         [],
       ),
+    'createTaskTemplate' : IDL.Func(
+        [TenantId, WorkspaceId, TaskTemplateInput],
+        [IDL.Variant({ 'ok' : TaskTemplate, 'err' : IDL.Text })],
+        [],
+      ),
+    'createTimeEntry' : IDL.Func(
+        [TenantId, WorkspaceId, TimeEntryInput],
+        [IDL.Variant({ 'ok' : TimeEntry, 'err' : IDL.Text })],
+        [],
+      ),
     'createWalletAccount' : IDL.Func(
-        [TenantId, IDL.Text],
+        [TenantId, WorkspaceId, IDL.Text],
         [IDL.Variant({ 'ok' : WalletAccount, 'err' : IDL.Text })],
         [],
       ),
+    'createWhiteboard' : IDL.Func(
+        [TenantId, WorkspaceId, WhiteboardInput],
+        [IDL.Variant({ 'ok' : Whiteboard, 'err' : IDL.Text })],
+        [],
+      ),
     'createWorkspace' : IDL.Func(
-        [TenantId, WorkspaceInput],
+        [TenantId, WorkspaceInput, IDL.Text, IDL.Text],
         [IDL.Variant({ 'ok' : Workspace, 'err' : IDL.Text })],
         [],
       ),
+    'createWorkspaceTreasury' : IDL.Func(
+        [TenantId, WorkspaceId],
+        [IDL.Variant({ 'ok' : WalletAccount, 'err' : IDL.Text })],
+        [],
+      ),
     'deactivateEmployee' : IDL.Func(
-        [TenantId, EntityId],
+        [TenantId, WorkspaceId, EntityId],
         [IDL.Variant({ 'ok' : Employee, 'err' : IDL.Text })],
         [],
       ),
+    'deleteCalendar' : IDL.Func(
+        [TenantId, WorkspaceId, EntityId],
+        [IDL.Variant({ 'ok' : IDL.Bool, 'err' : IDL.Text })],
+        [],
+      ),
+    'deleteChannel' : IDL.Func(
+        [TenantId, WorkspaceId, EntityId],
+        [IDL.Variant({ 'ok' : IDL.Bool, 'err' : IDL.Text })],
+        [],
+      ),
+    'deleteChecklistItem' : IDL.Func(
+        [TenantId, WorkspaceId, EntityId],
+        [IDL.Variant({ 'ok' : IDL.Bool, 'err' : IDL.Text })],
+        [],
+      ),
+    'deleteComment' : IDL.Func(
+        [TenantId, WorkspaceId, EntityId],
+        [IDL.Variant({ 'ok' : IDL.Bool, 'err' : IDL.Text })],
+        [],
+      ),
     'deleteEvent' : IDL.Func(
-        [TenantId, EntityId],
+        [TenantId, WorkspaceId, EntityId],
+        [IDL.Variant({ 'ok' : IDL.Bool, 'err' : IDL.Text })],
+        [],
+      ),
+    'deleteForm' : IDL.Func(
+        [TenantId, WorkspaceId, EntityId],
+        [IDL.Variant({ 'ok' : IDL.Bool, 'err' : IDL.Text })],
+        [],
+      ),
+    'deleteGoal' : IDL.Func(
+        [TenantId, WorkspaceId, EntityId],
+        [IDL.Variant({ 'ok' : IDL.Bool, 'err' : IDL.Text })],
+        [],
+      ),
+    'deleteIntegration' : IDL.Func(
+        [TenantId, WorkspaceId, EntityId],
+        [IDL.Variant({ 'ok' : IDL.Bool, 'err' : IDL.Text })],
+        [],
+      ),
+    'deleteKeyResult' : IDL.Func(
+        [TenantId, WorkspaceId, EntityId],
         [IDL.Variant({ 'ok' : IDL.Bool, 'err' : IDL.Text })],
         [],
       ),
     'deleteMessage' : IDL.Func(
-        [TenantId, EntityId],
+        [TenantId, WorkspaceId, EntityId],
+        [IDL.Variant({ 'ok' : IDL.Bool, 'err' : IDL.Text })],
+        [],
+      ),
+    'deleteMilestone' : IDL.Func(
+        [TenantId, WorkspaceId, EntityId],
         [IDL.Variant({ 'ok' : IDL.Bool, 'err' : IDL.Text })],
         [],
       ),
     'deleteNote' : IDL.Func(
-        [TenantId, EntityId],
+        [TenantId, WorkspaceId, EntityId],
+        [IDL.Variant({ 'ok' : IDL.Bool, 'err' : IDL.Text })],
+        [],
+      ),
+    'deleteNoteTemplate' : IDL.Func(
+        [TenantId, WorkspaceId, EntityId],
+        [IDL.Variant({ 'ok' : IDL.Bool, 'err' : IDL.Text })],
+        [],
+      ),
+    'deletePage' : IDL.Func(
+        [TenantId, WorkspaceId, EntityId],
+        [IDL.Variant({ 'ok' : IDL.Bool, 'err' : IDL.Text })],
+        [],
+      ),
+    'deleteRecurringTask' : IDL.Func(
+        [TenantId, WorkspaceId, EntityId],
+        [IDL.Variant({ 'ok' : IDL.Bool, 'err' : IDL.Text })],
+        [],
+      ),
+    'deleteSprint' : IDL.Func(
+        [TenantId, WorkspaceId, EntityId],
+        [IDL.Variant({ 'ok' : IDL.Bool, 'err' : IDL.Text })],
+        [],
+      ),
+    'deleteSubtask' : IDL.Func(
+        [TenantId, WorkspaceId, EntityId],
         [IDL.Variant({ 'ok' : IDL.Bool, 'err' : IDL.Text })],
         [],
       ),
     'deleteTask' : IDL.Func(
-        [TenantId, EntityId],
+        [TenantId, WorkspaceId, EntityId],
         [IDL.Variant({ 'ok' : IDL.Bool, 'err' : IDL.Text })],
         [],
       ),
-    'disputeEscrow' : IDL.Func(
-        [TenantId, EntityId],
+    'deleteTaskTemplate' : IDL.Func(
+        [TenantId, WorkspaceId, EntityId],
+        [IDL.Variant({ 'ok' : IDL.Bool, 'err' : IDL.Text })],
+        [],
+      ),
+    'deleteTimeEntry' : IDL.Func(
+        [TenantId, WorkspaceId, EntityId],
+        [IDL.Variant({ 'ok' : IDL.Bool, 'err' : IDL.Text })],
+        [],
+      ),
+    'deleteWhiteboard' : IDL.Func(
+        [TenantId, WorkspaceId, EntityId],
+        [IDL.Variant({ 'ok' : IDL.Bool, 'err' : IDL.Text })],
+        [],
+      ),
+    'depositEscrow' : IDL.Func(
+        [TenantId, WorkspaceId, EntityId],
         [IDL.Variant({ 'ok' : EscrowContract, 'err' : IDL.Text })],
         [],
+      ),
+    'disputeEscrow' : IDL.Func(
+        [TenantId, WorkspaceId, EntityId],
+        [IDL.Variant({ 'ok' : EscrowContract, 'err' : IDL.Text })],
+        [],
+      ),
+    'editComment' : IDL.Func(
+        [TenantId, WorkspaceId, EntityId, IDL.Text],
+        [IDL.Variant({ 'ok' : TaskComment, 'err' : IDL.Text })],
+        [],
+      ),
+    'exportTimeEntries' : IDL.Func(
+        [WorkspaceId, TenantId, TimeReportFilter],
+        [IDL.Text],
+        ['query'],
+      ),
+    'exportTransactions' : IDL.Func(
+        [TenantId, WorkspaceId, EntityId, IDL.Opt(TxFilter)],
+        [IDL.Text],
+        ['query'],
       ),
     'fundEscrow' : IDL.Func(
-        [TenantId, EntityId],
+        [TenantId, WorkspaceId, EntityId],
         [IDL.Variant({ 'ok' : EscrowContract, 'err' : IDL.Text })],
         [],
       ),
+    'getAIConfig' : IDL.Func(
+        [TenantId, WorkspaceId],
+        [IDL.Opt(AIConfig)],
+        ['query'],
+      ),
+    'getAIResponses' : IDL.Func(
+        [TenantId, WorkspaceId, IDL.Opt(EntityId), IDL.Nat],
+        [IDL.Vec(AIResponse)],
+        ['query'],
+      ),
+    'getAvailability' : IDL.Func(
+        [TenantId, WorkspaceId, IDL.Vec(UserId), IDL.Text, IDL.Text],
+        [IDL.Vec(AvailabilitySlot)],
+        ['query'],
+      ),
+    'getBacklinks' : IDL.Func(
+        [TenantId, WorkspaceId, EntityId],
+        [IDL.Vec(PageNode)],
+        ['query'],
+      ),
     'getBackup' : IDL.Func(
-        [TenantId, EntityId],
+        [TenantId, WorkspaceId, EntityId],
         [IDL.Variant({ 'ok' : Backup, 'err' : IDL.Text })],
         ['query'],
       ),
+    'getCalendar' : IDL.Func(
+        [TenantId, WorkspaceId, EntityId],
+        [IDL.Variant({ 'ok' : CalendarDef, 'err' : IDL.Text })],
+        ['query'],
+      ),
     'getChannel' : IDL.Func(
-        [TenantId, EntityId],
+        [TenantId, WorkspaceId, EntityId],
         [IDL.Variant({ 'ok' : Channel, 'err' : IDL.Text })],
         ['query'],
       ),
+    'getChannelPins' : IDL.Func(
+        [TenantId, WorkspaceId, EntityId],
+        [IDL.Vec(Message)],
+        ['query'],
+      ),
+    'getContractor' : IDL.Func(
+        [TenantId, WorkspaceId, EntityId],
+        [IDL.Variant({ 'ok' : Contractor, 'err' : IDL.Text })],
+        ['query'],
+      ),
     'getEmployee' : IDL.Func(
-        [TenantId, EntityId],
+        [TenantId, WorkspaceId, EntityId],
         [IDL.Variant({ 'ok' : Employee, 'err' : IDL.Text })],
         ['query'],
       ),
     'getEscrow' : IDL.Func(
-        [TenantId, EntityId],
+        [TenantId, WorkspaceId, EntityId],
         [IDL.Variant({ 'ok' : EscrowContract, 'err' : IDL.Text })],
         ['query'],
       ),
+    'getEscrowDispute' : IDL.Func(
+        [TenantId, WorkspaceId, EntityId],
+        [IDL.Variant({ 'ok' : EscrowDispute, 'err' : IDL.Text })],
+        ['query'],
+      ),
+    'getEscrowSummary' : IDL.Func(
+        [TenantId, WorkspaceId, EntityId],
+        [IDL.Variant({ 'ok' : EscrowSummary, 'err' : IDL.Text })],
+        ['query'],
+      ),
     'getEvent' : IDL.Func(
-        [TenantId, EntityId],
+        [TenantId, WorkspaceId, EntityId],
         [IDL.Variant({ 'ok' : Event, 'err' : IDL.Text })],
         ['query'],
       ),
+    'getEventException' : IDL.Func(
+        [TenantId, WorkspaceId, EntityId],
+        [IDL.Variant({ 'ok' : EventException, 'err' : IDL.Text })],
+        ['query'],
+      ),
+    'getEventRsvps' : IDL.Func(
+        [TenantId, WorkspaceId, IDL.Text],
+        [IDL.Vec(EventRsvp)],
+        ['query'],
+      ),
+    'getForm' : IDL.Func(
+        [TenantId, WorkspaceId, EntityId],
+        [IDL.Variant({ 'ok' : Form, 'err' : IDL.Text })],
+        ['query'],
+      ),
+    'getFormAnalytics' : IDL.Func(
+        [TenantId, WorkspaceId, EntityId],
+        [FormAnalytics],
+        ['query'],
+      ),
+    'getGoal' : IDL.Func(
+        [TenantId, WorkspaceId, EntityId],
+        [IDL.Variant({ 'ok' : Goal, 'err' : IDL.Text })],
+        ['query'],
+      ),
+    'getGuestUser' : IDL.Func(
+        [TenantId, WorkspaceId, EntityId],
+        [IDL.Opt(GuestUser)],
+        ['query'],
+      ),
+    'getIntegrationActivityLog' : IDL.Func(
+        [
+          TenantId,
+          WorkspaceId,
+          IDL.Opt(IntegrationProvider),
+          IDL.Opt(Timestamp),
+          IDL.Opt(Timestamp),
+          IDL.Nat,
+        ],
+        [IDL.Vec(IntegrationEvent)],
+        ['query'],
+      ),
+    'getIntegrationEvents' : IDL.Func(
+        [TenantId, WorkspaceId, EntityId, IDL.Nat],
+        [IDL.Vec(IntegrationEvent)],
+        ['query'],
+      ),
+    'getIntegrations' : IDL.Func(
+        [TenantId, WorkspaceId],
+        [IDL.Vec(Integration)],
+        ['query'],
+      ),
     'getMessages' : IDL.Func(
-        [TenantId, EntityId, IDL.Nat, IDL.Opt(Timestamp)],
+        [TenantId, WorkspaceId, EntityId, IDL.Nat, IDL.Opt(Timestamp)],
         [IDL.Vec(Message)],
         ['query'],
       ),
     'getMyProfile' : IDL.Func([TenantId], [IDL.Opt(UserProfile)], ['query']),
     'getMyWalletAccount' : IDL.Func(
-        [TenantId],
+        [TenantId, WorkspaceId],
         [IDL.Opt(WalletAccount)],
-        ['query'],
+        [],
       ),
     'getNote' : IDL.Func(
-        [TenantId, EntityId],
+        [TenantId, WorkspaceId, EntityId],
         [IDL.Variant({ 'ok' : Note, 'err' : IDL.Text })],
         ['query'],
       ),
+    'getOrCreateWorkspaceShareToken' : IDL.Func(
+        [WorkspaceId, TenantId],
+        [IDL.Text],
+        [],
+      ),
+    'getPage' : IDL.Func(
+        [TenantId, WorkspaceId, EntityId],
+        [IDL.Variant({ 'ok' : PageNode, 'err' : IDL.Text })],
+        ['query'],
+      ),
+    'getPageHierarchy' : IDL.Func(
+        [TenantId, WorkspaceId],
+        [IDL.Vec(PageNode)],
+        ['query'],
+      ),
+    'getPendingApprovals' : IDL.Func(
+        [TenantId, WorkspaceId],
+        [IDL.Vec(WalletTransaction)],
+        ['query'],
+      ),
     'getProject' : IDL.Func(
-        [TenantId, EntityId],
+        [TenantId, WorkspaceId, EntityId],
         [IDL.Variant({ 'ok' : Project, 'err' : IDL.Text })],
         ['query'],
       ),
+    'getProjectTimeEntries' : IDL.Func(
+        [TenantId, WorkspaceId, EntityId],
+        [IDL.Vec(TimeEntry)],
+        ['query'],
+      ),
+    'getPromptHistory' : IDL.Func(
+        [TenantId, WorkspaceId, IDL.Opt(UserId), IDL.Nat],
+        [IDL.Vec(AIPrompt)],
+        ['query'],
+      ),
+    'getPublicForm' : IDL.Func([IDL.Text], [IDL.Opt(Form)], ['query']),
+    'getPublicGoals' : IDL.Func(
+        [IDL.Text],
+        [IDL.Variant({ 'ok' : IDL.Vec(PublicGoal), 'err' : IDL.Text })],
+        ['query'],
+      ),
+    'getReceiveAddress' : IDL.Func(
+        [TenantId, WorkspaceId, EntityId],
+        [IDL.Variant({ 'ok' : IDL.Text, 'err' : IDL.Text })],
+        ['query'],
+      ),
+    'getSpendingLimit' : IDL.Func(
+        [TenantId, WorkspaceId, Role],
+        [IDL.Opt(WorkspaceSpendingLimit)],
+        ['query'],
+      ),
+    'getSprint' : IDL.Func(
+        [TenantId, WorkspaceId, EntityId],
+        [IDL.Variant({ 'ok' : Sprint, 'err' : IDL.Text })],
+        ['query'],
+      ),
     'getTask' : IDL.Func(
-        [TenantId, EntityId],
+        [TenantId, WorkspaceId, EntityId],
         [IDL.Variant({ 'ok' : Task, 'err' : IDL.Text })],
         ['query'],
       ),
+    'getTaskTemplate' : IDL.Func(
+        [TenantId, WorkspaceId, EntityId],
+        [IDL.Variant({ 'ok' : TaskTemplate, 'err' : IDL.Text })],
+        ['query'],
+      ),
+    'getTaskTimeEntries' : IDL.Func(
+        [TenantId, WorkspaceId, EntityId],
+        [IDL.Vec(TimeEntry)],
+        ['query'],
+      ),
+    'getThreadMessages' : IDL.Func(
+        [TenantId, WorkspaceId, EntityId],
+        [IDL.Vec(Message)],
+        ['query'],
+      ),
+    'getTimeReport' : IDL.Func(
+        [WorkspaceId, TenantId, TimeReportFilter],
+        [TimeReport],
+        ['query'],
+      ),
+    'getUnreadCounts' : IDL.Func(
+        [TenantId, WorkspaceId],
+        [IDL.Vec(IDL.Tuple(IDL.Text, IDL.Nat))],
+        ['query'],
+      ),
+    'getUserStatus' : IDL.Func(
+        [TenantId, WorkspaceId, IDL.Principal],
+        [IDL.Opt(UserStatus)],
+        ['query'],
+      ),
+    'getUserTimeEntries' : IDL.Func(
+        [TenantId, WorkspaceId, UserId],
+        [IDL.Vec(TimeEntry)],
+        ['query'],
+      ),
     'getWalletAccount' : IDL.Func(
-        [TenantId, EntityId],
+        [TenantId, WorkspaceId, EntityId],
         [IDL.Variant({ 'ok' : WalletAccount, 'err' : IDL.Text })],
+        ['query'],
+      ),
+    'getWeeklyTimesheet' : IDL.Func(
+        [WorkspaceId, TenantId, UserId, Timestamp],
+        [IDL.Vec(DailyTimesheetEntry)],
+        ['query'],
+      ),
+    'getWhiteboard' : IDL.Func(
+        [TenantId, WorkspaceId, EntityId],
+        [IDL.Variant({ 'ok' : Whiteboard, 'err' : IDL.Text })],
         ['query'],
       ),
     'getWorkspace' : IDL.Func(
@@ -1191,8 +4974,23 @@ export const idlFactory = ({ IDL }) => {
         [IDL.Variant({ 'ok' : Workspace, 'err' : IDL.Text })],
         ['query'],
       ),
+    'getWorkspaceDashboardStats' : IDL.Func(
+        [WorkspaceId, TenantId],
+        [DashboardStats],
+        ['query'],
+      ),
+    'getWorkspaceMember' : IDL.Func(
+        [TenantId, EntityId, UserId],
+        [IDL.Opt(WorkspaceMember)],
+        ['query'],
+      ),
+    'getWorkspaceRecentActivity' : IDL.Func(
+        [WorkspaceId, TenantId, IDL.Nat],
+        [IDL.Vec(ActivityEntry)],
+        ['query'],
+      ),
     'getWorkspaceStats' : IDL.Func(
-        [TenantId],
+        [TenantId, WorkspaceId],
         [
           IDL.Record({
             'walletAccountCount' : IDL.Nat,
@@ -1204,100 +5002,598 @@ export const idlFactory = ({ IDL }) => {
         ],
         ['query'],
       ),
+    'getWorkspaceTreasury' : IDL.Func(
+        [TenantId, WorkspaceId],
+        [IDL.Opt(WalletAccount)],
+        [],
+      ),
+    'isWatching' : IDL.Func(
+        [TenantId, WorkspaceId, EntityId, UserId],
+        [IDL.Bool],
+        ['query'],
+      ),
     'joinChannel' : IDL.Func(
-        [TenantId, EntityId],
+        [TenantId, WorkspaceId, EntityId],
         [IDL.Variant({ 'ok' : Channel, 'err' : IDL.Text })],
         [],
       ),
+    'leaveChannel' : IDL.Func(
+        [TenantId, WorkspaceId, EntityId],
+        [IDL.Variant({ 'ok' : Channel, 'err' : IDL.Text })],
+        [],
+      ),
+    'linkTaskToKR' : IDL.Func(
+        [TenantId, WorkspaceId, EntityId, EntityId],
+        [IDL.Variant({ 'ok' : KeyResult, 'err' : IDL.Text })],
+        [],
+      ),
+    'listActivityEvents' : IDL.Func(
+        [TenantId, WorkspaceId, EntityId],
+        [IDL.Vec(ActivityEvent)],
+        ['query'],
+      ),
     'listAuditLogs' : IDL.Func(
-        [TenantId, IDL.Nat],
+        [TenantId, WorkspaceId, IDL.Nat],
         [IDL.Vec(AuditLog)],
         ['query'],
       ),
     'listAutomationRules' : IDL.Func(
-        [TenantId],
+        [TenantId, WorkspaceId],
         [IDL.Vec(AutomationRule)],
         ['query'],
       ),
-    'listBackups' : IDL.Func([TenantId], [IDL.Vec(Backup)], ['query']),
-    'listChannels' : IDL.Func([TenantId], [IDL.Vec(Channel)], ['query']),
-    'listEmployees' : IDL.Func([TenantId], [IDL.Vec(Employee)], ['query']),
-    'listEscrows' : IDL.Func([TenantId], [IDL.Vec(EscrowContract)], ['query']),
+    'listBackups' : IDL.Func(
+        [TenantId, WorkspaceId],
+        [IDL.Vec(Backup)],
+        ['query'],
+      ),
+    'listBenefits' : IDL.Func(
+        [TenantId, WorkspaceId, IDL.Opt(EntityId)],
+        [IDL.Vec(Benefit)],
+        ['query'],
+      ),
+    'listCalendars' : IDL.Func(
+        [TenantId, WorkspaceId, IDL.Opt(UserId)],
+        [IDL.Vec(CalendarDef)],
+        ['query'],
+      ),
+    'listChannels' : IDL.Func(
+        [TenantId, WorkspaceId],
+        [IDL.Vec(Channel)],
+        ['query'],
+      ),
+    'listCheckIns' : IDL.Func(
+        [TenantId, WorkspaceId, EntityId],
+        [IDL.Vec(GoalCheckIn)],
+        ['query'],
+      ),
+    'listChecklistItems' : IDL.Func(
+        [TenantId, WorkspaceId, EntityId],
+        [IDL.Vec(ChecklistItem)],
+        ['query'],
+      ),
+    'listComments' : IDL.Func(
+        [TenantId, WorkspaceId, EntityId],
+        [IDL.Vec(TaskComment)],
+        ['query'],
+      ),
+    'listContractorPayments' : IDL.Func(
+        [TenantId, WorkspaceId, IDL.Opt(EntityId)],
+        [IDL.Vec(ContractorPayment)],
+        ['query'],
+      ),
+    'listContractors' : IDL.Func(
+        [TenantId, WorkspaceId],
+        [IDL.Vec(Contractor)],
+        ['query'],
+      ),
+    'listDeductions' : IDL.Func(
+        [TenantId, WorkspaceId, IDL.Opt(EntityId)],
+        [IDL.Vec(Deduction)],
+        ['query'],
+      ),
+    'listEmployees' : IDL.Func(
+        [TenantId, WorkspaceId],
+        [IDL.Vec(Employee)],
+        ['query'],
+      ),
+    'listEscrowDisputes' : IDL.Func(
+        [TenantId, WorkspaceId, EntityId],
+        [IDL.Vec(EscrowDispute)],
+        ['query'],
+      ),
+    'listEscrowMilestones' : IDL.Func(
+        [TenantId, WorkspaceId, EntityId],
+        [IDL.Vec(EscrowMilestone)],
+        ['query'],
+      ),
+    'listEscrows' : IDL.Func(
+        [TenantId, WorkspaceId, IDL.Opt(EscrowFilter)],
+        [IDL.Vec(EscrowContract)],
+        ['query'],
+      ),
+    'listEventExceptions' : IDL.Func(
+        [TenantId, WorkspaceId, IDL.Text],
+        [IDL.Vec(EventException)],
+        ['query'],
+      ),
+    'listEventRsvps' : IDL.Func(
+        [TenantId, WorkspaceId, UserId],
+        [IDL.Vec(EventRsvp)],
+        ['query'],
+      ),
     'listEvents' : IDL.Func(
-        [TenantId, Timestamp, Timestamp],
+        [TenantId, WorkspaceId, Timestamp, Timestamp],
         [IDL.Vec(Event)],
         ['query'],
       ),
-    'listMyEvents' : IDL.Func([TenantId], [IDL.Vec(Event)], ['query']),
-    'listNotes' : IDL.Func([TenantId], [IDL.Vec(Note)], ['query']),
+    'listFormSubmissions' : IDL.Func(
+        [TenantId, WorkspaceId, EntityId],
+        [IDL.Vec(FormSubmission)],
+        ['query'],
+      ),
+    'listForms' : IDL.Func([TenantId, WorkspaceId], [IDL.Vec(Form)], ['query']),
+    'listGoals' : IDL.Func([TenantId, WorkspaceId], [IDL.Vec(Goal)], ['query']),
+    'listGuestUsers' : IDL.Func(
+        [TenantId, WorkspaceId],
+        [IDL.Vec(GuestUser)],
+        ['query'],
+      ),
+    'listKeyResults' : IDL.Func(
+        [TenantId, WorkspaceId, EntityId],
+        [IDL.Vec(KeyResult)],
+        ['query'],
+      ),
+    'listMessages' : IDL.Func(
+        [TenantId, WorkspaceId, EntityId, IDL.Nat, IDL.Opt(Timestamp)],
+        [IDL.Vec(Message)],
+        ['query'],
+      ),
+    'listMilestones' : IDL.Func(
+        [TenantId, WorkspaceId, EntityId],
+        [IDL.Vec(Milestone)],
+        ['query'],
+      ),
+    'listMyEvents' : IDL.Func(
+        [TenantId, WorkspaceId],
+        [IDL.Vec(Event)],
+        ['query'],
+      ),
+    'listNoteTemplates' : IDL.Func(
+        [TenantId, WorkspaceId],
+        [IDL.Vec(NoteTemplate)],
+        ['query'],
+      ),
+    'listNotes' : IDL.Func([TenantId, WorkspaceId], [IDL.Vec(Note)], ['query']),
+    'listOffCyclePayments' : IDL.Func(
+        [TenantId, WorkspaceId, IDL.Opt(EntityId)],
+        [IDL.Vec(OffCyclePayment)],
+        ['query'],
+      ),
+    'listPages' : IDL.Func(
+        [TenantId, WorkspaceId, IDL.Opt(EntityId)],
+        [IDL.Vec(PageNode)],
+        ['query'],
+      ),
+    'listPaySchedules' : IDL.Func(
+        [TenantId, WorkspaceId],
+        [IDL.Vec(PaySchedule)],
+        ['query'],
+      ),
+    'listPayStubs' : IDL.Func(
+        [TenantId, WorkspaceId, IDL.Opt(EntityId)],
+        [IDL.Vec(PayStub)],
+        ['query'],
+      ),
+    'listPayrollAuditLog' : IDL.Func(
+        [TenantId, WorkspaceId, IDL.Nat],
+        [IDL.Vec(AuditLogEntry)],
+        ['query'],
+      ),
     'listPayrollRecords' : IDL.Func(
-        [TenantId, IDL.Opt(EntityId)],
+        [TenantId, WorkspaceId, IDL.Opt(EntityId)],
         [IDL.Vec(PayrollRecord)],
         ['query'],
       ),
     'listProfiles' : IDL.Func([TenantId], [IDL.Vec(UserProfile)], ['query']),
-    'listProjects' : IDL.Func([TenantId], [IDL.Vec(Project)], ['query']),
+    'listProjectDeadlines' : IDL.Func(
+        [TenantId, WorkspaceId],
+        [IDL.Vec(Event)],
+        ['query'],
+      ),
+    'listProjects' : IDL.Func(
+        [TenantId, WorkspaceId],
+        [IDL.Vec(Project)],
+        ['query'],
+      ),
     'listRecurringPayments' : IDL.Func(
-        [TenantId, EntityId],
+        [TenantId, WorkspaceId, EntityId],
         [IDL.Vec(RecurringPayment)],
         ['query'],
       ),
-    'listTasks' : IDL.Func([TenantId, EntityId], [IDL.Vec(Task)], ['query']),
+    'listRecurringTasks' : IDL.Func(
+        [TenantId, WorkspaceId, EntityId],
+        [IDL.Vec(RecurringTask)],
+        ['query'],
+      ),
+    'listSprints' : IDL.Func(
+        [TenantId, WorkspaceId, EntityId],
+        [IDL.Vec(Sprint)],
+        ['query'],
+      ),
+    'listSubtasks' : IDL.Func(
+        [TenantId, WorkspaceId, EntityId],
+        [IDL.Vec(Subtask)],
+        ['query'],
+      ),
+    'listTaskRelationships' : IDL.Func(
+        [TenantId, WorkspaceId, EntityId],
+        [IDL.Vec(TaskRelationship)],
+        ['query'],
+      ),
+    'listTaskTemplates' : IDL.Func(
+        [TenantId, WorkspaceId],
+        [IDL.Vec(TaskTemplate)],
+        ['query'],
+      ),
+    'listTaskWatchers' : IDL.Func(
+        [TenantId, WorkspaceId, EntityId],
+        [IDL.Vec(TaskWatcher)],
+        ['query'],
+      ),
+    'listTasks' : IDL.Func(
+        [TenantId, WorkspaceId, EntityId],
+        [IDL.Vec(Task)],
+        ['query'],
+      ),
     'listTransactions' : IDL.Func(
-        [TenantId, EntityId],
+        [TenantId, WorkspaceId, EntityId, IDL.Opt(TxFilter)],
         [IDL.Vec(WalletTransaction)],
         ['query'],
       ),
+    'listWhiteboardTemplates' : IDL.Func(
+        [],
+        [IDL.Vec(WhiteboardTemplate)],
+        ['query'],
+      ),
+    'listWhiteboards' : IDL.Func(
+        [TenantId, WorkspaceId],
+        [IDL.Vec(Whiteboard)],
+        ['query'],
+      ),
+    'listWorkspaceMembers' : IDL.Func(
+        [TenantId, EntityId],
+        [IDL.Vec(WorkspaceMember)],
+        ['query'],
+      ),
     'listWorkspaces' : IDL.Func([TenantId], [IDL.Vec(Workspace)], ['query']),
+    'markChannelRead' : IDL.Func(
+        [TenantId, WorkspaceId, EntityId],
+        [IDL.Variant({ 'ok' : IDL.Bool, 'err' : IDL.Text })],
+        [],
+      ),
+    'pinMessage' : IDL.Func(
+        [TenantId, WorkspaceId, EntityId, IDL.Text],
+        [IDL.Variant({ 'ok' : Channel, 'err' : IDL.Text })],
+        [],
+      ),
+    'processIntegrationTrigger' : IDL.Func(
+        [
+          TenantId,
+          WorkspaceId,
+          IntegrationProvider,
+          IDL.Text,
+          IDL.Text,
+          IDL.Text,
+        ],
+        [IDL.Variant({ 'ok' : IntegrationEvent, 'err' : IDL.Text })],
+        [],
+      ),
     'processPayroll' : IDL.Func(
-        [TenantId, EntityId, IDL.Text],
+        [TenantId, WorkspaceId, EntityId, IDL.Text],
+        [IDL.Variant({ 'ok' : PayrollRecord, 'err' : IDL.Text })],
+        [],
+      ),
+    'raiseEscrowDispute' : IDL.Func(
+        [TenantId, WorkspaceId, EntityId, IDL.Text],
+        [IDL.Variant({ 'ok' : EscrowDispute, 'err' : IDL.Text })],
+        [],
+      ),
+    'recordCheckIn' : IDL.Func(
+        [TenantId, WorkspaceId, CheckInInput],
+        [IDL.Variant({ 'ok' : GoalCheckIn, 'err' : IDL.Text })],
+        [],
+      ),
+    'regenerateWorkspaceShareToken' : IDL.Func(
+        [WorkspaceId, TenantId],
+        [IDL.Text],
+        [],
+      ),
+    'rejectPayrollRecord' : IDL.Func(
+        [TenantId, WorkspaceId, EntityId, IDL.Text],
         [IDL.Variant({ 'ok' : PayrollRecord, 'err' : IDL.Text })],
         [],
       ),
     'releaseEscrow' : IDL.Func(
-        [TenantId, EntityId],
+        [TenantId, WorkspaceId, EntityId],
         [IDL.Variant({ 'ok' : EscrowContract, 'err' : IDL.Text })],
         [],
       ),
-    'searchNotes' : IDL.Func([TenantId, IDL.Text], [IDL.Vec(Note)], ['query']),
+    'releaseMilestoneFunds' : IDL.Func(
+        [TenantId, WorkspaceId, EntityId],
+        [IDL.Variant({ 'ok' : EscrowMilestone, 'err' : IDL.Text })],
+        [],
+      ),
+    'removeReaction' : IDL.Func(
+        [TenantId, WorkspaceId, EntityId, IDL.Text],
+        [IDL.Variant({ 'ok' : Message, 'err' : IDL.Text })],
+        [],
+      ),
+    'removeTaskFromSprint' : IDL.Func(
+        [TenantId, WorkspaceId, EntityId, EntityId],
+        [IDL.Variant({ 'ok' : Sprint, 'err' : IDL.Text })],
+        [],
+      ),
+    'removeTaskRelationship' : IDL.Func(
+        [TenantId, WorkspaceId, EntityId],
+        [IDL.Variant({ 'ok' : IDL.Bool, 'err' : IDL.Text })],
+        [],
+      ),
+    'removeTaskWatcher' : IDL.Func(
+        [TenantId, WorkspaceId, EntityId, UserId],
+        [IDL.Variant({ 'ok' : IDL.Bool, 'err' : IDL.Text })],
+        [],
+      ),
+    'removeWorkspaceMember' : IDL.Func(
+        [TenantId, EntityId, UserId],
+        [IDL.Variant({ 'ok' : IDL.Null, 'err' : IDL.Text })],
+        [],
+      ),
+    'resolveDispute' : IDL.Func(
+        [TenantId, WorkspaceId, EntityId, IDL.Text],
+        [IDL.Variant({ 'ok' : EscrowDispute, 'err' : IDL.Text })],
+        [],
+      ),
+    'respondToEvent' : IDL.Func(
+        [TenantId, WorkspaceId, EventRsvpInput],
+        [IDL.Variant({ 'ok' : EventRsvp, 'err' : IDL.Text })],
+        [],
+      ),
+    'saveAIConfig' : IDL.Func(
+        [TenantId, WorkspaceId, AIConfigInput],
+        [IDL.Variant({ 'ok' : AIConfig, 'err' : IDL.Text })],
+        [],
+      ),
+    'saveIntegration' : IDL.Func(
+        [TenantId, WorkspaceId, IntegrationInput],
+        [IDL.Variant({ 'ok' : Integration, 'err' : IDL.Text })],
+        [],
+      ),
+    'searchMessages' : IDL.Func(
+        [
+          TenantId,
+          WorkspaceId,
+          IDL.Text,
+          IDL.Opt(EntityId),
+          IDL.Opt(IDL.Principal),
+          IDL.Opt(IDL.Int),
+          IDL.Opt(IDL.Int),
+        ],
+        [IDL.Vec(Message)],
+        ['query'],
+      ),
+    'searchNotes' : IDL.Func(
+        [TenantId, WorkspaceId, IDL.Text],
+        [IDL.Vec(Note)],
+        ['query'],
+      ),
     'sendAsset' : IDL.Func(
-        [TenantId, EntityId, AssetType, IDL.Nat, IDL.Text, IDL.Opt(IDL.Text)],
+        [
+          TenantId,
+          WorkspaceId,
+          EntityId,
+          AssetType,
+          IDL.Nat,
+          IDL.Text,
+          IDL.Opt(IDL.Text),
+          IDL.Nat,
+        ],
         [IDL.Variant({ 'ok' : WalletTransaction, 'err' : IDL.Text })],
         [],
       ),
     'sendMessage' : IDL.Func(
-        [TenantId, MessageInput],
+        [TenantId, WorkspaceId, MessageInput],
         [IDL.Variant({ 'ok' : Message, 'err' : IDL.Text })],
         [],
       ),
+    'setSpendingLimit' : IDL.Func(
+        [TenantId, WorkspaceId, Role, IDL.Float64, IDL.Text],
+        [IDL.Variant({ 'ok' : WorkspaceSpendingLimit, 'err' : IDL.Text })],
+        [],
+      ),
+    'setUserStatus' : IDL.Func(
+        [
+          TenantId,
+          WorkspaceId,
+          IDL.Variant({
+            'away' : IDL.Null,
+            'offline' : IDL.Null,
+            'online' : IDL.Null,
+          }),
+          IDL.Text,
+        ],
+        [IDL.Variant({ 'ok' : UserStatus, 'err' : IDL.Text })],
+        [],
+      ),
+    'submitAIPrompt' : IDL.Func(
+        [TenantId, WorkspaceId, AIPromptInput],
+        [IDL.Variant({ 'ok' : AIResponse, 'err' : IDL.Text })],
+        [],
+      ),
+    'submitFormResponse' : IDL.Func(
+        [FormSubmissionInput],
+        [IDL.Variant({ 'ok' : FormSubmission, 'err' : IDL.Text })],
+        [],
+      ),
     'toggleAutomationRule' : IDL.Func(
-        [TenantId, EntityId],
+        [TenantId, WorkspaceId, EntityId],
         [IDL.Variant({ 'ok' : AutomationRule, 'err' : IDL.Text })],
         [],
       ),
+    'toggleGoalPublic' : IDL.Func(
+        [EntityId, WorkspaceId, TenantId],
+        [IDL.Variant({ 'ok' : Goal, 'err' : IDL.Text })],
+        [],
+      ),
+    'unlinkTaskFromKR' : IDL.Func(
+        [TenantId, WorkspaceId, EntityId, EntityId],
+        [IDL.Variant({ 'ok' : KeyResult, 'err' : IDL.Text })],
+        [],
+      ),
+    'unpinMessage' : IDL.Func(
+        [TenantId, WorkspaceId, EntityId, IDL.Text],
+        [IDL.Variant({ 'ok' : Channel, 'err' : IDL.Text })],
+        [],
+      ),
+    'updateCalendar' : IDL.Func(
+        [TenantId, WorkspaceId, EntityId, CalendarDefInput],
+        [IDL.Variant({ 'ok' : CalendarDef, 'err' : IDL.Text })],
+        [],
+      ),
+    'updateChannel' : IDL.Func(
+        [TenantId, WorkspaceId, EntityId, IDL.Text, IDL.Text, IDL.Text],
+        [IDL.Variant({ 'ok' : Channel, 'err' : IDL.Text })],
+        [],
+      ),
+    'updateChannelTopic' : IDL.Func(
+        [TenantId, WorkspaceId, EntityId, IDL.Text],
+        [IDL.Variant({ 'ok' : Channel, 'err' : IDL.Text })],
+        [],
+      ),
+    'updateChecklistItem' : IDL.Func(
+        [TenantId, WorkspaceId, EntityId, IDL.Text, IDL.Bool],
+        [IDL.Variant({ 'ok' : ChecklistItem, 'err' : IDL.Text })],
+        [],
+      ),
+    'updateContractor' : IDL.Func(
+        [TenantId, WorkspaceId, EntityId, ContractorInput],
+        [IDL.Variant({ 'ok' : Contractor, 'err' : IDL.Text })],
+        [],
+      ),
+    'updateDeduction' : IDL.Func(
+        [TenantId, WorkspaceId, EntityId, IDL.Bool, IDL.Float64],
+        [IDL.Variant({ 'ok' : Deduction, 'err' : IDL.Text })],
+        [],
+      ),
     'updateEmployee' : IDL.Func(
-        [TenantId, EntityId, EmployeeInput],
+        [TenantId, WorkspaceId, EntityId, EmployeeInput],
         [IDL.Variant({ 'ok' : Employee, 'err' : IDL.Text })],
         [],
       ),
+    'updateEscrowMilestone' : IDL.Func(
+        [TenantId, WorkspaceId, EntityId, EscrowMilestoneInput],
+        [IDL.Variant({ 'ok' : EscrowMilestone, 'err' : IDL.Text })],
+        [],
+      ),
     'updateEvent' : IDL.Func(
-        [TenantId, EntityId, EventInput],
+        [TenantId, WorkspaceId, EntityId, EventInput],
         [IDL.Variant({ 'ok' : Event, 'err' : IDL.Text })],
         [],
       ),
+    'updateForm' : IDL.Func(
+        [TenantId, WorkspaceId, EntityId, FormInput],
+        [IDL.Variant({ 'ok' : Form, 'err' : IDL.Text })],
+        [],
+      ),
+    'updateGoal' : IDL.Func(
+        [TenantId, WorkspaceId, EntityId, GoalInput, GoalStatus],
+        [IDL.Variant({ 'ok' : Goal, 'err' : IDL.Text })],
+        [],
+      ),
+    'updateGuestStatus' : IDL.Func(
+        [TenantId, WorkspaceId, EntityId, GuestStatus],
+        [IDL.Variant({ 'ok' : GuestUser, 'err' : IDL.Text })],
+        [],
+      ),
+    'updateIntegrationSyncStatus' : IDL.Func(
+        [TenantId, WorkspaceId, EntityId, IDL.Text, Timestamp],
+        [IDL.Variant({ 'ok' : IDL.Bool, 'err' : IDL.Text })],
+        [],
+      ),
+    'updateKeyResult' : IDL.Func(
+        [TenantId, WorkspaceId, EntityId, IDL.Float64, KRStatus],
+        [IDL.Variant({ 'ok' : KeyResult, 'err' : IDL.Text })],
+        [],
+      ),
+    'updateMilestone' : IDL.Func(
+        [TenantId, WorkspaceId, EntityId, IDL.Text, MilestoneStatus, Timestamp],
+        [IDL.Variant({ 'ok' : Milestone, 'err' : IDL.Text })],
+        [],
+      ),
     'updateNote' : IDL.Func(
-        [TenantId, EntityId, NoteInput],
+        [TenantId, WorkspaceId, EntityId, NoteInput],
         [IDL.Variant({ 'ok' : Note, 'err' : IDL.Text })],
         [],
       ),
+    'updatePage' : IDL.Func(
+        [
+          TenantId,
+          WorkspaceId,
+          EntityId,
+          IDL.Text,
+          IDL.Text,
+          IDL.Opt(IDL.Text),
+          IDL.Vec(Block),
+        ],
+        [IDL.Variant({ 'ok' : PageNode, 'err' : IDL.Text })],
+        [],
+      ),
     'updateProject' : IDL.Func(
-        [TenantId, EntityId, ProjectInput],
+        [TenantId, WorkspaceId, EntityId, ProjectInput],
         [IDL.Variant({ 'ok' : Project, 'err' : IDL.Text })],
         [],
       ),
+    'updateSprint' : IDL.Func(
+        [
+          TenantId,
+          WorkspaceId,
+          EntityId,
+          IDL.Text,
+          IDL.Text,
+          SprintStatus,
+          IDL.Vec(EntityId),
+        ],
+        [IDL.Variant({ 'ok' : Sprint, 'err' : IDL.Text })],
+        [],
+      ),
+    'updateSubtask' : IDL.Func(
+        [TenantId, WorkspaceId, EntityId, IDL.Text, TaskStatus],
+        [IDL.Variant({ 'ok' : Subtask, 'err' : IDL.Text })],
+        [],
+      ),
     'updateTask' : IDL.Func(
-        [TenantId, EntityId, TaskInput],
+        [TenantId, WorkspaceId, EntityId, TaskInput],
         [IDL.Variant({ 'ok' : Task, 'err' : IDL.Text })],
+        [],
+      ),
+    'updateTimeEntry' : IDL.Func(
+        [TenantId, WorkspaceId, EntityId, TimeEntryInput],
+        [IDL.Variant({ 'ok' : TimeEntry, 'err' : IDL.Text })],
+        [],
+      ),
+    'updateWhiteboardElements' : IDL.Func(
+        [TenantId, WorkspaceId, EntityId, IDL.Vec(WhiteboardElement)],
+        [IDL.Variant({ 'ok' : Whiteboard, 'err' : IDL.Text })],
+        [],
+      ),
+    'updateWorkspace' : IDL.Func(
+        [TenantId, EntityId, IDL.Text],
+        [IDL.Variant({ 'ok' : Workspace, 'err' : IDL.Text })],
+        [],
+      ),
+    'updateWorkspaceMemberRole' : IDL.Func(
+        [TenantId, EntityId, UserId, WorkspaceRole],
+        [IDL.Variant({ 'ok' : WorkspaceMember, 'err' : IDL.Text })],
         [],
       ),
     'upsertProfile' : IDL.Func(

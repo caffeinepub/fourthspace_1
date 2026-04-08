@@ -10,6 +10,94 @@ import type { ActorMethod } from '@icp-sdk/core/agent';
 import type { IDL } from '@icp-sdk/core/candid';
 import type { Principal } from '@icp-sdk/core/principal';
 
+export interface AIConfig {
+  'id' : EntityId,
+  'model' : string,
+  'provider' : AIProvider,
+  'createdAt' : Timestamp,
+  'tenantId' : TenantId,
+  'apiKey' : string,
+  'workspaceId' : WorkspaceId,
+}
+export interface AIConfigInput {
+  'model' : string,
+  'provider' : AIProvider,
+  'apiKey' : string,
+}
+export interface AIPrompt {
+  'id' : EntityId,
+  'model' : string,
+  'content' : string,
+  'userId' : UserId,
+  'createdAt' : Timestamp,
+  'promptType' : AIPromptType,
+  'tenantId' : TenantId,
+  'workspaceId' : WorkspaceId,
+}
+export interface AIPromptInput {
+  'model' : string,
+  'content' : string,
+  'contextData' : [] | [string],
+  'promptType' : AIPromptType,
+  'contextEntityType' : [] | [string],
+  'contextEntityId' : [] | [EntityId],
+}
+export type AIPromptType = { 'SuggestPriorities' : null } |
+  { 'MeetingSummary' : null } |
+  { 'Custom' : null } |
+  { 'WorkspaceQA' : null } |
+  { 'Analyze' : null } |
+  { 'Generate' : null } |
+  { 'Translate' : null } |
+  { 'Summarize' : null } |
+  { 'GenerateTasks' : null };
+export type AIProvider = { 'OpenAI' : null } |
+  { 'Anthropic' : null };
+export interface AIResponse {
+  'id' : EntityId,
+  'model' : string,
+  'content' : string,
+  'createdAt' : Timestamp,
+  'tokensUsed' : bigint,
+  'tenantId' : TenantId,
+  'workspaceId' : WorkspaceId,
+  'promptId' : EntityId,
+}
+export type AccountType = { 'personal' : null } |
+  { 'treasury' : null };
+export interface ActivityEntry {
+  'action' : string,
+  'entityTitle' : string,
+  'actorId' : string,
+  'timestamp' : bigint,
+  'entityType' : string,
+}
+export interface ActivityEvent {
+  'id' : EntityId,
+  'metadata' : string,
+  'createdAt' : Timestamp,
+  'description' : string,
+  'actorId' : UserId,
+  'tenantId' : TenantId,
+  'taskId' : EntityId,
+  'projectId' : EntityId,
+  'workspaceId' : WorkspaceId,
+  'eventType' : ActivityEventType,
+}
+export type ActivityEventType = { 'watcherAdded' : null } |
+  { 'checklistItemAdded' : null } |
+  { 'checklistItemCompleted' : null } |
+  { 'taskAssigned' : null } |
+  { 'taskStatusChanged' : null } |
+  { 'commentEdited' : null } |
+  { 'taskUpdated' : null } |
+  { 'subtaskAdded' : null } |
+  { 'commentAdded' : null } |
+  { 'sprintCompleted' : null } |
+  { 'taskCreated' : null } |
+  { 'dependencyAdded' : null } |
+  { 'sprintStarted' : null } |
+  { 'milestoneCreated' : null };
 export type AssetType = { 'BTC' : null } |
   { 'ICP' : null };
 export interface AuditLog {
@@ -20,7 +108,24 @@ export interface AuditLog {
   'entityId' : EntityId,
   'timestamp' : Timestamp,
   'details' : string,
+  'workspaceId' : WorkspaceId,
   'entityType' : string,
+}
+export interface AuditLogEntry {
+  'id' : EntityId,
+  'action' : string,
+  'tenantId' : TenantId,
+  'entityId' : EntityId,
+  'performedBy' : UserId,
+  'timestamp' : Timestamp,
+  'details' : string,
+  'workspaceId' : WorkspaceId,
+  'entityType' : string,
+}
+export interface AutoCreateTaskConfig {
+  'assigneeId' : [] | [Principal],
+  'taskTitle' : string,
+  'projectId' : string,
 }
 export type AutomationAction = { 'RunPayroll' : null } |
   { 'CreateTask' : null } |
@@ -36,6 +141,7 @@ export interface AutomationRule {
   'description' : string,
   'isActive' : boolean,
   'tenantId' : TenantId,
+  'workspaceId' : WorkspaceId,
 }
 export type AutomationTrigger = { 'OnTaskStatusChange' : null } |
   { 'OnNoteCreated' : null } |
@@ -43,6 +149,12 @@ export type AutomationTrigger = { 'OnTaskStatusChange' : null } |
   { 'Scheduled' : null } |
   { 'OnEscrowUpdate' : null } |
   { 'OnEventReminder' : null };
+export interface AvailabilitySlot {
+  'userId' : UserId,
+  'date' : string,
+  'busyPeriods' : Array<[string, string]>,
+  'timeZone' : string,
+}
 export interface Backup {
   'id' : EntityId,
   'status' : BackupStatus,
@@ -51,21 +163,77 @@ export interface Backup {
   'createdBy' : UserId,
   'tenantId' : TenantId,
   'backupLabel' : string,
+  'workspaceId' : WorkspaceId,
   'sizeBytes' : [] | [bigint],
 }
 export type BackupStatus = { 'Failed' : null } |
   { 'Running' : null } |
   { 'Completed' : null } |
   { 'Pending' : null };
+export interface Benefit {
+  'id' : EntityId,
+  'endDate' : [] | [string],
+  'name' : string,
+  'isActive' : boolean,
+  'tenantId' : TenantId,
+  'employeeId' : EntityId,
+  'workspaceId' : WorkspaceId,
+  'monthlyCost' : number,
+  'startDate' : string,
+}
+export interface BenefitInput {
+  'endDate' : [] | [string],
+  'name' : string,
+  'employeeId' : EntityId,
+  'monthlyCost' : number,
+  'startDate' : string,
+}
+export interface Block {
+  'id' : EntityId,
+  'content' : string,
+  'order' : bigint,
+  'metadata' : string,
+  'blockType' : BlockTypeTag,
+  'parentId' : [] | [EntityId],
+}
+export type BlockTypeTag = string;
+export interface CalendarDef {
+  'id' : EntityId,
+  'calendarType' : CalendarType,
+  'ownerId' : UserId,
+  'name' : string,
+  'createdAt' : Timestamp,
+  'color' : string,
+  'tenantId' : TenantId,
+  'projectId' : [] | [string],
+  'isVisible' : boolean,
+  'workspaceId' : WorkspaceId,
+}
+export interface CalendarDefInput {
+  'calendarType' : CalendarType,
+  'name' : string,
+  'color' : string,
+  'projectId' : [] | [string],
+  'isVisible' : boolean,
+}
+export type CalendarType = { 'team' : null } |
+  { 'company' : null } |
+  { 'personal' : null } |
+  { 'project' : null };
 export interface Channel {
   'id' : EntityId,
+  'topic' : [] | [string],
+  'mentionFlags' : [] | [Array<MentionEntry>],
+  'unreadCounts' : [] | [Array<UnreadEntry>],
   'name' : string,
   'createdAt' : Timestamp,
   'createdBy' : UserId,
   'description' : string,
   'tenantId' : TenantId,
+  'workspaceId' : WorkspaceId,
   'memberIds' : Array<UserId>,
   'isPublic' : boolean,
+  'pinnedMessageIds' : [] | [Array<string>],
 }
 export interface ChannelInput {
   'name' : string,
@@ -73,12 +241,131 @@ export interface ChannelInput {
   'memberIds' : Array<UserId>,
   'isPublic' : boolean,
 }
+export interface CheckInInput {
+  'krId' : [] | [EntityId],
+  'note' : string,
+  'newValue' : number,
+  'goalId' : EntityId,
+}
+export interface ChecklistItem {
+  'id' : EntityId,
+  'content' : string,
+  'order' : bigint,
+  'createdAt' : Timestamp,
+  'completed' : boolean,
+  'tenantId' : TenantId,
+  'updatedAt' : Timestamp,
+  'taskId' : EntityId,
+  'workspaceId' : WorkspaceId,
+}
+export interface ChecklistItemInput {
+  'content' : string,
+  'order' : bigint,
+  'completed' : boolean,
+  'taskId' : EntityId,
+}
+export interface ConditionalLogic {
+  'value' : string,
+  'operator' : string,
+  'fieldId' : string,
+}
+export interface Contractor {
+  'id' : EntityId,
+  'taxId' : string,
+  'name' : string,
+  'createdAt' : Timestamp,
+  'rate' : number,
+  'isActive' : boolean,
+  'email' : string,
+  'tenantId' : TenantId,
+  'currency' : string,
+  'workspaceId' : WorkspaceId,
+}
+export interface ContractorInput {
+  'taxId' : string,
+  'name' : string,
+  'rate' : number,
+  'email' : string,
+  'currency' : string,
+}
+export interface ContractorPayment {
+  'id' : EntityId,
+  'status' : ContractorPaymentStatus,
+  'createdAt' : Timestamp,
+  'contractorId' : EntityId,
+  'tenantId' : TenantId,
+  'processedAt' : [] | [Timestamp],
+  'notes' : string,
+  'paymentDate' : string,
+  'workspaceId' : WorkspaceId,
+  'amount' : number,
+  'reason' : ContractorPaymentReason,
+}
+export interface ContractorPaymentInput {
+  'contractorId' : EntityId,
+  'notes' : string,
+  'paymentDate' : string,
+  'amount' : number,
+  'reason' : ContractorPaymentReason,
+}
+export type ContractorPaymentReason = { 'projectMilestone' : null } |
+  { 'other' : null } |
+  { 'freelanceInvoice' : null } |
+  { 'reimbursement' : null };
+export type ContractorPaymentStatus = { 'pending' : null } |
+  { 'processed' : null };
 export interface CrossLink {
   'linkLabel' : string,
   'tenantId' : TenantId,
   'entityId' : EntityId,
   'entityType' : string,
 }
+export interface DailyTimesheetEntry {
+  'totalHours' : number,
+  'date' : Timestamp,
+  'entries' : Array<TimeEntry>,
+}
+export interface DashboardStats {
+  'memberCount' : bigint,
+  'goalCount' : bigint,
+  'noteCount' : bigint,
+  'taskCount' : bigint,
+  'projectCount' : bigint,
+}
+export interface Deduction {
+  'id' : EntityId,
+  'name' : string,
+  'createdAt' : Timestamp,
+  'isActive' : boolean,
+  'tenantId' : TenantId,
+  'employeeId' : EntityId,
+  'workspaceId' : WorkspaceId,
+  'frequency' : DeductionFrequency,
+  'amount' : number,
+  'deductionType' : DeductionType,
+}
+export type DeductionFrequency = { 'perRun' : null } |
+  { 'annual' : null };
+export interface DeductionInput {
+  'name' : string,
+  'employeeId' : EntityId,
+  'frequency' : DeductionFrequency,
+  'amount' : number,
+  'deductionType' : DeductionType,
+}
+export type DeductionType = { 'postTax' : null } |
+  { 'preTax' : null };
+export type DisputeStatus = { 'Open' : null } |
+  { 'Resolved' : null };
+export type DrawingTool = { 'Pen' : null } |
+  { 'Line' : null } |
+  { 'Text' : null } |
+  { 'Sticky' : null } |
+  { 'Connector' : null } |
+  { 'Image' : null } |
+  { 'Eraser' : null } |
+  { 'Circle' : null } |
+  { 'Rectangle' : null };
 export interface Employee {
   'id' : EntityId,
   'salary' : bigint,
@@ -87,10 +374,14 @@ export interface Employee {
   'isActive' : boolean,
   'email' : string,
   'tenantId' : TenantId,
+  'payScheduleId' : string,
   'currency' : string,
+  'workspaceId' : WorkspaceId,
   'payFrequency' : PayFrequency,
   'lastName' : string,
+  'contractorFlag' : boolean,
   'taxRate' : bigint,
+  'timeZone' : string,
   'startDate' : Timestamp,
   'firstName' : string,
 }
@@ -98,10 +389,13 @@ export interface EmployeeInput {
   'salary' : bigint,
   'userId' : UserId,
   'email' : string,
+  'payScheduleId' : string,
   'currency' : string,
   'payFrequency' : PayFrequency,
   'lastName' : string,
+  'contractorFlag' : boolean,
   'taxRate' : bigint,
+  'timeZone' : string,
   'startDate' : Timestamp,
   'firstName' : string,
 }
@@ -113,14 +407,36 @@ export interface EscrowContract {
   'createdAt' : Timestamp,
   'dueDate' : [] | [Timestamp],
   'description' : string,
+  'statusHistory' : Array<StatusHistoryEntry>,
   'tenantId' : TenantId,
   'updatedAt' : Timestamp,
   'currency' : string,
+  'workspaceId' : WorkspaceId,
   'conditions' : Array<string>,
+  'fundingBlockHeight' : [] | [bigint],
   'crossLinks' : Array<CrossLink>,
   'amount' : bigint,
   'payeeId' : UserId,
   'payerId' : UserId,
+  'fundedAmount' : [] | [bigint],
+}
+export interface EscrowDispute {
+  'id' : EntityId,
+  'status' : DisputeStatus,
+  'arbiter' : [] | [Principal],
+  'createdAt' : Timestamp,
+  'resolution' : [] | [string],
+  'tenantId' : TenantId,
+  'updatedAt' : Timestamp,
+  'raisedBy' : Principal,
+  'workspaceId' : WorkspaceId,
+  'escrowId' : EntityId,
+  'reason' : string,
+}
+export interface EscrowFilter {
+  'status' : [] | [EscrowStatus],
+  'toDate' : [] | [Timestamp],
+  'fromDate' : [] | [Timestamp],
 }
 export interface EscrowInput {
   'title' : string,
@@ -132,24 +448,88 @@ export interface EscrowInput {
   'amount' : bigint,
   'payeeId' : UserId,
 }
+export interface EscrowMilestone {
+  'id' : EntityId,
+  'status' : MilestoneStatus__1,
+  'title' : string,
+  'createdAt' : Timestamp,
+  'description' : string,
+  'tenantId' : TenantId,
+  'updatedAt' : Timestamp,
+  'ledgerBlockHeight' : [] | [bigint],
+  'workspaceId' : WorkspaceId,
+  'escrowId' : EntityId,
+  'amount' : bigint,
+}
+export interface EscrowMilestoneInput {
+  'title' : string,
+  'description' : string,
+  'amount' : bigint,
+}
 export type EscrowStatus = { 'Disputed' : null } |
   { 'Released' : null } |
   { 'Funded' : null } |
   { 'Cancelled' : null } |
   { 'Pending' : null };
+export interface EscrowSummary {
+  'id' : EntityId,
+  'status' : EscrowStatus,
+  'title' : string,
+  'createdAt' : Timestamp,
+  'statusHistory' : Array<StatusHistoryEntry>,
+  'currency' : string,
+  'conditions' : Array<string>,
+  'amount' : bigint,
+  'payeeId' : string,
+  'payerId' : string,
+  'milestoneCount' : bigint,
+}
 export interface Event {
   'id' : EntityId,
   'startTime' : Timestamp,
   'title' : string,
   'endTime' : Timestamp,
+  'isRecurringSeries' : boolean,
   'createdAt' : Timestamp,
   'createdBy' : UserId,
   'description' : string,
   'attendeeIds' : Array<UserId>,
+  'seriesId' : [] | [string],
   'tenantId' : TenantId,
   'recurrence' : RecurrenceRule,
   'updatedAt' : Timestamp,
+  'categoryColor' : string,
+  'projectId' : [] | [string],
+  'linkedNoteId' : [] | [string],
+  'rsvpRequired' : boolean,
+  'calendarId' : string,
+  'category' : EventCategory,
+  'workspaceId' : WorkspaceId,
   'crossLinks' : Array<CrossLink>,
+  'isProjectDeadline' : boolean,
+  'timeZone' : string,
+}
+export type EventCategory = { 'pto' : null } |
+  { 'internal' : null } |
+  { 'other' : null } |
+  { 'deadline' : null } |
+  { 'meeting' : null } |
+  { 'external' : null };
+export interface EventException {
+  'id' : EntityId,
+  'eventId' : string,
+  'originalDate' : string,
+  'exceptionType' : ExceptionType,
+  'createdAt' : Timestamp,
+  'tenantId' : TenantId,
+  'overrideData' : [] | [EventInput],
+  'workspaceId' : WorkspaceId,
+}
+export interface EventExceptionInput {
+  'eventId' : string,
+  'originalDate' : string,
+  'exceptionType' : ExceptionType,
+  'overrideData' : [] | [EventInput],
 }
 export interface EventInput {
   'startTime' : Timestamp,
@@ -158,17 +538,244 @@ export interface EventInput {
   'description' : string,
   'attendeeIds' : Array<UserId>,
   'recurrence' : RecurrenceRule,
+  'categoryColor' : [] | [string],
+  'projectId' : [] | [string],
+  'linkedNoteId' : [] | [string],
+  'rsvpRequired' : [] | [boolean],
+  'calendarId' : [] | [string],
+  'category' : [] | [EventCategory],
   'crossLinks' : Array<CrossLink>,
+  'isProjectDeadline' : [] | [boolean],
+  'timeZone' : [] | [string],
 }
+export interface EventRsvp {
+  'id' : EntityId,
+  'status' : RsvpStatus,
+  'eventId' : string,
+  'userId' : UserId,
+  'tenantId' : TenantId,
+  'workspaceId' : WorkspaceId,
+  'respondedAt' : [] | [Timestamp],
+}
+export interface EventRsvpInput { 'status' : RsvpStatus, 'eventId' : string }
+export type ExceptionType = { 'deleted' : null } |
+  { 'modified' : null };
+export interface FieldCompletionRate {
+  'completionRate' : number,
+  'fieldId' : string,
+}
+export interface Form {
+  'id' : EntityId,
+  'status' : FormStatus,
+  'title' : string,
+  'formTemplateId' : [] | [string],
+  'publicUrl' : string,
+  'createdAt' : Timestamp,
+  'createdBy' : UserId,
+  'description' : string,
+  'tenantId' : TenantId,
+  'fields' : Array<FormField>,
+  'updatedAt' : Timestamp,
+  'autoCreateTask' : [] | [AutoCreateTaskConfig],
+  'workspaceId' : WorkspaceId,
+  'branding' : [] | [FormBranding],
+}
+export interface FormAnalytics {
+  'recentSubmissions' : Array<FormSubmission>,
+  'fieldCompletionRates' : Array<FieldCompletionRate>,
+  'submissionCount' : bigint,
+}
+export interface FormBranding {
+  'backgroundColor' : [] | [string],
+  'primaryColor' : [] | [string],
+  'logoUrl' : [] | [string],
+}
+export interface FormField {
+  'id' : EntityId,
+  'fieldLabel' : string,
+  'required' : boolean,
+  'conditionalLogic' : [] | [ConditionalLogic],
+  'options' : Array<string>,
+  'fieldType' : FormFieldType,
+}
+export type FormFieldType = { 'Email' : null } |
+  { 'Date' : null } |
+  { 'Textarea' : null } |
+  { 'Text' : null } |
+  { 'Checkbox' : null } |
+  { 'Dropdown' : null };
+export interface FormInput {
+  'title' : string,
+  'formTemplateId' : [] | [string],
+  'description' : string,
+  'fields' : Array<FormField>,
+  'autoCreateTask' : [] | [AutoCreateTaskConfig],
+  'branding' : [] | [FormBranding],
+}
+export type FormStatus = { 'Draft' : null } |
+  { 'Published' : null };
+export interface FormSubmission {
+  'id' : EntityId,
+  'data' : Array<[string, string]>,
+  'submittedAt' : Timestamp,
+  'tenantId' : TenantId,
+  'workspaceId' : WorkspaceId,
+  'submitterEmail' : string,
+  'formId' : EntityId,
+}
+export interface FormSubmissionInput {
+  'data' : Array<[string, string]>,
+  'submitterEmail' : string,
+  'formId' : EntityId,
+}
+export interface Goal {
+  'id' : EntityId,
+  'status' : GoalStatus,
+  'title' : string,
+  'endDate' : Timestamp,
+  'ownerId' : UserId,
+  'period' : string,
+  'createdAt' : Timestamp,
+  'description' : [] | [string],
+  'tenantId' : TenantId,
+  'updatedAt' : Timestamp,
+  'progress' : number,
+  'workspaceId' : WorkspaceId,
+  'isPublic' : boolean,
+  'contributorIds' : Array<UserId>,
+  'keyResults' : Array<EntityId>,
+  'startDate' : Timestamp,
+}
+export interface GoalCheckIn {
+  'id' : EntityId,
+  'userId' : UserId,
+  'krId' : [] | [EntityId],
+  'note' : string,
+  'newValue' : number,
+  'goalId' : EntityId,
+  'previousValue' : number,
+  'tenantId' : TenantId,
+  'timestamp' : Timestamp,
+  'workspaceId' : WorkspaceId,
+}
+export interface GoalInput {
+  'title' : string,
+  'endDate' : Timestamp,
+  'period' : string,
+  'description' : [] | [string],
+  'contributorIds' : Array<UserId>,
+  'startDate' : Timestamp,
+}
+export type GoalStatus = { 'OnHold' : null } |
+  { 'Active' : null } |
+  { 'Cancelled' : null } |
+  { 'Completed' : null };
+export interface GuestInvitation {
+  'id' : EntityId,
+  'inviteToken' : string,
+  'expiresAt' : Timestamp,
+  'inviteeEmail' : string,
+  'createdAt' : Timestamp,
+  'invitedBy' : UserId,
+  'tenantId' : TenantId,
+  'projectId' : EntityId,
+  'workspaceId' : WorkspaceId,
+  'accepted' : boolean,
+}
+export interface GuestInvitationInput {
+  'expiresAt' : Timestamp,
+  'inviteeEmail' : string,
+  'projectId' : EntityId,
+}
+export type GuestStatus = { 'Active' : null } |
+  { 'Revoked' : null } |
+  { 'Pending' : null };
+export interface GuestUser {
+  'id' : EntityId,
+  'status' : GuestStatus,
+  'principal' : [] | [UserId],
+  'createdAt' : Timestamp,
+  'email' : string,
+  'tenantId' : TenantId,
+  'workspaceId' : WorkspaceId,
+  'projectIds' : Array<EntityId>,
+}
+export interface Integration {
+  'id' : EntityId,
+  'status' : IntegrationStatus,
+  'provider' : IntegrationProvider,
+  'createdAt' : Timestamp,
+  'tenantId' : TenantId,
+  'updatedAt' : Timestamp,
+  'oauthToken' : [] | [string],
+  'accessToken' : string,
+  'workspaceId' : WorkspaceId,
+  'lastSyncAt' : [] | [Timestamp],
+  'config' : string,
+  'syncStatus' : [] | [string],
+}
+export interface IntegrationEvent {
+  'id' : EntityId,
+  'integrationId' : EntityId,
+  'triggerAction' : [] | [string],
+  'tenantId' : TenantId,
+  'timestamp' : Timestamp,
+  'workspaceId' : WorkspaceId,
+  'payload' : string,
+  'eventType' : string,
+}
+export interface IntegrationInput {
+  'provider' : IntegrationProvider,
+  'oauthToken' : [] | [string],
+  'accessToken' : string,
+  'config' : string,
+}
+export type IntegrationProvider = { 'Slack' : null } |
+  { 'GitHub' : null } |
+  { 'GoogleDrive' : null };
+export type IntegrationStatus = { 'Error' : null } |
+  { 'Connected' : null } |
+  { 'Disconnected' : null };
+export type KRStatus = { 'OnTrack' : null } |
+  { 'Behind' : null } |
+  { 'Completed' : null } |
+  { 'AtRisk' : null };
+export interface KeyResult {
+  'id' : EntityId,
+  'status' : KRStatus,
+  'title' : string,
+  'createdAt' : Timestamp,
+  'unit' : string,
+  'goalId' : EntityId,
+  'description' : [] | [string],
+  'tenantId' : TenantId,
+  'currentValue' : number,
+  'updatedAt' : Timestamp,
+  'linkedTaskIds' : Array<EntityId>,
+  'workspaceId' : WorkspaceId,
+  'targetValue' : number,
+}
+export interface KeyResultInput {
+  'title' : string,
+  'unit' : string,
+  'goalId' : EntityId,
+  'description' : [] | [string],
+  'targetValue' : number,
+}
+export interface MentionEntry { 'userId' : Principal, 'hasMention' : boolean }
 export interface Message {
   'id' : EntityId,
   'content' : string,
   'channelId' : EntityId,
+  'isThreadReply' : [] | [boolean],
   'createdAt' : Timestamp,
   'tenantId' : TenantId,
   'updatedAt' : Timestamp,
+  'threadCount' : [] | [bigint],
+  'workspaceId' : WorkspaceId,
   'replyToId' : [] | [EntityId],
   'crossLinks' : Array<CrossLink>,
+  'reactions' : [] | [Array<Reaction>],
   'senderId' : UserId,
 }
 export interface MessageInput {
@@ -177,6 +784,33 @@ export interface MessageInput {
   'replyToId' : [] | [EntityId],
   'crossLinks' : Array<CrossLink>,
 }
+export interface Milestone {
+  'id' : EntityId,
+  'status' : MilestoneStatus,
+  'title' : string,
+  'createdAt' : Timestamp,
+  'dueDate' : Timestamp,
+  'description' : string,
+  'tenantId' : TenantId,
+  'updatedAt' : Timestamp,
+  'projectId' : EntityId,
+  'linkedTaskIds' : Array<EntityId>,
+  'workspaceId' : WorkspaceId,
+}
+export interface MilestoneInput {
+  'title' : string,
+  'dueDate' : Timestamp,
+  'description' : string,
+  'projectId' : EntityId,
+  'linkedTaskIds' : Array<EntityId>,
+}
+export type MilestoneStatus = { 'reached' : null } |
+  { 'upcoming' : null } |
+  { 'missed' : null };
+export type MilestoneStatus__1 = { 'Releasing' : null } |
+  { 'Released' : null } |
+  { 'Approved' : null } |
+  { 'Pending' : null };
 export interface Note {
   'id' : EntityId,
   'title' : string,
@@ -186,6 +820,7 @@ export interface Note {
   'tags' : Array<string>,
   'tenantId' : TenantId,
   'updatedAt' : Timestamp,
+  'workspaceId' : WorkspaceId,
   'crossLinks' : Array<CrossLink>,
 }
 export interface NoteInput {
@@ -194,23 +829,129 @@ export interface NoteInput {
   'tags' : Array<string>,
   'crossLinks' : Array<CrossLink>,
 }
+export interface NoteTemplate {
+  'id' : EntityId,
+  'authorId' : UserId,
+  'icon' : string,
+  'name' : string,
+  'createdAt' : Timestamp,
+  'description' : string,
+  'tenantId' : TenantId,
+  'blocksJson' : string,
+  'workspaceId' : WorkspaceId,
+}
+export interface NoteTemplateInput {
+  'icon' : string,
+  'name' : string,
+  'description' : string,
+  'blocksJson' : string,
+}
+export interface OffCyclePayment {
+  'id' : EntityId,
+  'status' : OffCycleStatus,
+  'createdAt' : Timestamp,
+  'processImmediately' : boolean,
+  'tenantId' : TenantId,
+  'employeeId' : EntityId,
+  'notes' : string,
+  'workspaceId' : WorkspaceId,
+  'amount' : number,
+  'reason' : OffCycleReason,
+}
+export interface OffCyclePaymentInput {
+  'processImmediately' : boolean,
+  'employeeId' : EntityId,
+  'notes' : string,
+  'amount' : number,
+  'reason' : OffCycleReason,
+}
+export type OffCycleReason = { 'adjustment' : null } |
+  { 'reimbursement' : null } |
+  { 'bonus' : null };
+export type OffCycleStatus = { 'pending' : null } |
+  { 'processed' : null };
+export interface PageInput {
+  'title' : string,
+  'icon' : string,
+  'blocks' : Array<string>,
+  'coverUrl' : [] | [string],
+  'parentPageId' : [] | [EntityId],
+}
+export interface PageNode {
+  'id' : EntityId,
+  'title' : string,
+  'authorId' : UserId,
+  'icon' : string,
+  'createdAt' : Timestamp,
+  'tenantId' : TenantId,
+  'updatedAt' : Timestamp,
+  'blocks' : Array<Block>,
+  'workspaceId' : WorkspaceId,
+  'coverUrl' : [] | [string],
+  'crossLinks' : Array<CrossLink>,
+  'parentPageId' : [] | [EntityId],
+  'watchers' : Array<UserId>,
+}
 export type PayFrequency = { 'BiWeekly' : null } |
   { 'Weekly' : null } |
   { 'Quarterly' : null } |
+  { 'SemiMonthly' : null } |
   { 'Monthly' : null };
+export interface PaySchedule {
+  'id' : EntityId,
+  'name' : string,
+  'createdAt' : Timestamp,
+  'description' : string,
+  'tenantId' : TenantId,
+  'isDefault' : boolean,
+  'workspaceId' : WorkspaceId,
+  'frequency' : PayFrequency,
+}
+export interface PayScheduleInput {
+  'name' : string,
+  'description' : string,
+  'isDefault' : boolean,
+  'frequency' : PayFrequency,
+}
+export interface PayStub {
+  'id' : EntityId,
+  'taxDeductions' : number,
+  'period' : string,
+  'generatedAt' : Timestamp,
+  'grossPay' : number,
+  'netPay' : number,
+  'tenantId' : TenantId,
+  'employeeId' : EntityId,
+  'details' : string,
+  'workspaceId' : WorkspaceId,
+  'payrollRecordId' : EntityId,
+  'otherDeductions' : number,
+}
 export interface PayrollRecord {
   'id' : EntityId,
   'status' : PayrollStatus,
+  'netAmount' : number,
   'period' : string,
+  'approvedAt' : [] | [Timestamp],
+  'approvedBy' : [] | [UserId],
   'createdAt' : Timestamp,
+  'rejectionReason' : [] | [string],
+  'grossAmount' : number,
   'tenantId' : TenantId,
   'processedAt' : [] | [Timestamp],
+  'deductionAmount' : number,
   'employeeId' : EntityId,
   'currency' : string,
+  'workspaceId' : WorkspaceId,
+  'taxAmount' : number,
   'amount' : bigint,
 }
 export type PayrollStatus = { 'Paused' : null } |
   { 'Active' : null } |
+  { 'Approved' : null } |
+  { 'Processed' : null } |
+  { 'Rejected' : null } |
+  { 'PendingApproval' : null } |
   { 'Completed' : null };
 export interface Project {
   'id' : EntityId,
@@ -221,6 +962,7 @@ export interface Project {
   'description' : string,
   'tenantId' : TenantId,
   'updatedAt' : Timestamp,
+  'workspaceId' : WorkspaceId,
   'memberIds' : Array<UserId>,
   'crossLinks' : Array<CrossLink>,
 }
@@ -233,11 +975,36 @@ export type ProjectStatus = { 'OnHold' : null } |
   { 'Active' : null } |
   { 'Archived' : null } |
   { 'Completed' : null };
+export interface PublicGoal {
+  'id' : EntityId,
+  'status' : GoalStatus,
+  'title' : string,
+  'endDate' : Timestamp,
+  'period' : string,
+  'description' : [] | [string],
+  'progress' : number,
+  'checkInCount' : bigint,
+  'keyResults' : Array<PublicKeyResult>,
+  'startDate' : Timestamp,
+}
+export interface PublicKeyResult {
+  'id' : EntityId,
+  'status' : KRStatus,
+  'title' : string,
+  'unit' : string,
+  'description' : [] | [string],
+  'currentValue' : number,
+  'targetValue' : number,
+}
+export interface Reaction { 'userIds' : Array<Principal>, 'emoji' : string }
 export type RecurrenceRule = { 'Weekly' : null } |
   { 'None' : null } |
   { 'Daily' : null } |
   { 'Monthly' : null } |
   { 'Yearly' : null };
+export type RecurrenceType = { 'monthly' : null } |
+  { 'daily' : null } |
+  { 'weekly' : null };
 export interface RecurringPayment {
   'id' : EntityId,
   'asset' : AssetType,
@@ -246,13 +1013,100 @@ export interface RecurringPayment {
   'isActive' : boolean,
   'tenantId' : TenantId,
   'nextRunAt' : Timestamp,
+  'workspaceId' : WorkspaceId,
   'frequency' : PayFrequency,
   'toAddress' : string,
   'amount' : bigint,
 }
+export interface RecurringTask {
+  'id' : EntityId,
+  'title' : string,
+  'assigneeId' : [] | [UserId],
+  'lastCreatedAt' : [] | [Timestamp],
+  'createdAt' : Timestamp,
+  'description' : string,
+  'tenantId' : TenantId,
+  'recurrenceType' : RecurrenceType,
+  'updatedAt' : Timestamp,
+  'nextDueAt' : Timestamp,
+  'projectId' : EntityId,
+  'workspaceId' : WorkspaceId,
+  'priority' : TaskPriority,
+}
+export interface RecurringTaskInput {
+  'title' : string,
+  'assigneeId' : [] | [UserId],
+  'description' : string,
+  'recurrenceType' : RecurrenceType,
+  'projectId' : EntityId,
+  'priority' : TaskPriority,
+  'startDate' : Timestamp,
+}
 export type Role = { 'Admin' : null } |
   { 'Manager' : null } |
   { 'TeamMember' : null };
+export type RsvpStatus = { 'tentative' : null } |
+  { 'noResponse' : null } |
+  { 'accepted' : null } |
+  { 'declined' : null };
+export interface Sprint {
+  'id' : EntityId,
+  'status' : SprintStatus,
+  'taskIds' : Array<EntityId>,
+  'endDate' : Timestamp,
+  'goal' : string,
+  'name' : string,
+  'createdAt' : Timestamp,
+  'tenantId' : TenantId,
+  'updatedAt' : Timestamp,
+  'projectId' : EntityId,
+  'workspaceId' : WorkspaceId,
+  'startDate' : Timestamp,
+}
+export interface SprintInput {
+  'taskIds' : Array<EntityId>,
+  'endDate' : Timestamp,
+  'goal' : string,
+  'name' : string,
+  'projectId' : EntityId,
+  'startDate' : Timestamp,
+}
+export type SprintStatus = { 'active' : null } |
+  { 'completed' : null } |
+  { 'planned' : null };
+export interface StatusHistoryEntry {
+  'status' : EscrowStatus,
+  'changedBy' : Principal,
+  'note' : [] | [string],
+  'timestamp' : Timestamp,
+}
+export interface Subtask {
+  'id' : EntityId,
+  'status' : TaskStatus,
+  'title' : string,
+  'assigneeId' : [] | [UserId],
+  'order' : bigint,
+  'createdAt' : Timestamp,
+  'dueDate' : [] | [Timestamp],
+  'description' : string,
+  'tenantId' : TenantId,
+  'updatedAt' : Timestamp,
+  'projectId' : EntityId,
+  'parentTaskId' : EntityId,
+  'workspaceId' : WorkspaceId,
+  'priority' : TaskPriority,
+}
+export interface SubtaskInput {
+  'status' : TaskStatus,
+  'title' : string,
+  'assigneeId' : [] | [UserId],
+  'order' : bigint,
+  'dueDate' : [] | [Timestamp],
+  'description' : string,
+  'projectId' : EntityId,
+  'parentTaskId' : EntityId,
+  'priority' : TaskPriority,
+}
 export interface Task {
   'id' : EntityId,
   'status' : TaskStatus,
@@ -264,9 +1118,22 @@ export interface Task {
   'tenantId' : TenantId,
   'updatedAt' : Timestamp,
   'projectId' : EntityId,
+  'workspaceId' : WorkspaceId,
   'priority' : TaskPriority,
   'crossLinks' : Array<CrossLink>,
 }
+export interface TaskComment {
+  'id' : EntityId,
+  'content' : string,
+  'authorId' : UserId,
+  'createdAt' : Timestamp,
+  'tenantId' : TenantId,
+  'updatedAt' : Timestamp,
+  'taskId' : EntityId,
+  'workspaceId' : WorkspaceId,
+  'editedAt' : [] | [Timestamp],
+}
+export interface TaskCommentInput { 'content' : string, 'taskId' : EntityId }
 export interface TaskInput {
   'title' : string,
   'assigneeId' : [] | [UserId],
@@ -280,14 +1147,104 @@ export type TaskPriority = { 'Low' : null } |
   { 'High' : null } |
   { 'Medium' : null } |
   { 'Critical' : null };
+export interface TaskRelationship {
+  'id' : EntityId,
+  'targetTaskId' : EntityId,
+  'createdAt' : Timestamp,
+  'createdBy' : UserId,
+  'tenantId' : TenantId,
+  'sourceTaskId' : EntityId,
+  'workspaceId' : WorkspaceId,
+  'relationshipType' : TaskRelationshipType,
+}
+export type TaskRelationshipType = { 'blockedBy' : null } |
+  { 'duplicateOf' : null } |
+  { 'blocks' : null } |
+  { 'relatedTo' : null };
 export type TaskStatus = { 'Blocked' : null } |
   { 'Done' : null } |
   { 'Todo' : null } |
   { 'InProgress' : null };
+export interface TaskTemplate {
+  'id' : EntityId,
+  'name' : string,
+  'createdAt' : Timestamp,
+  'description' : string,
+  'tenantId' : TenantId,
+  'updatedAt' : Timestamp,
+  'projectId' : [] | [EntityId],
+  'checklistItems' : Array<string>,
+  'workspaceId' : WorkspaceId,
+  'defaultPriority' : TaskPriority,
+  'defaultAssigneeId' : [] | [UserId],
+}
+export interface TaskTemplateInput {
+  'name' : string,
+  'description' : string,
+  'projectId' : [] | [EntityId],
+  'checklistItems' : Array<string>,
+  'defaultPriority' : TaskPriority,
+  'defaultAssigneeId' : [] | [UserId],
+}
+export interface TaskWatcher {
+  'userId' : UserId,
+  'tenantId' : TenantId,
+  'taskId' : EntityId,
+  'addedAt' : Timestamp,
+  'workspaceId' : WorkspaceId,
+}
 export type TenantId = string;
+export interface TimeEntry {
+  'id' : EntityId,
+  'startTime' : Timestamp,
+  'endTime' : [] | [Timestamp],
+  'userId' : UserId,
+  'createdAt' : Timestamp,
+  'tenantId' : TenantId,
+  'taskId' : [] | [EntityId],
+  'billable' : boolean,
+  'durationMinutes' : bigint,
+  'projectId' : EntityId,
+  'notes' : string,
+  'workspaceId' : WorkspaceId,
+}
+export interface TimeEntryInput {
+  'startTime' : Timestamp,
+  'endTime' : [] | [Timestamp],
+  'taskId' : [] | [EntityId],
+  'billable' : boolean,
+  'durationMinutes' : bigint,
+  'projectId' : EntityId,
+  'notes' : string,
+}
+export interface TimeReport {
+  'byUser' : Array<[UserId, number]>,
+  'totalHours' : number,
+  'entries' : Array<TimeEntry>,
+  'byProject' : Array<[EntityId, number]>,
+  'billableHours' : number,
+  'nonBillableHours' : number,
+}
+export interface TimeReportFilter {
+  'userId' : [] | [UserId],
+  'toDate' : [] | [Timestamp],
+  'billable' : [] | [boolean],
+  'projectId' : [] | [EntityId],
+  'fromDate' : [] | [Timestamp],
+}
 export type Timestamp = bigint;
+export interface TransactionApproval {
+  'id' : EntityId,
+  'txId' : EntityId,
+  'tenantId' : TenantId,
+  'approved' : boolean,
+  'approver' : Principal,
+  'timestamp' : Timestamp,
+  'workspaceId' : WorkspaceId,
+}
 export type TransactionStatus = { 'Failed' : null } |
   { 'Cancelled' : null } |
+  { 'AwaitingApproval' : null } |
   { 'Completed' : null } |
   { 'Pending' : null };
 export type TransactionType = { 'Stake' : null } |
@@ -295,6 +1252,15 @@ export type TransactionType = { 'Stake' : null } |
   { 'Swap' : null } |
   { 'Unstake' : null } |
   { 'Receive' : null };
+export interface TxFilter {
+  'maxAmount' : [] | [number],
+  'status' : [] | [TransactionStatus],
+  'minAmount' : [] | [number],
+  'toDate' : [] | [Timestamp],
+  'fromDate' : [] | [Timestamp],
+  'txType' : [] | [TransactionType],
+}
+export interface UnreadEntry { 'userId' : Principal, 'count' : bigint }
 export type UserId = Principal;
 export interface UserProfile {
   'displayName' : string,
@@ -311,6 +1277,16 @@ export interface UserProfileInput {
   'email' : string,
   'workspaceId' : EntityId,
 }
+export interface UserStatus {
+  'id' : Principal,
+  'customStatus' : string,
+  'status' : { 'away' : null } |
+    { 'offline' : null } |
+    { 'online' : null },
+  'tenantId' : TenantId,
+  'workspaceId' : WorkspaceId,
+  'lastSeen' : bigint,
+}
 export interface WalletAccount {
   'id' : EntityId,
   'accountId' : string,
@@ -318,192 +1294,746 @@ export interface WalletAccount {
   'btcBalance' : bigint,
   'userId' : UserId,
   'createdAt' : Timestamp,
+  'icrc1Account' : string,
   'icpBalance' : bigint,
   'tenantId' : TenantId,
   'updatedAt' : Timestamp,
+  'accountType' : AccountType,
+  'workspaceId' : WorkspaceId,
   'principalId' : string,
 }
 export interface WalletTransaction {
   'id' : EntityId,
   'status' : TransactionStatus,
+  'requiredApprovals' : bigint,
   'asset' : AssetType,
   'accountId' : EntityId,
   'fromAddress' : [] | [string],
+  'memoValue' : [] | [bigint],
   'memo' : [] | [string],
   'createdAt' : Timestamp,
   'tenantId' : TenantId,
+  'ledgerTxHash' : [] | [string],
+  'ledgerBlockHeight' : [] | [bigint],
+  'workspaceId' : WorkspaceId,
   'txType' : TransactionType,
   'toAddress' : [] | [string],
   'amount' : bigint,
+  'approvals' : Array<TransactionApproval>,
+}
+export interface Whiteboard {
+  'id' : EntityId,
+  'title' : string,
+  'templateId' : [] | [string],
+  'createdAt' : Timestamp,
+  'createdBy' : UserId,
+  'templateName' : [] | [string],
+  'tenantId' : TenantId,
+  'updatedAt' : Timestamp,
+  'elements' : Array<WhiteboardElement>,
+  'projectId' : [] | [EntityId],
+  'workspaceId' : WorkspaceId,
+}
+export interface WhiteboardElement {
+  'x' : number,
+  'y' : number,
+  'id' : EntityId,
+  'height' : number,
+  'color' : string,
+  'text' : string,
+  'tool' : DrawingTool,
+  'connectorTo' : [] | [string],
+  'imageUrl' : [] | [string],
+  'width' : number,
+  'connectorFrom' : [] | [string],
+  'converted' : boolean,
+  'strokeWidth' : number,
+  'linkedTaskId' : [] | [string],
+  'points' : Array<number>,
+}
+export interface WhiteboardInput {
+  'title' : string,
+  'templateId' : [] | [string],
+  'templateName' : [] | [string],
+  'projectId' : [] | [EntityId],
+}
+export interface WhiteboardTemplate {
+  'id' : string,
+  'name' : string,
+  'description' : string,
+  'category' : string,
+  'definition' : string,
 }
 export interface Workspace {
   'id' : EntityId,
+  'members' : Array<[UserId, WorkspaceMember]>,
   'ownerId' : UserId,
   'name' : string,
   'createdAt' : Timestamp,
   'tenantId' : TenantId,
 }
+export type WorkspaceId = string;
 export interface WorkspaceInput { 'name' : string }
+export interface WorkspaceMember {
+  'displayName' : string,
+  'userId' : UserId,
+  'joinedAt' : Timestamp,
+  'role' : WorkspaceRole,
+  'email' : string,
+  'workspaceId' : WorkspaceId,
+}
+export type WorkspaceRole = { 'Guest' : null } |
+  { 'Admin' : null } |
+  { 'Manager' : null } |
+  { 'TeamMember' : null };
+export interface WorkspaceSpendingLimit {
+  'id' : EntityId,
+  'maxAmount' : number,
+  'createdAt' : Timestamp,
+  'role' : Role,
+  'tenantId' : TenantId,
+  'updatedAt' : Timestamp,
+  'currency' : string,
+  'workspaceId' : WorkspaceId,
+}
 export interface _SERVICE {
+  'acceptGuestInvitation' : ActorMethod<
+    [TenantId, WorkspaceId, string],
+    { 'ok' : GuestUser } |
+      { 'err' : string }
+  >,
+  'addBenefit' : ActorMethod<
+    [TenantId, WorkspaceId, BenefitInput],
+    { 'ok' : Benefit } |
+      { 'err' : string }
+  >,
+  'addChecklistItem' : ActorMethod<
+    [TenantId, WorkspaceId, ChecklistItemInput],
+    { 'ok' : ChecklistItem } |
+      { 'err' : string }
+  >,
+  'addComment' : ActorMethod<
+    [TenantId, WorkspaceId, EntityId, TaskCommentInput],
+    { 'ok' : TaskComment } |
+      { 'err' : string }
+  >,
+  'addContractor' : ActorMethod<
+    [TenantId, WorkspaceId, ContractorInput],
+    { 'ok' : Contractor } |
+      { 'err' : string }
+  >,
+  'addContractorPayment' : ActorMethod<
+    [TenantId, WorkspaceId, ContractorPaymentInput],
+    { 'ok' : ContractorPayment } |
+      { 'err' : string }
+  >,
+  'addDeduction' : ActorMethod<
+    [TenantId, WorkspaceId, DeductionInput],
+    { 'ok' : Deduction } |
+      { 'err' : string }
+  >,
   'addEmployee' : ActorMethod<
-    [TenantId, EmployeeInput],
+    [TenantId, WorkspaceId, EmployeeInput],
     { 'ok' : Employee } |
       { 'err' : string }
   >,
+  'addEscrowMilestone' : ActorMethod<
+    [TenantId, WorkspaceId, EntityId, EscrowMilestoneInput],
+    { 'ok' : EscrowMilestone } |
+      { 'err' : string }
+  >,
+  'addIntegrationEvent' : ActorMethod<
+    [TenantId, WorkspaceId, EntityId, string, string],
+    { 'ok' : IntegrationEvent } |
+      { 'err' : string }
+  >,
+  'addKeyResult' : ActorMethod<
+    [TenantId, WorkspaceId, KeyResultInput],
+    { 'ok' : KeyResult } |
+      { 'err' : string }
+  >,
+  'addOffCyclePayment' : ActorMethod<
+    [TenantId, WorkspaceId, OffCyclePaymentInput],
+    { 'ok' : OffCyclePayment } |
+      { 'err' : string }
+  >,
+  'addPaySchedule' : ActorMethod<
+    [TenantId, WorkspaceId, PayScheduleInput],
+    { 'ok' : PaySchedule } |
+      { 'err' : string }
+  >,
+  'addReaction' : ActorMethod<
+    [TenantId, WorkspaceId, EntityId, string],
+    { 'ok' : Message } |
+      { 'err' : string }
+  >,
+  'addTaskRelationship' : ActorMethod<
+    [TenantId, WorkspaceId, EntityId, EntityId, TaskRelationshipType],
+    { 'ok' : TaskRelationship } |
+      { 'err' : string }
+  >,
+  'addTaskToSprint' : ActorMethod<
+    [TenantId, WorkspaceId, EntityId, EntityId],
+    { 'ok' : Sprint } |
+      { 'err' : string }
+  >,
+  'addTaskWatcher' : ActorMethod<
+    [TenantId, WorkspaceId, EntityId, UserId],
+    { 'ok' : TaskWatcher } |
+      { 'err' : string }
+  >,
+  'addWorkspaceMember' : ActorMethod<
+    [TenantId, EntityId, UserId, WorkspaceRole, string, string],
+    { 'ok' : WorkspaceMember } |
+      { 'err' : string }
+  >,
+  'approveMilestone' : ActorMethod<
+    [TenantId, WorkspaceId, EntityId],
+    { 'ok' : EscrowMilestone } |
+      { 'err' : string }
+  >,
+  'approveTransaction' : ActorMethod<
+    [TenantId, WorkspaceId, EntityId, boolean],
+    { 'ok' : WalletTransaction } |
+      { 'err' : string }
+  >,
   'archiveProject' : ActorMethod<
-    [TenantId, EntityId],
+    [TenantId, WorkspaceId, EntityId],
     { 'ok' : Project } |
       { 'err' : string }
   >,
+  'assignArbiter' : ActorMethod<
+    [TenantId, WorkspaceId, EntityId, Principal],
+    { 'ok' : EscrowDispute } |
+      { 'err' : string }
+  >,
+  'bulkApprovePayroll' : ActorMethod<
+    [TenantId, WorkspaceId, Array<EntityId>],
+    { 'ok' : boolean } |
+      { 'err' : string }
+  >,
   'cancelEscrow' : ActorMethod<
-    [TenantId, EntityId],
+    [TenantId, WorkspaceId, EntityId],
     { 'ok' : EscrowContract } |
       { 'err' : string }
   >,
   'cancelRecurringPayment' : ActorMethod<
-    [TenantId, EntityId],
+    [TenantId, WorkspaceId, EntityId],
     { 'ok' : RecurringPayment } |
       { 'err' : string }
   >,
+  'checkSpendingLimit' : ActorMethod<
+    [TenantId, WorkspaceId, Role, number],
+    boolean
+  >,
+  'convertWhiteboardElementToTask' : ActorMethod<
+    [TenantId, WorkspaceId, EntityId, EntityId, EntityId],
+    { 'ok' : Whiteboard } |
+      { 'err' : string }
+  >,
   'createAutomationRule' : ActorMethod<
-    [TenantId, string, string, AutomationTrigger, AutomationAction],
+    [
+      TenantId,
+      WorkspaceId,
+      string,
+      string,
+      AutomationTrigger,
+      AutomationAction,
+    ],
     { 'ok' : AutomationRule } |
       { 'err' : string }
   >,
   'createBackup' : ActorMethod<
-    [TenantId, string],
+    [TenantId, WorkspaceId, string],
     { 'ok' : Backup } |
       { 'err' : string }
   >,
+  'createCalendar' : ActorMethod<
+    [TenantId, WorkspaceId, CalendarDefInput],
+    { 'ok' : CalendarDef } |
+      { 'err' : string }
+  >,
   'createChannel' : ActorMethod<
-    [TenantId, ChannelInput],
+    [TenantId, WorkspaceId, ChannelInput],
     { 'ok' : Channel } |
       { 'err' : string }
   >,
   'createEscrow' : ActorMethod<
-    [TenantId, EscrowInput],
+    [TenantId, WorkspaceId, EscrowInput],
     { 'ok' : EscrowContract } |
       { 'err' : string }
   >,
   'createEvent' : ActorMethod<
-    [TenantId, EventInput],
+    [TenantId, WorkspaceId, EventInput],
     { 'ok' : Event } |
       { 'err' : string }
   >,
+  'createEventException' : ActorMethod<
+    [TenantId, WorkspaceId, EventExceptionInput],
+    { 'ok' : EventException } |
+      { 'err' : string }
+  >,
+  'createForm' : ActorMethod<
+    [TenantId, WorkspaceId, FormInput],
+    { 'ok' : Form } |
+      { 'err' : string }
+  >,
+  'createGoal' : ActorMethod<
+    [TenantId, WorkspaceId, GoalInput],
+    { 'ok' : Goal } |
+      { 'err' : string }
+  >,
+  'createGuestInvitation' : ActorMethod<
+    [TenantId, WorkspaceId, GuestInvitationInput],
+    { 'ok' : GuestInvitation } |
+      { 'err' : string }
+  >,
+  'createMilestone' : ActorMethod<
+    [TenantId, WorkspaceId, MilestoneInput],
+    { 'ok' : Milestone } |
+      { 'err' : string }
+  >,
   'createNote' : ActorMethod<
-    [TenantId, NoteInput],
+    [TenantId, WorkspaceId, NoteInput],
     { 'ok' : Note } |
       { 'err' : string }
   >,
+  'createNoteTemplate' : ActorMethod<
+    [TenantId, WorkspaceId, NoteTemplateInput],
+    { 'ok' : NoteTemplate } |
+      { 'err' : string }
+  >,
+  'createPage' : ActorMethod<
+    [TenantId, WorkspaceId, PageInput],
+    { 'ok' : PageNode } |
+      { 'err' : string }
+  >,
   'createProject' : ActorMethod<
-    [TenantId, ProjectInput],
+    [TenantId, WorkspaceId, ProjectInput],
     { 'ok' : Project } |
       { 'err' : string }
   >,
+  'createProjectFromTemplate' : ActorMethod<
+    [TenantId, WorkspaceId, string, string, string],
+    { 'ok' : EntityId } |
+      { 'err' : string }
+  >,
   'createRecurringPayment' : ActorMethod<
-    [TenantId, EntityId, string, bigint, AssetType, PayFrequency],
+    [TenantId, WorkspaceId, EntityId, string, bigint, AssetType, PayFrequency],
     { 'ok' : RecurringPayment } |
       { 'err' : string }
   >,
+  'createRecurringTask' : ActorMethod<
+    [TenantId, WorkspaceId, RecurringTaskInput],
+    { 'ok' : RecurringTask } |
+      { 'err' : string }
+  >,
+  'createSprint' : ActorMethod<
+    [TenantId, WorkspaceId, SprintInput],
+    { 'ok' : Sprint } |
+      { 'err' : string }
+  >,
+  'createSubtask' : ActorMethod<
+    [TenantId, WorkspaceId, SubtaskInput],
+    { 'ok' : Subtask } |
+      { 'err' : string }
+  >,
   'createTask' : ActorMethod<
-    [TenantId, TaskInput],
+    [TenantId, WorkspaceId, TaskInput],
     { 'ok' : Task } |
       { 'err' : string }
   >,
+  'createTaskTemplate' : ActorMethod<
+    [TenantId, WorkspaceId, TaskTemplateInput],
+    { 'ok' : TaskTemplate } |
+      { 'err' : string }
+  >,
+  'createTimeEntry' : ActorMethod<
+    [TenantId, WorkspaceId, TimeEntryInput],
+    { 'ok' : TimeEntry } |
+      { 'err' : string }
+  >,
   'createWalletAccount' : ActorMethod<
-    [TenantId, string],
+    [TenantId, WorkspaceId, string],
     { 'ok' : WalletAccount } |
       { 'err' : string }
   >,
+  'createWhiteboard' : ActorMethod<
+    [TenantId, WorkspaceId, WhiteboardInput],
+    { 'ok' : Whiteboard } |
+      { 'err' : string }
+  >,
   'createWorkspace' : ActorMethod<
-    [TenantId, WorkspaceInput],
+    [TenantId, WorkspaceInput, string, string],
     { 'ok' : Workspace } |
       { 'err' : string }
   >,
+  'createWorkspaceTreasury' : ActorMethod<
+    [TenantId, WorkspaceId],
+    { 'ok' : WalletAccount } |
+      { 'err' : string }
+  >,
   'deactivateEmployee' : ActorMethod<
-    [TenantId, EntityId],
+    [TenantId, WorkspaceId, EntityId],
     { 'ok' : Employee } |
       { 'err' : string }
   >,
+  'deleteCalendar' : ActorMethod<
+    [TenantId, WorkspaceId, EntityId],
+    { 'ok' : boolean } |
+      { 'err' : string }
+  >,
+  'deleteChannel' : ActorMethod<
+    [TenantId, WorkspaceId, EntityId],
+    { 'ok' : boolean } |
+      { 'err' : string }
+  >,
+  'deleteChecklistItem' : ActorMethod<
+    [TenantId, WorkspaceId, EntityId],
+    { 'ok' : boolean } |
+      { 'err' : string }
+  >,
+  'deleteComment' : ActorMethod<
+    [TenantId, WorkspaceId, EntityId],
+    { 'ok' : boolean } |
+      { 'err' : string }
+  >,
   'deleteEvent' : ActorMethod<
-    [TenantId, EntityId],
+    [TenantId, WorkspaceId, EntityId],
+    { 'ok' : boolean } |
+      { 'err' : string }
+  >,
+  'deleteForm' : ActorMethod<
+    [TenantId, WorkspaceId, EntityId],
+    { 'ok' : boolean } |
+      { 'err' : string }
+  >,
+  'deleteGoal' : ActorMethod<
+    [TenantId, WorkspaceId, EntityId],
+    { 'ok' : boolean } |
+      { 'err' : string }
+  >,
+  'deleteIntegration' : ActorMethod<
+    [TenantId, WorkspaceId, EntityId],
+    { 'ok' : boolean } |
+      { 'err' : string }
+  >,
+  'deleteKeyResult' : ActorMethod<
+    [TenantId, WorkspaceId, EntityId],
     { 'ok' : boolean } |
       { 'err' : string }
   >,
   'deleteMessage' : ActorMethod<
-    [TenantId, EntityId],
+    [TenantId, WorkspaceId, EntityId],
+    { 'ok' : boolean } |
+      { 'err' : string }
+  >,
+  'deleteMilestone' : ActorMethod<
+    [TenantId, WorkspaceId, EntityId],
     { 'ok' : boolean } |
       { 'err' : string }
   >,
   'deleteNote' : ActorMethod<
-    [TenantId, EntityId],
+    [TenantId, WorkspaceId, EntityId],
+    { 'ok' : boolean } |
+      { 'err' : string }
+  >,
+  'deleteNoteTemplate' : ActorMethod<
+    [TenantId, WorkspaceId, EntityId],
+    { 'ok' : boolean } |
+      { 'err' : string }
+  >,
+  'deletePage' : ActorMethod<
+    [TenantId, WorkspaceId, EntityId],
+    { 'ok' : boolean } |
+      { 'err' : string }
+  >,
+  'deleteRecurringTask' : ActorMethod<
+    [TenantId, WorkspaceId, EntityId],
+    { 'ok' : boolean } |
+      { 'err' : string }
+  >,
+  'deleteSprint' : ActorMethod<
+    [TenantId, WorkspaceId, EntityId],
+    { 'ok' : boolean } |
+      { 'err' : string }
+  >,
+  'deleteSubtask' : ActorMethod<
+    [TenantId, WorkspaceId, EntityId],
     { 'ok' : boolean } |
       { 'err' : string }
   >,
   'deleteTask' : ActorMethod<
-    [TenantId, EntityId],
+    [TenantId, WorkspaceId, EntityId],
     { 'ok' : boolean } |
       { 'err' : string }
   >,
-  'disputeEscrow' : ActorMethod<
-    [TenantId, EntityId],
+  'deleteTaskTemplate' : ActorMethod<
+    [TenantId, WorkspaceId, EntityId],
+    { 'ok' : boolean } |
+      { 'err' : string }
+  >,
+  'deleteTimeEntry' : ActorMethod<
+    [TenantId, WorkspaceId, EntityId],
+    { 'ok' : boolean } |
+      { 'err' : string }
+  >,
+  'deleteWhiteboard' : ActorMethod<
+    [TenantId, WorkspaceId, EntityId],
+    { 'ok' : boolean } |
+      { 'err' : string }
+  >,
+  /**
+   * / Deposit funds into an escrow using the ICRC-2 approve/transfer_from pattern (Protection 3).
+   * / Flow: caller must first call icrc2_approve on the ICP or ckBTC ledger to authorize
+   * / this canister to pull `contract.amount` tokens. Then call this method to execute the pull.
+   * / On success: sets escrow status to #Funded with actual funded amount and block height.
+   * / On failure: escrow remains #Pending, caller can retry after re-approving.
+   */
+  'depositEscrow' : ActorMethod<
+    [TenantId, WorkspaceId, EntityId],
     { 'ok' : EscrowContract } |
       { 'err' : string }
+  >,
+  'disputeEscrow' : ActorMethod<
+    [TenantId, WorkspaceId, EntityId],
+    { 'ok' : EscrowContract } |
+      { 'err' : string }
+  >,
+  'editComment' : ActorMethod<
+    [TenantId, WorkspaceId, EntityId, string],
+    { 'ok' : TaskComment } |
+      { 'err' : string }
+  >,
+  'exportTimeEntries' : ActorMethod<
+    [WorkspaceId, TenantId, TimeReportFilter],
+    string
+  >,
+  'exportTransactions' : ActorMethod<
+    [TenantId, WorkspaceId, EntityId, [] | [TxFilter]],
+    string
   >,
   'fundEscrow' : ActorMethod<
-    [TenantId, EntityId],
+    [TenantId, WorkspaceId, EntityId],
     { 'ok' : EscrowContract } |
       { 'err' : string }
   >,
+  'getAIConfig' : ActorMethod<[TenantId, WorkspaceId], [] | [AIConfig]>,
+  'getAIResponses' : ActorMethod<
+    [TenantId, WorkspaceId, [] | [EntityId], bigint],
+    Array<AIResponse>
+  >,
+  'getAvailability' : ActorMethod<
+    [TenantId, WorkspaceId, Array<UserId>, string, string],
+    Array<AvailabilitySlot>
+  >,
+  'getBacklinks' : ActorMethod<
+    [TenantId, WorkspaceId, EntityId],
+    Array<PageNode>
+  >,
   'getBackup' : ActorMethod<
-    [TenantId, EntityId],
+    [TenantId, WorkspaceId, EntityId],
     { 'ok' : Backup } |
       { 'err' : string }
   >,
+  'getCalendar' : ActorMethod<
+    [TenantId, WorkspaceId, EntityId],
+    { 'ok' : CalendarDef } |
+      { 'err' : string }
+  >,
   'getChannel' : ActorMethod<
-    [TenantId, EntityId],
+    [TenantId, WorkspaceId, EntityId],
     { 'ok' : Channel } |
       { 'err' : string }
   >,
+  'getChannelPins' : ActorMethod<
+    [TenantId, WorkspaceId, EntityId],
+    Array<Message>
+  >,
+  'getContractor' : ActorMethod<
+    [TenantId, WorkspaceId, EntityId],
+    { 'ok' : Contractor } |
+      { 'err' : string }
+  >,
   'getEmployee' : ActorMethod<
-    [TenantId, EntityId],
+    [TenantId, WorkspaceId, EntityId],
     { 'ok' : Employee } |
       { 'err' : string }
   >,
   'getEscrow' : ActorMethod<
-    [TenantId, EntityId],
+    [TenantId, WorkspaceId, EntityId],
     { 'ok' : EscrowContract } |
       { 'err' : string }
   >,
+  'getEscrowDispute' : ActorMethod<
+    [TenantId, WorkspaceId, EntityId],
+    { 'ok' : EscrowDispute } |
+      { 'err' : string }
+  >,
+  'getEscrowSummary' : ActorMethod<
+    [TenantId, WorkspaceId, EntityId],
+    { 'ok' : EscrowSummary } |
+      { 'err' : string }
+  >,
   'getEvent' : ActorMethod<
-    [TenantId, EntityId],
+    [TenantId, WorkspaceId, EntityId],
     { 'ok' : Event } |
       { 'err' : string }
   >,
+  'getEventException' : ActorMethod<
+    [TenantId, WorkspaceId, EntityId],
+    { 'ok' : EventException } |
+      { 'err' : string }
+  >,
+  'getEventRsvps' : ActorMethod<
+    [TenantId, WorkspaceId, string],
+    Array<EventRsvp>
+  >,
+  'getForm' : ActorMethod<
+    [TenantId, WorkspaceId, EntityId],
+    { 'ok' : Form } |
+      { 'err' : string }
+  >,
+  'getFormAnalytics' : ActorMethod<
+    [TenantId, WorkspaceId, EntityId],
+    FormAnalytics
+  >,
+  'getGoal' : ActorMethod<
+    [TenantId, WorkspaceId, EntityId],
+    { 'ok' : Goal } |
+      { 'err' : string }
+  >,
+  'getGuestUser' : ActorMethod<
+    [TenantId, WorkspaceId, EntityId],
+    [] | [GuestUser]
+  >,
+  'getIntegrationActivityLog' : ActorMethod<
+    [
+      TenantId,
+      WorkspaceId,
+      [] | [IntegrationProvider],
+      [] | [Timestamp],
+      [] | [Timestamp],
+      bigint,
+    ],
+    Array<IntegrationEvent>
+  >,
+  'getIntegrationEvents' : ActorMethod<
+    [TenantId, WorkspaceId, EntityId, bigint],
+    Array<IntegrationEvent>
+  >,
+  'getIntegrations' : ActorMethod<[TenantId, WorkspaceId], Array<Integration>>,
   'getMessages' : ActorMethod<
-    [TenantId, EntityId, bigint, [] | [Timestamp]],
+    [TenantId, WorkspaceId, EntityId, bigint, [] | [Timestamp]],
     Array<Message>
   >,
   'getMyProfile' : ActorMethod<[TenantId], [] | [UserProfile]>,
-  'getMyWalletAccount' : ActorMethod<[TenantId], [] | [WalletAccount]>,
+  /**
+   * / Returns wallet account with LIVE ICP and ckBTC balances from the real ledger.
+   * / Includes lazy migration: if stored accountId is not a valid 64-char hex, re-derives it.
+   */
+  'getMyWalletAccount' : ActorMethod<
+    [TenantId, WorkspaceId],
+    [] | [WalletAccount]
+  >,
   'getNote' : ActorMethod<
-    [TenantId, EntityId],
+    [TenantId, WorkspaceId, EntityId],
     { 'ok' : Note } |
       { 'err' : string }
   >,
+  'getOrCreateWorkspaceShareToken' : ActorMethod<
+    [WorkspaceId, TenantId],
+    string
+  >,
+  'getPage' : ActorMethod<
+    [TenantId, WorkspaceId, EntityId],
+    { 'ok' : PageNode } |
+      { 'err' : string }
+  >,
+  'getPageHierarchy' : ActorMethod<[TenantId, WorkspaceId], Array<PageNode>>,
+  'getPendingApprovals' : ActorMethod<
+    [TenantId, WorkspaceId],
+    Array<WalletTransaction>
+  >,
   'getProject' : ActorMethod<
-    [TenantId, EntityId],
+    [TenantId, WorkspaceId, EntityId],
     { 'ok' : Project } |
       { 'err' : string }
   >,
+  'getProjectTimeEntries' : ActorMethod<
+    [TenantId, WorkspaceId, EntityId],
+    Array<TimeEntry>
+  >,
+  'getPromptHistory' : ActorMethod<
+    [TenantId, WorkspaceId, [] | [UserId], bigint],
+    Array<AIPrompt>
+  >,
+  'getPublicForm' : ActorMethod<[string], [] | [Form]>,
+  'getPublicGoals' : ActorMethod<
+    [string],
+    { 'ok' : Array<PublicGoal> } |
+      { 'err' : string }
+  >,
+  'getReceiveAddress' : ActorMethod<
+    [TenantId, WorkspaceId, EntityId],
+    { 'ok' : string } |
+      { 'err' : string }
+  >,
+  'getSpendingLimit' : ActorMethod<
+    [TenantId, WorkspaceId, Role],
+    [] | [WorkspaceSpendingLimit]
+  >,
+  'getSprint' : ActorMethod<
+    [TenantId, WorkspaceId, EntityId],
+    { 'ok' : Sprint } |
+      { 'err' : string }
+  >,
   'getTask' : ActorMethod<
-    [TenantId, EntityId],
+    [TenantId, WorkspaceId, EntityId],
     { 'ok' : Task } |
       { 'err' : string }
   >,
+  'getTaskTemplate' : ActorMethod<
+    [TenantId, WorkspaceId, EntityId],
+    { 'ok' : TaskTemplate } |
+      { 'err' : string }
+  >,
+  'getTaskTimeEntries' : ActorMethod<
+    [TenantId, WorkspaceId, EntityId],
+    Array<TimeEntry>
+  >,
+  'getThreadMessages' : ActorMethod<
+    [TenantId, WorkspaceId, EntityId],
+    Array<Message>
+  >,
+  'getTimeReport' : ActorMethod<
+    [WorkspaceId, TenantId, TimeReportFilter],
+    TimeReport
+  >,
+  'getUnreadCounts' : ActorMethod<
+    [TenantId, WorkspaceId],
+    Array<[string, bigint]>
+  >,
+  'getUserStatus' : ActorMethod<
+    [TenantId, WorkspaceId, Principal],
+    [] | [UserStatus]
+  >,
+  'getUserTimeEntries' : ActorMethod<
+    [TenantId, WorkspaceId, UserId],
+    Array<TimeEntry>
+  >,
   'getWalletAccount' : ActorMethod<
-    [TenantId, EntityId],
+    [TenantId, WorkspaceId, EntityId],
     { 'ok' : WalletAccount } |
+      { 'err' : string }
+  >,
+  'getWeeklyTimesheet' : ActorMethod<
+    [WorkspaceId, TenantId, UserId, Timestamp],
+    Array<DailyTimesheetEntry>
+  >,
+  'getWhiteboard' : ActorMethod<
+    [TenantId, WorkspaceId, EntityId],
+    { 'ok' : Whiteboard } |
       { 'err' : string }
   >,
   'getWorkspace' : ActorMethod<
@@ -511,8 +2041,26 @@ export interface _SERVICE {
     { 'ok' : Workspace } |
       { 'err' : string }
   >,
+  /**
+   * / Returns real workspace statistics aggregated from live backend data.
+   */
+  'getWorkspaceDashboardStats' : ActorMethod<
+    [WorkspaceId, TenantId],
+    DashboardStats
+  >,
+  'getWorkspaceMember' : ActorMethod<
+    [TenantId, EntityId, UserId],
+    [] | [WorkspaceMember]
+  >,
+  /**
+   * / Returns recent activity feed (up to `limit` entries) from real workspace events.
+   */
+  'getWorkspaceRecentActivity' : ActorMethod<
+    [WorkspaceId, TenantId, bigint],
+    Array<ActivityEntry>
+  >,
   'getWorkspaceStats' : ActorMethod<
-    [TenantId],
+    [TenantId, WorkspaceId],
     {
       'walletAccountCount' : bigint,
       'employeeCount' : bigint,
@@ -521,85 +2069,515 @@ export interface _SERVICE {
       'projectCount' : bigint,
     }
   >,
+  /**
+   * / Returns workspace treasury account with LIVE ICP and ckBTC balances from the real ledger.
+   * / Treasury address is derived from the CANISTER's own principal + workspace subaccount,
+   * / guaranteeing it is always distinct from any user's personal wallet address.
+   * / Includes lazy migration: if stored accountId is not a valid 64-char hex, re-derives it
+   * / using the canister principal + workspace subaccount (the correct treasury derivation).
+   */
+  'getWorkspaceTreasury' : ActorMethod<
+    [TenantId, WorkspaceId],
+    [] | [WalletAccount]
+  >,
+  'isWatching' : ActorMethod<
+    [TenantId, WorkspaceId, EntityId, UserId],
+    boolean
+  >,
   'joinChannel' : ActorMethod<
-    [TenantId, EntityId],
+    [TenantId, WorkspaceId, EntityId],
     { 'ok' : Channel } |
       { 'err' : string }
   >,
-  'listAuditLogs' : ActorMethod<[TenantId, bigint], Array<AuditLog>>,
-  'listAutomationRules' : ActorMethod<[TenantId], Array<AutomationRule>>,
-  'listBackups' : ActorMethod<[TenantId], Array<Backup>>,
-  'listChannels' : ActorMethod<[TenantId], Array<Channel>>,
-  'listEmployees' : ActorMethod<[TenantId], Array<Employee>>,
-  'listEscrows' : ActorMethod<[TenantId], Array<EscrowContract>>,
-  'listEvents' : ActorMethod<[TenantId, Timestamp, Timestamp], Array<Event>>,
-  'listMyEvents' : ActorMethod<[TenantId], Array<Event>>,
-  'listNotes' : ActorMethod<[TenantId], Array<Note>>,
+  'leaveChannel' : ActorMethod<
+    [TenantId, WorkspaceId, EntityId],
+    { 'ok' : Channel } |
+      { 'err' : string }
+  >,
+  'linkTaskToKR' : ActorMethod<
+    [TenantId, WorkspaceId, EntityId, EntityId],
+    { 'ok' : KeyResult } |
+      { 'err' : string }
+  >,
+  'listActivityEvents' : ActorMethod<
+    [TenantId, WorkspaceId, EntityId],
+    Array<ActivityEvent>
+  >,
+  'listAuditLogs' : ActorMethod<
+    [TenantId, WorkspaceId, bigint],
+    Array<AuditLog>
+  >,
+  'listAutomationRules' : ActorMethod<
+    [TenantId, WorkspaceId],
+    Array<AutomationRule>
+  >,
+  'listBackups' : ActorMethod<[TenantId, WorkspaceId], Array<Backup>>,
+  'listBenefits' : ActorMethod<
+    [TenantId, WorkspaceId, [] | [EntityId]],
+    Array<Benefit>
+  >,
+  'listCalendars' : ActorMethod<
+    [TenantId, WorkspaceId, [] | [UserId]],
+    Array<CalendarDef>
+  >,
+  'listChannels' : ActorMethod<[TenantId, WorkspaceId], Array<Channel>>,
+  'listCheckIns' : ActorMethod<
+    [TenantId, WorkspaceId, EntityId],
+    Array<GoalCheckIn>
+  >,
+  'listChecklistItems' : ActorMethod<
+    [TenantId, WorkspaceId, EntityId],
+    Array<ChecklistItem>
+  >,
+  'listComments' : ActorMethod<
+    [TenantId, WorkspaceId, EntityId],
+    Array<TaskComment>
+  >,
+  'listContractorPayments' : ActorMethod<
+    [TenantId, WorkspaceId, [] | [EntityId]],
+    Array<ContractorPayment>
+  >,
+  'listContractors' : ActorMethod<[TenantId, WorkspaceId], Array<Contractor>>,
+  'listDeductions' : ActorMethod<
+    [TenantId, WorkspaceId, [] | [EntityId]],
+    Array<Deduction>
+  >,
+  'listEmployees' : ActorMethod<[TenantId, WorkspaceId], Array<Employee>>,
+  'listEscrowDisputes' : ActorMethod<
+    [TenantId, WorkspaceId, EntityId],
+    Array<EscrowDispute>
+  >,
+  'listEscrowMilestones' : ActorMethod<
+    [TenantId, WorkspaceId, EntityId],
+    Array<EscrowMilestone>
+  >,
+  'listEscrows' : ActorMethod<
+    [TenantId, WorkspaceId, [] | [EscrowFilter]],
+    Array<EscrowContract>
+  >,
+  'listEventExceptions' : ActorMethod<
+    [TenantId, WorkspaceId, string],
+    Array<EventException>
+  >,
+  'listEventRsvps' : ActorMethod<
+    [TenantId, WorkspaceId, UserId],
+    Array<EventRsvp>
+  >,
+  'listEvents' : ActorMethod<
+    [TenantId, WorkspaceId, Timestamp, Timestamp],
+    Array<Event>
+  >,
+  'listFormSubmissions' : ActorMethod<
+    [TenantId, WorkspaceId, EntityId],
+    Array<FormSubmission>
+  >,
+  'listForms' : ActorMethod<[TenantId, WorkspaceId], Array<Form>>,
+  'listGoals' : ActorMethod<[TenantId, WorkspaceId], Array<Goal>>,
+  'listGuestUsers' : ActorMethod<[TenantId, WorkspaceId], Array<GuestUser>>,
+  'listKeyResults' : ActorMethod<
+    [TenantId, WorkspaceId, EntityId],
+    Array<KeyResult>
+  >,
+  'listMessages' : ActorMethod<
+    [TenantId, WorkspaceId, EntityId, bigint, [] | [Timestamp]],
+    Array<Message>
+  >,
+  'listMilestones' : ActorMethod<
+    [TenantId, WorkspaceId, EntityId],
+    Array<Milestone>
+  >,
+  'listMyEvents' : ActorMethod<[TenantId, WorkspaceId], Array<Event>>,
+  'listNoteTemplates' : ActorMethod<
+    [TenantId, WorkspaceId],
+    Array<NoteTemplate>
+  >,
+  'listNotes' : ActorMethod<[TenantId, WorkspaceId], Array<Note>>,
+  'listOffCyclePayments' : ActorMethod<
+    [TenantId, WorkspaceId, [] | [EntityId]],
+    Array<OffCyclePayment>
+  >,
+  'listPages' : ActorMethod<
+    [TenantId, WorkspaceId, [] | [EntityId]],
+    Array<PageNode>
+  >,
+  'listPaySchedules' : ActorMethod<[TenantId, WorkspaceId], Array<PaySchedule>>,
+  'listPayStubs' : ActorMethod<
+    [TenantId, WorkspaceId, [] | [EntityId]],
+    Array<PayStub>
+  >,
+  'listPayrollAuditLog' : ActorMethod<
+    [TenantId, WorkspaceId, bigint],
+    Array<AuditLogEntry>
+  >,
   'listPayrollRecords' : ActorMethod<
-    [TenantId, [] | [EntityId]],
+    [TenantId, WorkspaceId, [] | [EntityId]],
     Array<PayrollRecord>
   >,
   'listProfiles' : ActorMethod<[TenantId], Array<UserProfile>>,
-  'listProjects' : ActorMethod<[TenantId], Array<Project>>,
+  'listProjectDeadlines' : ActorMethod<[TenantId, WorkspaceId], Array<Event>>,
+  'listProjects' : ActorMethod<[TenantId, WorkspaceId], Array<Project>>,
   'listRecurringPayments' : ActorMethod<
-    [TenantId, EntityId],
+    [TenantId, WorkspaceId, EntityId],
     Array<RecurringPayment>
   >,
-  'listTasks' : ActorMethod<[TenantId, EntityId], Array<Task>>,
+  'listRecurringTasks' : ActorMethod<
+    [TenantId, WorkspaceId, EntityId],
+    Array<RecurringTask>
+  >,
+  'listSprints' : ActorMethod<[TenantId, WorkspaceId, EntityId], Array<Sprint>>,
+  'listSubtasks' : ActorMethod<
+    [TenantId, WorkspaceId, EntityId],
+    Array<Subtask>
+  >,
+  'listTaskRelationships' : ActorMethod<
+    [TenantId, WorkspaceId, EntityId],
+    Array<TaskRelationship>
+  >,
+  'listTaskTemplates' : ActorMethod<
+    [TenantId, WorkspaceId],
+    Array<TaskTemplate>
+  >,
+  'listTaskWatchers' : ActorMethod<
+    [TenantId, WorkspaceId, EntityId],
+    Array<TaskWatcher>
+  >,
+  'listTasks' : ActorMethod<[TenantId, WorkspaceId, EntityId], Array<Task>>,
   'listTransactions' : ActorMethod<
-    [TenantId, EntityId],
+    [TenantId, WorkspaceId, EntityId, [] | [TxFilter]],
     Array<WalletTransaction>
   >,
+  'listWhiteboardTemplates' : ActorMethod<[], Array<WhiteboardTemplate>>,
+  'listWhiteboards' : ActorMethod<[TenantId, WorkspaceId], Array<Whiteboard>>,
+  'listWorkspaceMembers' : ActorMethod<
+    [TenantId, EntityId],
+    Array<WorkspaceMember>
+  >,
   'listWorkspaces' : ActorMethod<[TenantId], Array<Workspace>>,
+  'markChannelRead' : ActorMethod<
+    [TenantId, WorkspaceId, EntityId],
+    { 'ok' : boolean } |
+      { 'err' : string }
+  >,
+  'pinMessage' : ActorMethod<
+    [TenantId, WorkspaceId, EntityId, string],
+    { 'ok' : Channel } |
+      { 'err' : string }
+  >,
+  'processIntegrationTrigger' : ActorMethod<
+    [TenantId, WorkspaceId, IntegrationProvider, string, string, string],
+    { 'ok' : IntegrationEvent } |
+      { 'err' : string }
+  >,
   'processPayroll' : ActorMethod<
-    [TenantId, EntityId, string],
+    [TenantId, WorkspaceId, EntityId, string],
+    { 'ok' : PayrollRecord } |
+      { 'err' : string }
+  >,
+  'raiseEscrowDispute' : ActorMethod<
+    [TenantId, WorkspaceId, EntityId, string],
+    { 'ok' : EscrowDispute } |
+      { 'err' : string }
+  >,
+  'recordCheckIn' : ActorMethod<
+    [TenantId, WorkspaceId, CheckInInput],
+    { 'ok' : GoalCheckIn } |
+      { 'err' : string }
+  >,
+  'regenerateWorkspaceShareToken' : ActorMethod<
+    [WorkspaceId, TenantId],
+    string
+  >,
+  'rejectPayrollRecord' : ActorMethod<
+    [TenantId, WorkspaceId, EntityId, string],
     { 'ok' : PayrollRecord } |
       { 'err' : string }
   >,
   'releaseEscrow' : ActorMethod<
-    [TenantId, EntityId],
+    [TenantId, WorkspaceId, EntityId],
     { 'ok' : EscrowContract } |
       { 'err' : string }
   >,
-  'searchNotes' : ActorMethod<[TenantId, string], Array<Note>>,
+  /**
+   * / Release milestone funds via the real ICP ledger.
+   * / Protection 1 (state-before-transfer): sets milestone to #Releasing BEFORE the async ledger call.
+   * / Protection 2 (unique memo): increments txMemoCounter and passes it as the ICP transfer memo.
+   * / On ledger success: marks milestone #Released with block height.
+   * / On ledger failure: reverts milestone back to #Approved so it can be retried.
+   */
+  'releaseMilestoneFunds' : ActorMethod<
+    [TenantId, WorkspaceId, EntityId],
+    { 'ok' : EscrowMilestone } |
+      { 'err' : string }
+  >,
+  'removeReaction' : ActorMethod<
+    [TenantId, WorkspaceId, EntityId, string],
+    { 'ok' : Message } |
+      { 'err' : string }
+  >,
+  'removeTaskFromSprint' : ActorMethod<
+    [TenantId, WorkspaceId, EntityId, EntityId],
+    { 'ok' : Sprint } |
+      { 'err' : string }
+  >,
+  'removeTaskRelationship' : ActorMethod<
+    [TenantId, WorkspaceId, EntityId],
+    { 'ok' : boolean } |
+      { 'err' : string }
+  >,
+  'removeTaskWatcher' : ActorMethod<
+    [TenantId, WorkspaceId, EntityId, UserId],
+    { 'ok' : boolean } |
+      { 'err' : string }
+  >,
+  'removeWorkspaceMember' : ActorMethod<
+    [TenantId, EntityId, UserId],
+    { 'ok' : null } |
+      { 'err' : string }
+  >,
+  'resolveDispute' : ActorMethod<
+    [TenantId, WorkspaceId, EntityId, string],
+    { 'ok' : EscrowDispute } |
+      { 'err' : string }
+  >,
+  'respondToEvent' : ActorMethod<
+    [TenantId, WorkspaceId, EventRsvpInput],
+    { 'ok' : EventRsvp } |
+      { 'err' : string }
+  >,
+  'saveAIConfig' : ActorMethod<
+    [TenantId, WorkspaceId, AIConfigInput],
+    { 'ok' : AIConfig } |
+      { 'err' : string }
+  >,
+  'saveIntegration' : ActorMethod<
+    [TenantId, WorkspaceId, IntegrationInput],
+    { 'ok' : Integration } |
+      { 'err' : string }
+  >,
+  'searchMessages' : ActorMethod<
+    [
+      TenantId,
+      WorkspaceId,
+      string,
+      [] | [EntityId],
+      [] | [Principal],
+      [] | [bigint],
+      [] | [bigint],
+    ],
+    Array<Message>
+  >,
+  'searchNotes' : ActorMethod<[TenantId, WorkspaceId, string], Array<Note>>,
+  /**
+   * / Send ICP or ckBTC via the real on-chain ledger.
+   * / For ICP: calls icpLedger.transfer() with standard fee of 10_000 e8s.
+   * / For ckBTC: calls ckBTCLedger.icrc1_transfer() to recipient principal.
+   * / On ledger error: returns #err — transaction is NOT recorded.
+   */
   'sendAsset' : ActorMethod<
-    [TenantId, EntityId, AssetType, bigint, string, [] | [string]],
+    [
+      TenantId,
+      WorkspaceId,
+      EntityId,
+      AssetType,
+      bigint,
+      string,
+      [] | [string],
+      bigint,
+    ],
     { 'ok' : WalletTransaction } |
       { 'err' : string }
   >,
   'sendMessage' : ActorMethod<
-    [TenantId, MessageInput],
+    [TenantId, WorkspaceId, MessageInput],
     { 'ok' : Message } |
       { 'err' : string }
   >,
+  'setSpendingLimit' : ActorMethod<
+    [TenantId, WorkspaceId, Role, number, string],
+    { 'ok' : WorkspaceSpendingLimit } |
+      { 'err' : string }
+  >,
+  'setUserStatus' : ActorMethod<
+    [
+      TenantId,
+      WorkspaceId,
+      { 'away' : null } |
+        { 'offline' : null } |
+        { 'online' : null },
+      string,
+    ],
+    { 'ok' : UserStatus } |
+      { 'err' : string }
+  >,
+  'submitAIPrompt' : ActorMethod<
+    [TenantId, WorkspaceId, AIPromptInput],
+    { 'ok' : AIResponse } |
+      { 'err' : string }
+  >,
+  'submitFormResponse' : ActorMethod<
+    [FormSubmissionInput],
+    { 'ok' : FormSubmission } |
+      { 'err' : string }
+  >,
   'toggleAutomationRule' : ActorMethod<
-    [TenantId, EntityId],
+    [TenantId, WorkspaceId, EntityId],
     { 'ok' : AutomationRule } |
       { 'err' : string }
   >,
+  'toggleGoalPublic' : ActorMethod<
+    [EntityId, WorkspaceId, TenantId],
+    { 'ok' : Goal } |
+      { 'err' : string }
+  >,
+  'unlinkTaskFromKR' : ActorMethod<
+    [TenantId, WorkspaceId, EntityId, EntityId],
+    { 'ok' : KeyResult } |
+      { 'err' : string }
+  >,
+  'unpinMessage' : ActorMethod<
+    [TenantId, WorkspaceId, EntityId, string],
+    { 'ok' : Channel } |
+      { 'err' : string }
+  >,
+  'updateCalendar' : ActorMethod<
+    [TenantId, WorkspaceId, EntityId, CalendarDefInput],
+    { 'ok' : CalendarDef } |
+      { 'err' : string }
+  >,
+  'updateChannel' : ActorMethod<
+    [TenantId, WorkspaceId, EntityId, string, string, string],
+    { 'ok' : Channel } |
+      { 'err' : string }
+  >,
+  'updateChannelTopic' : ActorMethod<
+    [TenantId, WorkspaceId, EntityId, string],
+    { 'ok' : Channel } |
+      { 'err' : string }
+  >,
+  'updateChecklistItem' : ActorMethod<
+    [TenantId, WorkspaceId, EntityId, string, boolean],
+    { 'ok' : ChecklistItem } |
+      { 'err' : string }
+  >,
+  'updateContractor' : ActorMethod<
+    [TenantId, WorkspaceId, EntityId, ContractorInput],
+    { 'ok' : Contractor } |
+      { 'err' : string }
+  >,
+  'updateDeduction' : ActorMethod<
+    [TenantId, WorkspaceId, EntityId, boolean, number],
+    { 'ok' : Deduction } |
+      { 'err' : string }
+  >,
   'updateEmployee' : ActorMethod<
-    [TenantId, EntityId, EmployeeInput],
+    [TenantId, WorkspaceId, EntityId, EmployeeInput],
     { 'ok' : Employee } |
       { 'err' : string }
   >,
+  'updateEscrowMilestone' : ActorMethod<
+    [TenantId, WorkspaceId, EntityId, EscrowMilestoneInput],
+    { 'ok' : EscrowMilestone } |
+      { 'err' : string }
+  >,
   'updateEvent' : ActorMethod<
-    [TenantId, EntityId, EventInput],
+    [TenantId, WorkspaceId, EntityId, EventInput],
     { 'ok' : Event } |
       { 'err' : string }
   >,
+  'updateForm' : ActorMethod<
+    [TenantId, WorkspaceId, EntityId, FormInput],
+    { 'ok' : Form } |
+      { 'err' : string }
+  >,
+  'updateGoal' : ActorMethod<
+    [TenantId, WorkspaceId, EntityId, GoalInput, GoalStatus],
+    { 'ok' : Goal } |
+      { 'err' : string }
+  >,
+  'updateGuestStatus' : ActorMethod<
+    [TenantId, WorkspaceId, EntityId, GuestStatus],
+    { 'ok' : GuestUser } |
+      { 'err' : string }
+  >,
+  'updateIntegrationSyncStatus' : ActorMethod<
+    [TenantId, WorkspaceId, EntityId, string, Timestamp],
+    { 'ok' : boolean } |
+      { 'err' : string }
+  >,
+  'updateKeyResult' : ActorMethod<
+    [TenantId, WorkspaceId, EntityId, number, KRStatus],
+    { 'ok' : KeyResult } |
+      { 'err' : string }
+  >,
+  'updateMilestone' : ActorMethod<
+    [TenantId, WorkspaceId, EntityId, string, MilestoneStatus, Timestamp],
+    { 'ok' : Milestone } |
+      { 'err' : string }
+  >,
   'updateNote' : ActorMethod<
-    [TenantId, EntityId, NoteInput],
+    [TenantId, WorkspaceId, EntityId, NoteInput],
     { 'ok' : Note } |
       { 'err' : string }
   >,
+  'updatePage' : ActorMethod<
+    [
+      TenantId,
+      WorkspaceId,
+      EntityId,
+      string,
+      string,
+      [] | [string],
+      Array<Block>,
+    ],
+    { 'ok' : PageNode } |
+      { 'err' : string }
+  >,
   'updateProject' : ActorMethod<
-    [TenantId, EntityId, ProjectInput],
+    [TenantId, WorkspaceId, EntityId, ProjectInput],
     { 'ok' : Project } |
       { 'err' : string }
   >,
+  'updateSprint' : ActorMethod<
+    [
+      TenantId,
+      WorkspaceId,
+      EntityId,
+      string,
+      string,
+      SprintStatus,
+      Array<EntityId>,
+    ],
+    { 'ok' : Sprint } |
+      { 'err' : string }
+  >,
+  'updateSubtask' : ActorMethod<
+    [TenantId, WorkspaceId, EntityId, string, TaskStatus],
+    { 'ok' : Subtask } |
+      { 'err' : string }
+  >,
   'updateTask' : ActorMethod<
-    [TenantId, EntityId, TaskInput],
+    [TenantId, WorkspaceId, EntityId, TaskInput],
     { 'ok' : Task } |
+      { 'err' : string }
+  >,
+  'updateTimeEntry' : ActorMethod<
+    [TenantId, WorkspaceId, EntityId, TimeEntryInput],
+    { 'ok' : TimeEntry } |
+      { 'err' : string }
+  >,
+  'updateWhiteboardElements' : ActorMethod<
+    [TenantId, WorkspaceId, EntityId, Array<WhiteboardElement>],
+    { 'ok' : Whiteboard } |
+      { 'err' : string }
+  >,
+  'updateWorkspace' : ActorMethod<
+    [TenantId, EntityId, string],
+    { 'ok' : Workspace } |
+      { 'err' : string }
+  >,
+  'updateWorkspaceMemberRole' : ActorMethod<
+    [TenantId, EntityId, UserId, WorkspaceRole],
+    { 'ok' : WorkspaceMember } |
       { 'err' : string }
   >,
   'upsertProfile' : ActorMethod<

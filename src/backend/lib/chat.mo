@@ -1,10 +1,9 @@
 import Map "mo:core/Map";
-import Iter "mo:core/Iter";
 import Array "mo:core/Array";
 import Text "mo:core/Text";
 import Time "mo:core/Time";
-import Int "mo:core/Int";
 import Principal "mo:core/Principal";
+import Runtime "mo:core/Runtime";
 import Types "../types/chat";
 import Common "../types/common";
 
@@ -20,6 +19,14 @@ module {
     Map.fromArray(store)
   };
 
+  func toStatusMap(store : [(Text, Types.UserStatus)]) : Map.Map<Text, Types.UserStatus> {
+    Map.fromArray(store)
+  };
+
+  func toNotifMap(store : [(Text, Types.ThreadNotification)]) : Map.Map<Text, Types.ThreadNotification> {
+    Map.fromArray(store)
+  };
+
   func channelToStore(m : Map.Map<Common.EntityId, Types.Channel>) : [(Common.EntityId, Types.Channel)] {
     m.toArray()
   };
@@ -28,9 +35,21 @@ module {
     m.toArray()
   };
 
+  func statusToStore(m : Map.Map<Text, Types.UserStatus>) : [(Text, Types.UserStatus)] {
+    m.toArray()
+  };
+
+  func notifToStore(m : Map.Map<Text, Types.ThreadNotification>) : [(Text, Types.ThreadNotification)] {
+    m.toArray()
+  };
+
   func genId(salt : Text) : Common.EntityId {
     let ts = Time.now();
     ts.toText() # "-" # salt
+  };
+
+  func statusKey(tenantId : Common.TenantId, workspaceId : Common.WorkspaceId, userId : Principal) : Text {
+    tenantId # ":" # workspaceId # ":" # userId.toText()
   };
 
   func isMember(channel : Types.Channel, userId : Common.UserId) : Bool {
@@ -42,13 +61,13 @@ module {
   public func createChannel(
     channelStore : [(Common.EntityId, Types.Channel)],
     tenantId : Common.TenantId,
+    workspaceId : Common.WorkspaceId,
     caller : Common.UserId,
     input : Types.ChannelInput,
   ) : (Types.Channel, [(Common.EntityId, Types.Channel)]) {
     let now = Time.now();
     let id = genId(caller.toText() # "ch");
-    // Include caller in memberIds if not already present
-    let members : [Common.UserId] = if (input.memberIds.any(func(id : Common.UserId) : Bool { Principal.equal(id, caller) })) {
+    let members : [Common.UserId] = if (input.memberIds.any(func(uid : Common.UserId) : Bool { Principal.equal(uid, caller) })) {
       input.memberIds
     } else {
       input.memberIds.concat([caller])
@@ -56,12 +75,17 @@ module {
     let channel : Types.Channel = {
       id;
       tenantId;
+      workspaceId;
       name = input.name;
       description = input.description;
       createdBy = caller;
       memberIds = members;
       isPublic = input.isPublic;
       createdAt = now;
+      pinnedMessageIds = ?[];
+      topic = ?"";
+      unreadCounts = ?[];
+      mentionFlags = ?[];
     };
     let m = toChannelMap(channelStore);
     m.add(id, channel);
@@ -71,11 +95,12 @@ module {
   public func getChannel(
     channelStore : [(Common.EntityId, Types.Channel)],
     tenantId : Common.TenantId,
+    workspaceId : Common.WorkspaceId,
     id : Common.EntityId,
   ) : ?Types.Channel {
     let m = toChannelMap(channelStore);
     switch (m.get(id)) {
-      case (?ch) { if (ch.tenantId == tenantId) ?ch else null };
+      case (?ch) { if (ch.tenantId == tenantId and ch.workspaceId == workspaceId) ?ch else null };
       case null null;
     }
   };
@@ -83,12 +108,13 @@ module {
   public func listChannels(
     channelStore : [(Common.EntityId, Types.Channel)],
     tenantId : Common.TenantId,
+    workspaceId : Common.WorkspaceId,
     caller : Common.UserId,
   ) : [Types.Channel] {
     let m = toChannelMap(channelStore);
     m.values().filter(
         func(ch : Types.Channel) : Bool {
-          ch.tenantId == tenantId and (ch.isPublic or isMember(ch, caller))
+          ch.tenantId == tenantId and ch.workspaceId == workspaceId and (ch.isPublic or isMember(ch, caller))
         },
       ).toArray()
   };
@@ -96,20 +122,96 @@ module {
   public func joinChannel(
     channelStore : [(Common.EntityId, Types.Channel)],
     tenantId : Common.TenantId,
+    workspaceId : Common.WorkspaceId,
     id : Common.EntityId,
     caller : Common.UserId,
   ) : (?Types.Channel, [(Common.EntityId, Types.Channel)]) {
     let m = toChannelMap(channelStore);
     switch (m.get(id)) {
       case (?ch) {
-        if (ch.tenantId != tenantId) return (null, channelStore);
-        if (not ch.isPublic) return (null, channelStore); // private channels require invite
-        if (isMember(ch, caller)) return (?ch, channelStore); // already a member
-        let updated : Types.Channel = {
-          ch with
-          memberIds = ch.memberIds.concat([caller]);
-        };
+        if (ch.tenantId != tenantId or ch.workspaceId != workspaceId) return (null, channelStore);
+        if (not ch.isPublic) return (null, channelStore);
+        if (isMember(ch, caller)) return (?ch, channelStore);
+        let updated : Types.Channel = { ch with memberIds = ch.memberIds.concat([caller]) };
         m.add(id, updated);
+        (?updated, channelToStore(m))
+      };
+      case null (null, channelStore);
+    }
+  };
+
+  public func updateChannelTopic(
+    channelStore : [(Common.EntityId, Types.Channel)],
+    tenantId : Common.TenantId,
+    workspaceId : Common.WorkspaceId,
+    channelId : Common.EntityId,
+    topic : Text,
+  ) : (?Types.Channel, [(Common.EntityId, Types.Channel)]) {
+    let m = toChannelMap(channelStore);
+    switch (m.get(channelId)) {
+      case (?ch) {
+        if (ch.tenantId != tenantId or ch.workspaceId != workspaceId) return (null, channelStore);
+        let updated : Types.Channel = { ch with topic = ?topic };
+        m.add(channelId, updated);
+        (?updated, channelToStore(m))
+      };
+      case null (null, channelStore);
+    }
+  };
+
+  public func leaveChannel(
+    channelStore : [(Common.EntityId, Types.Channel)],
+    tenantId : Common.TenantId,
+    workspaceId : Common.WorkspaceId,
+    id : Common.EntityId,
+    caller : Common.UserId,
+  ) : (?Types.Channel, [(Common.EntityId, Types.Channel)]) {
+    let m = toChannelMap(channelStore);
+    switch (m.get(id)) {
+      case (?ch) {
+        if (ch.tenantId != tenantId or ch.workspaceId != workspaceId) return (null, channelStore);
+        let updated : Types.Channel = { ch with memberIds = ch.memberIds.filter(func(uid : Common.UserId) : Bool { not Principal.equal(uid, caller) }) };
+        m.add(id, updated);
+        (?updated, channelToStore(m))
+      };
+      case null (null, channelStore);
+    }
+  };
+
+  public func deleteChannel(
+    channelStore : [(Common.EntityId, Types.Channel)],
+    tenantId : Common.TenantId,
+    workspaceId : Common.WorkspaceId,
+    id : Common.EntityId,
+    caller : Common.UserId,
+  ) : (Bool, [(Common.EntityId, Types.Channel)]) {
+    let m = toChannelMap(channelStore);
+    switch (m.get(id)) {
+      case (?ch) {
+        if (ch.tenantId != tenantId or ch.workspaceId != workspaceId) return (false, channelStore);
+        if (not Principal.equal(ch.createdBy, caller)) return (false, channelStore);
+        m.remove(id);
+        (true, channelToStore(m))
+      };
+      case null (false, channelStore);
+    }
+  };
+
+  public func updateChannel(
+    channelStore : [(Common.EntityId, Types.Channel)],
+    tenantId : Common.TenantId,
+    workspaceId : Common.WorkspaceId,
+    channelId : Common.EntityId,
+    name : Text,
+    description : Text,
+    topic : Text,
+  ) : (?Types.Channel, [(Common.EntityId, Types.Channel)]) {
+    let m = toChannelMap(channelStore);
+    switch (m.get(channelId)) {
+      case (?ch) {
+        if (ch.tenantId != tenantId or ch.workspaceId != workspaceId) return (null, channelStore);
+        let updated : Types.Channel = { ch with name; description; topic = ?topic };
+        m.add(channelId, updated);
         (?updated, channelToStore(m))
       };
       case null (null, channelStore);
@@ -122,23 +224,28 @@ module {
     channelStore : [(Common.EntityId, Types.Channel)],
     messageStore : [(Common.EntityId, Types.Message)],
     tenantId : Common.TenantId,
+    workspaceId : Common.WorkspaceId,
     caller : Common.UserId,
     input : Types.MessageInput,
   ) : (?Types.Message, [(Common.EntityId, Types.Message)]) {
-    // Access control: private channels require membership
     let chMap = toChannelMap(channelStore);
     switch (chMap.get(input.channelId)) {
       case (?ch) {
-        if (ch.tenantId != tenantId) return (null, messageStore);
+        if (ch.tenantId != tenantId or ch.workspaceId != workspaceId) return (null, messageStore);
         if (not ch.isPublic and not isMember(ch, caller)) return (null, messageStore);
       };
       case null return (null, messageStore);
     };
     let now = Time.now();
     let id = genId(caller.toText() # "msg");
+    let isThread : ?Bool = switch (input.replyToId) {
+      case (?_) ?true;
+      case null null;
+    };
     let msg : Types.Message = {
       id;
       tenantId;
+      workspaceId;
       channelId = input.channelId;
       senderId = caller;
       content = input.content;
@@ -146,15 +253,33 @@ module {
       crossLinks = input.crossLinks;
       createdAt = now;
       updatedAt = now;
+      reactions = ?[];
+      threadCount = ?0;
+      isThreadReply = isThread;
     };
     let mMap = toMessageMap(messageStore);
     mMap.add(id, msg);
+    // Bump parent threadCount if this is a thread reply
+    switch (input.replyToId) {
+      case (?parentId) {
+        switch (mMap.get(parentId)) {
+          case (?parent) {
+            let count = switch (parent.threadCount) { case (?n) n; case null 0 };
+            let updatedParent : Types.Message = { parent with threadCount = ?(count + 1) };
+            mMap.add(parentId, updatedParent);
+          };
+          case null {};
+        };
+      };
+      case null {};
+    };
     (?msg, messageToStore(mMap))
   };
 
   public func getMessages(
     messageStore : [(Common.EntityId, Types.Message)],
     tenantId : Common.TenantId,
+    workspaceId : Common.WorkspaceId,
     channelId : Common.EntityId,
     limit : Nat,
     before : ?Common.Timestamp,
@@ -163,7 +288,9 @@ module {
     let filtered = m.values().filter(
         func(msg : Types.Message) : Bool {
           msg.tenantId == tenantId and
-          msg.channelId == channelId and (
+          msg.workspaceId == workspaceId and
+          msg.channelId == channelId and
+          msg.isThreadReply != ?true and (
             switch (before) {
               case (?ts) msg.createdAt < ts;
               case null true;
@@ -171,7 +298,6 @@ module {
           )
         },
       ).toArray();
-    // Sort by createdAt descending to get most recent first, then take limit
     let sorted = filtered.sort(func(a : Types.Message, b : Types.Message) : { #less; #equal; #greater } {
       if (a.createdAt > b.createdAt) #less
       else if (a.createdAt < b.createdAt) #greater
@@ -184,18 +310,342 @@ module {
   public func deleteMessage(
     messageStore : [(Common.EntityId, Types.Message)],
     tenantId : Common.TenantId,
+    workspaceId : Common.WorkspaceId,
     id : Common.EntityId,
     caller : Common.UserId,
   ) : (Bool, [(Common.EntityId, Types.Message)]) {
     let m = toMessageMap(messageStore);
     switch (m.get(id)) {
       case (?msg) {
-        if (msg.tenantId != tenantId) return (false, messageStore);
+        if (msg.tenantId != tenantId or msg.workspaceId != workspaceId) return (false, messageStore);
         if (not Principal.equal(msg.senderId, caller)) return (false, messageStore);
         m.remove(id);
         (true, messageToStore(m))
       };
       case null (false, messageStore);
     }
+  };
+
+  public func getThreadMessages(
+    messageStore : [(Common.EntityId, Types.Message)],
+    tenantId : Common.TenantId,
+    workspaceId : Common.WorkspaceId,
+    parentMessageId : Common.EntityId,
+  ) : [Types.Message] {
+    let m = toMessageMap(messageStore);
+    m.values().filter(
+        func(msg : Types.Message) : Bool {
+          msg.tenantId == tenantId and
+          msg.workspaceId == workspaceId and
+          msg.replyToId == ?parentMessageId
+        },
+      ).toArray()
+      .sort(func(a : Types.Message, b : Types.Message) : { #less; #equal; #greater } {
+        if (a.createdAt < b.createdAt) #less
+        else if (a.createdAt > b.createdAt) #greater
+        else #equal
+      })
+  };
+
+  public func searchMessages(
+    messageStore : [(Common.EntityId, Types.Message)],
+    tenantId : Common.TenantId,
+    workspaceId : Common.WorkspaceId,
+    searchQuery : Text,
+    channelId : ?Common.EntityId,
+    senderId : ?Principal,
+    fromTime : ?Int,
+    toTime : ?Int,
+  ) : [Types.Message] {
+    let m = toMessageMap(messageStore);
+    let lq = searchQuery.toLower();
+    m.values().filter(
+        func(msg : Types.Message) : Bool {
+          if (msg.tenantId != tenantId or msg.workspaceId != workspaceId) return false;
+          if (not msg.content.toLower().contains(#text lq)) return false;
+          switch (channelId) {
+            case (?cid) { if (msg.channelId != cid) return false };
+            case null {};
+          };
+          switch (senderId) {
+            case (?sid) { if (not Principal.equal(msg.senderId, sid)) return false };
+            case null {};
+          };
+          switch (fromTime) {
+            case (?ft) { if (msg.createdAt < ft) return false };
+            case null {};
+          };
+          switch (toTime) {
+            case (?tt) { if (msg.createdAt > tt) return false };
+            case null {};
+          };
+          true
+        },
+      ).toArray()
+  };
+
+  // ── Reactions ─────────────────────────────────────────────────────────────────
+
+  public func addReaction(
+    messageStore : [(Common.EntityId, Types.Message)],
+    tenantId : Common.TenantId,
+    workspaceId : Common.WorkspaceId,
+    messageId : Common.EntityId,
+    emoji : Text,
+    caller : Principal,
+  ) : (?Types.Message, [(Common.EntityId, Types.Message)]) {
+    let m = toMessageMap(messageStore);
+    switch (m.get(messageId)) {
+      case (?msg) {
+        if (msg.tenantId != tenantId or msg.workspaceId != workspaceId) return (null, messageStore);
+        let existing : [Types.Reaction] = switch (msg.reactions) { case (?r) r; case null [] };
+        // Find if emoji already exists
+        let updated : [Types.Reaction] = switch (existing.findIndex(func(r : Types.Reaction) : Bool { r.emoji == emoji })) {
+          case (?idx) {
+            let reaction = existing[idx];
+            if (reaction.userIds.any(func(uid : Principal) : Bool { Principal.equal(uid, caller) })) {
+              // Already reacted — no change
+              existing
+            } else {
+              existing.mapEntries(func(r : Types.Reaction, i : Nat) : Types.Reaction {
+                if (i == idx) { { r with userIds = r.userIds.concat([caller]) } }
+                else r
+              })
+            }
+          };
+          case null {
+            existing.concat([{ emoji; userIds = [caller] }])
+          };
+        };
+        let updatedMsg : Types.Message = { msg with reactions = ?updated };
+        m.add(messageId, updatedMsg);
+        (?updatedMsg, messageToStore(m))
+      };
+      case null (null, messageStore);
+    }
+  };
+
+  public func removeReaction(
+    messageStore : [(Common.EntityId, Types.Message)],
+    tenantId : Common.TenantId,
+    workspaceId : Common.WorkspaceId,
+    messageId : Common.EntityId,
+    emoji : Text,
+    caller : Principal,
+  ) : (?Types.Message, [(Common.EntityId, Types.Message)]) {
+    let m = toMessageMap(messageStore);
+    switch (m.get(messageId)) {
+      case (?msg) {
+        if (msg.tenantId != tenantId or msg.workspaceId != workspaceId) return (null, messageStore);
+        let existing : [Types.Reaction] = switch (msg.reactions) { case (?r) r; case null [] };
+        let updated : [Types.Reaction] = existing
+          .map(func(r : Types.Reaction) : Types.Reaction {
+            if (r.emoji == emoji) {
+              { r with userIds = r.userIds.filter(func(uid : Principal) : Bool { not Principal.equal(uid, caller) }) }
+            } else r
+          })
+          .filter(func(r : Types.Reaction) : Bool { r.userIds.size() > 0 });
+        let updatedMsg : Types.Message = { msg with reactions = ?updated };
+        m.add(messageId, updatedMsg);
+        (?updatedMsg, messageToStore(m))
+      };
+      case null (null, messageStore);
+    }
+  };
+
+  // ── Pinned Messages ───────────────────────────────────────────────────────────
+
+  public func pinMessage(
+    channelStore : [(Common.EntityId, Types.Channel)],
+    tenantId : Common.TenantId,
+    workspaceId : Common.WorkspaceId,
+    channelId : Common.EntityId,
+    messageId : Text,
+  ) : (?Types.Channel, [(Common.EntityId, Types.Channel)]) {
+    let m = toChannelMap(channelStore);
+    switch (m.get(channelId)) {
+      case (?ch) {
+        if (ch.tenantId != tenantId or ch.workspaceId != workspaceId) return (null, channelStore);
+        let pins : [Text] = switch (ch.pinnedMessageIds) { case (?p) p; case null [] };
+        let alreadyPinned = pins.any(func(id : Text) : Bool { id == messageId });
+        let updatedPins = if (alreadyPinned) pins else pins.concat([messageId]);
+        let updated : Types.Channel = { ch with pinnedMessageIds = ?updatedPins };
+        m.add(channelId, updated);
+        (?updated, channelToStore(m))
+      };
+      case null (null, channelStore);
+    }
+  };
+
+  public func unpinMessage(
+    channelStore : [(Common.EntityId, Types.Channel)],
+    tenantId : Common.TenantId,
+    workspaceId : Common.WorkspaceId,
+    channelId : Common.EntityId,
+    messageId : Text,
+  ) : (?Types.Channel, [(Common.EntityId, Types.Channel)]) {
+    let m = toChannelMap(channelStore);
+    switch (m.get(channelId)) {
+      case (?ch) {
+        if (ch.tenantId != tenantId or ch.workspaceId != workspaceId) return (null, channelStore);
+        let pins : [Text] = switch (ch.pinnedMessageIds) { case (?p) p; case null [] };
+        let updated : Types.Channel = { ch with pinnedMessageIds = ?pins.filter(func(id : Text) : Bool { id != messageId }) };
+        m.add(channelId, updated);
+        (?updated, channelToStore(m))
+      };
+      case null (null, channelStore);
+    }
+  };
+
+  public func getPinnedMessages(
+    channelStore : [(Common.EntityId, Types.Channel)],
+    messageStore : [(Common.EntityId, Types.Message)],
+    tenantId : Common.TenantId,
+    workspaceId : Common.WorkspaceId,
+    channelId : Common.EntityId,
+  ) : [Types.Message] {
+    let chMap = toChannelMap(channelStore);
+    switch (chMap.get(channelId)) {
+      case (?ch) {
+        if (ch.tenantId != tenantId or ch.workspaceId != workspaceId) return [];
+        let pins : [Text] = switch (ch.pinnedMessageIds) { case (?p) p; case null [] };
+        let mMap = toMessageMap(messageStore);
+        pins.filterMap<Text, Types.Message>(func(pid : Text) : ?Types.Message { mMap.get(pid) })
+      };
+      case null [];
+    }
+  };
+
+  // ── User Status ───────────────────────────────────────────────────────────────
+
+  public func setUserStatus(
+    statusStore : [(Text, Types.UserStatus)],
+    tenantId : Common.TenantId,
+    workspaceId : Common.WorkspaceId,
+    caller : Principal,
+    status : { #online; #away; #offline },
+    customStatus : Text,
+  ) : (Types.UserStatus, [(Text, Types.UserStatus)]) {
+    let m = toStatusMap(statusStore);
+    let key = statusKey(tenantId, workspaceId, caller);
+    let now = Time.now();
+    let userStatus : Types.UserStatus = {
+      id = caller;
+      tenantId;
+      workspaceId;
+      status;
+      customStatus;
+      lastSeen = now;
+    };
+    m.add(key, userStatus);
+    (userStatus, statusToStore(m))
+  };
+
+  public func getUserStatus(
+    statusStore : [(Text, Types.UserStatus)],
+    tenantId : Common.TenantId,
+    workspaceId : Common.WorkspaceId,
+    userId : Principal,
+  ) : ?Types.UserStatus {
+    let m = toStatusMap(statusStore);
+    m.get(statusKey(tenantId, workspaceId, userId))
+  };
+
+  // ── Unread Counts ─────────────────────────────────────────────────────────────
+
+  public func markChannelRead(
+    channelStore : [(Common.EntityId, Types.Channel)],
+    tenantId : Common.TenantId,
+    workspaceId : Common.WorkspaceId,
+    channelId : Common.EntityId,
+    caller : Principal,
+  ) : (Bool, [(Common.EntityId, Types.Channel)]) {
+    let m = toChannelMap(channelStore);
+    switch (m.get(channelId)) {
+      case (?ch) {
+        if (ch.tenantId != tenantId or ch.workspaceId != workspaceId) return (false, channelStore);
+        let counts : [Types.UnreadEntry] = switch (ch.unreadCounts) { case (?uc) uc; case null [] };
+        let updatedCounts = counts.map(func(e : Types.UnreadEntry) : Types.UnreadEntry {
+          if (Principal.equal(e.userId, caller)) { { e with count = 0 } } else e
+        });
+        let mentions : [Types.MentionEntry] = switch (ch.mentionFlags) { case (?mf) mf; case null [] };
+        let updatedMentions = mentions.map(func(e : Types.MentionEntry) : Types.MentionEntry {
+          if (Principal.equal(e.userId, caller)) { { e with hasMention = false } } else e
+        });
+        let updated : Types.Channel = { ch with unreadCounts = ?updatedCounts; mentionFlags = ?updatedMentions };
+        m.add(channelId, updated);
+        (true, channelToStore(m))
+      };
+      case null (false, channelStore);
+    }
+  };
+
+  public func getUnreadCounts(
+    channelStore : [(Common.EntityId, Types.Channel)],
+    tenantId : Common.TenantId,
+    workspaceId : Common.WorkspaceId,
+    caller : Principal,
+  ) : [(Text, Nat)] {
+    let m = toChannelMap(channelStore);
+    m.values()
+      .filter(func(ch : Types.Channel) : Bool { ch.tenantId == tenantId and ch.workspaceId == workspaceId and isMember(ch, caller) })
+      .toArray()
+      .filterMap<Types.Channel, (Text, Nat)>(func(ch : Types.Channel) : ?(Text, Nat) {
+        switch (ch.unreadCounts) {
+          case (?counts) {
+            switch (counts.find(func(e : Types.UnreadEntry) : Bool { Principal.equal(e.userId, caller) })) {
+              case (?entry) ?(ch.id, entry.count);
+              case null ?(ch.id, 0);
+            }
+          };
+          case null ?(ch.id, 0);
+        }
+      })
+  };
+
+  // ── Thread Notifications ──────────────────────────────────────────────────────
+
+  public func addThreadNotification(
+    notifStore : [(Text, Types.ThreadNotification)],
+    tenantId : Common.TenantId,
+    workspaceId : Common.WorkspaceId,
+    messageId : Text,
+    channelId : Text,
+    recipientId : Principal,
+    senderId : Principal,
+  ) : [(Text, Types.ThreadNotification)] {
+    let m = toNotifMap(notifStore);
+    let id = genId(recipientId.toText() # "notif");
+    let notif : Types.ThreadNotification = {
+      id;
+      tenantId;
+      messageId;
+      channelId;
+      recipientId;
+      senderId;
+      createdAt = Time.now();
+    };
+    m.add(id, notif);
+    notifToStore(m)
+  };
+
+  public func getThreadParticipants(
+    messageStore : [(Common.EntityId, Types.Message)],
+    tenantId : Common.TenantId,
+    workspaceId : Common.WorkspaceId,
+    parentMessageId : Common.EntityId,
+  ) : [Principal] {
+    let m = toMessageMap(messageStore);
+    let participants : [Principal] = m.values()
+      .filter(func(msg : Types.Message) : Bool {
+        msg.tenantId == tenantId and msg.workspaceId == workspaceId and msg.replyToId == ?parentMessageId
+      })
+      .toArray()
+      .map<Types.Message, Principal>(func(msg : Types.Message) : Principal { msg.senderId });
+    // Deduplicate via fold
+    participants.foldLeft<Principal, [Principal]>([], func(acc : [Principal], p : Principal) : [Principal] {
+      if (acc.any(func(ep : Principal) : Bool { Principal.equal(ep, p) })) acc
+      else acc.concat([p])
+    })
   };
 };

@@ -4,140 +4,195 @@ import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import { useNavigate } from "@tanstack/react-router";
-import { ArrowLeft, Bot, Send, Sparkles, Trash2, User } from "lucide-react";
+import {
+  ArrowLeft,
+  Bot,
+  Send,
+  Settings,
+  Sparkles,
+  Trash2,
+  User,
+} from "lucide-react";
 import { useEffect, useRef, useState } from "react";
+import { toast } from "sonner";
+import { useWorkspace } from "../../hooks/useWorkspace";
 
 interface ChatMessage {
   id: string;
   role: "user" | "assistant";
   content: string;
   timestamp: Date;
+  isError?: boolean;
 }
 
-const BOT_RESPONSES: Record<string, string> = {
-  help: `Welcome to Fourthspace AI Assistant! Here's what I can help you with:
+const AI_STORAGE_KEY = "fourthspace_ai_config";
+const CHAT_HISTORY_KEY = "fourthspace_ai_chat_history";
 
-• **Notes** — Create, search, and organize your workspace notes
-• **Projects** — Track tasks, deadlines, and team progress
-• **Chat** — Manage channels and team communications
-• **Calendar** — Schedule events, set reminders, manage availability
-• **Payroll** — View payslips, manage employees, run payroll reports
-• **Escrow** — Create and manage escrow contracts
-• **Wallet** — Check balances, send ICP, manage recurring payments
+interface StoredConfig {
+  provider: string;
+  apiKey: string;
+  model: string;
+}
+interface StoredMessage {
+  id: string;
+  role: "user" | "assistant";
+  content: string;
+  timestamp: string;
+  isError?: boolean;
+}
 
-Just ask me anything about any of these areas!`,
+function loadAIConfig(): StoredConfig | null {
+  try {
+    const raw = localStorage.getItem(AI_STORAGE_KEY);
+    return raw ? (JSON.parse(raw) as StoredConfig) : null;
+  } catch {
+    return null;
+  }
+}
 
-  notes: `Your Notes section is where all your workspace knowledge lives.
+function loadHistory(): ChatMessage[] {
+  try {
+    const raw = localStorage.getItem(CHAT_HISTORY_KEY);
+    if (!raw) return [];
+    const stored = JSON.parse(raw) as StoredMessage[];
+    return stored.map((m) => ({ ...m, timestamp: new Date(m.timestamp) }));
+  } catch {
+    return [];
+  }
+}
 
-📝 **Recent Notes**: 12 notes created this month
-📂 **Folders**: Team Docs, Personal, Meeting Notes
-🔍 **Search**: Use the search bar to find any note instantly
-🔗 **Cross-linking**: Notes can be linked to tasks and projects
+function saveHistory(messages: ChatMessage[]): void {
+  try {
+    const toStore: StoredMessage[] = messages
+      .slice(-50)
+      .map((m) => ({ ...m, timestamp: m.timestamp.toISOString() }));
+    localStorage.setItem(CHAT_HISTORY_KEY, JSON.stringify(toStore));
+  } catch {
+    /* ignore */
+  }
+}
 
-Navigate to /app/notes to manage your notes. Would you like help with anything specific?`,
+async function callAIChat(
+  config: StoredConfig,
+  history: ChatMessage[],
+  userMessage: string,
+): Promise<string> {
+  const systemPrompt =
+    "You are the Fourthspace AI Assistant — a helpful, professional workspace assistant. You help users with notes, projects, tasks, calendar events, payroll, escrow contracts, and their crypto wallet. Be concise, helpful, and professional.";
+  const conversationHistory = history
+    .filter((m) => !m.isError)
+    .slice(-10)
+    .map((m) => ({ role: m.role, content: m.content }));
+  if (config.provider === "openai") {
+    const res = await fetch("https://api.openai.com/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${config.apiKey}`,
+      },
+      body: JSON.stringify({
+        model: config.model,
+        messages: [
+          { role: "system", content: systemPrompt },
+          ...conversationHistory,
+          { role: "user", content: userMessage },
+        ],
+        max_tokens: 800,
+      }),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(
+        (err as { error?: { message?: string } }).error?.message ??
+          `OpenAI error ${res.status}`,
+      );
+    }
+    const data = (await res.json()) as {
+      choices: { message: { content: string } }[];
+    };
+    return data.choices[0]?.message?.content ?? "";
+  }
+  const res = await fetch("https://api.anthropic.com/v1/messages", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "x-api-key": config.apiKey,
+      "anthropic-version": "2023-06-01",
+    },
+    body: JSON.stringify({
+      model: config.model,
+      max_tokens: 800,
+      system: systemPrompt,
+      messages: [
+        ...conversationHistory,
+        { role: "user", content: userMessage },
+      ],
+    }),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(
+      (err as { error?: { message?: string } }).error?.message ??
+        `Anthropic error ${res.status}`,
+    );
+  }
+  const data = (await res.json()) as { content: { text: string }[] };
+  return data.content[0]?.text ?? "";
+}
 
-  projects: `Your Projects section gives you full visibility into team progress.
-
-📊 **Active Projects**: 4 projects in progress
-✅ **Tasks Completed This Week**: 17
-⚠️ **Overdue Tasks**: 3 need attention
-👥 **Team Assignments**: 8 members actively assigned
-
-Head to /app/projects to dive in. Is there a specific project you'd like to discuss?`,
-
-  payroll: `Payroll management is fully handled within Fourthspace.
-
-💰 **Next Payroll Run**: Scheduled for the 1st of next month
-👥 **Active Employees**: 24 on payroll
-📈 **Monthly Payroll Total**: $148,500
-🏦 **Last Payment Status**: All processed successfully
-
-Visit /app/payroll to manage payroll. Is there a specific employee or payment you need help with?`,
-
-  calendar: `Your Calendar is synced across the workspace.
-
-📅 **Events This Week**: 6 scheduled
-🔔 **Upcoming Deadline**: Product review on Friday
-👥 **Team Meetings**: 2 this week
-⏰ **Available Slots**: Tuesday 2–4 PM, Thursday 3–5 PM
-
-Navigate to /app/calendar to manage your schedule. Need help creating an event?`,
-
-  escrow: `Fourthspace Escrow keeps your contracts secure and transparent.
-
-🔐 **Active Contracts**: 3 in progress
-⏳ **Pending Release**: 1 awaiting milestone confirmation
-💸 **Total Value in Escrow**: 4,250 ICP
-✅ **Completed This Month**: 2 contracts settled
-
-Visit /app/escrow to manage contracts. Would you like to create a new escrow contract?`,
-
-  wallet: `Your Fourthspace Wallet gives you full control over your ICP assets.
-
-💳 **ICP Balance**: 1,247.83 ICP
-📤 **Sent This Month**: 350 ICP across 4 transactions
-📥 **Received This Month**: 825 ICP
-🔄 **Recurring Payments**: 2 active
-
-Head to /app/wallet to manage your funds. Need help sending ICP or setting up a recurring payment?`,
+const WELCOME_MESSAGE: ChatMessage = {
+  id: "welcome",
+  role: "assistant",
+  content: loadAIConfig()?.apiKey
+    ? "Hi! I'm your Fourthspace AI Assistant. I can help you with your workspace — notes, projects, tasks, calendar, payroll, escrow, and wallet. How can I help you today?"
+    : "Hi! I'm your Fourthspace AI Assistant. No AI provider is configured yet — go to AI Settings to connect a real AI model. How can I help?",
+  timestamp: new Date(),
 };
 
-function getBotResponse(message: string): string {
+const FALLBACK_RESPONSES = {
+  help: "I'm running in demo mode. Configure your API key in AI Settings for intelligent responses.",
+  default:
+    "That's a great question! Configure your OpenAI or Anthropic API key in AI Settings to get real AI responses.",
+};
+
+function getFallbackResponse(message: string): string {
   const lower = message.toLowerCase();
   if (lower.includes("help") || ["hi", "hello", "hey"].includes(lower.trim()))
-    return BOT_RESPONSES.help;
-  if (lower.includes("note")) return BOT_RESPONSES.notes;
-  if (lower.includes("project") || lower.includes("task"))
-    return BOT_RESPONSES.projects;
-  if (
-    lower.includes("payroll") ||
-    lower.includes("salary") ||
-    lower.includes("employee")
-  )
-    return BOT_RESPONSES.payroll;
-  if (
-    lower.includes("calendar") ||
-    lower.includes("event") ||
-    lower.includes("schedule") ||
-    lower.includes("meeting")
-  )
-    return BOT_RESPONSES.calendar;
-  if (lower.includes("escrow") || lower.includes("contract"))
-    return BOT_RESPONSES.escrow;
-  if (
-    lower.includes("wallet") ||
-    lower.includes("icp") ||
-    lower.includes("balance") ||
-    lower.includes("send")
-  )
-    return BOT_RESPONSES.wallet;
+    return FALLBACK_RESPONSES.help;
+  return FALLBACK_RESPONSES.default;
+}
 
-  return `That's a great question! While I don't have a specific answer for "${message.slice(0, 40)}${message.length > 40 ? "..." : ""}" right now, I can assist with:
-
-• **Notes**, **Projects**, and **Tasks**
-• **Calendar** and **Events**
-• **Payroll**, **Escrow**, and **Wallet**
-• General workspace productivity
-
-Try asking about any of these topics, or type **"help"** to see everything I can do!`;
+function renderContent(text: string): React.ReactNode[] {
+  const lines = text.split("\n");
+  const result: React.ReactNode[] = [];
+  for (const [li, line] of lines.entries()) {
+    const segments = line.split(/(\*\*[^*]+\*\*)/g);
+    for (const seg of segments) {
+      if (seg.startsWith("**") && seg.endsWith("**"))
+        result.push(<strong key={`${li}-${seg}`}>{seg.slice(2, -2)}</strong>);
+      else if (seg) result.push(seg);
+    }
+    if (li < lines.length - 1)
+      result.push(<br key={`br-${li}-${line.slice(0, 8)}`} />);
+  }
+  return result;
 }
 
 export default function AIChatPage() {
   const navigate = useNavigate();
-  const [messages, setMessages] = useState<ChatMessage[]>([
-    {
-      id: "welcome",
-      role: "assistant",
-      content: `👋 Hi there! I'm your Fourthspace AI Assistant.\n\nI can help you navigate your workspace, answer questions about your projects, payroll, calendar, notes, escrow, and wallet.\n\nType **"help"** to see everything I can do, or just ask me anything!`,
-      timestamp: new Date(),
-    },
-  ]);
+  const { activeWorkspaceId } = useWorkspace();
+  const workspaceId = activeWorkspaceId ?? "";
+  const config = loadAIConfig();
+
+  const [messages, setMessages] = useState<ChatMessage[]>(() => {
+    const history = loadHistory();
+    return history.length > 0 ? history : [WELCOME_MESSAGE];
+  });
   const [input, setInput] = useState("");
   const [typing, setTyping] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   });
@@ -145,65 +200,49 @@ export default function AIChatPage() {
   const sendMessage = async () => {
     const text = input.trim();
     if (!text) return;
-
     const userMsg: ChatMessage = {
       id: `user-${Date.now()}`,
       role: "user",
       content: text,
       timestamp: new Date(),
     };
-
-    setMessages((prev) => [...prev, userMsg]);
+    const updatedMessages = [...messages, userMsg];
+    setMessages(updatedMessages);
     setInput("");
     setTyping(true);
-
-    await new Promise((r) => setTimeout(r, 1000));
-    setTyping(false);
-
-    const aiMsg: ChatMessage = {
-      id: `ai-${Date.now()}`,
-      role: "assistant",
-      content: getBotResponse(text),
-      timestamp: new Date(),
-    };
-    setMessages((prev) => [...prev, aiMsg]);
-    inputRef.current?.focus();
-  };
-
-  const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === "Enter" && !e.shiftKey) {
-      e.preventDefault();
-      sendMessage();
-    }
-  };
-
-  const clearConversation = () => {
-    setMessages([
-      {
-        id: `welcome-${Date.now()}`,
-        role: "assistant",
-        content: "Conversation cleared. How can I help you today?",
-        timestamp: new Date(),
-      },
-    ]);
-  };
-
-  const renderContent = (text: string): React.ReactNode[] => {
-    const lines = text.split("\n");
-    const result: React.ReactNode[] = [];
-    for (const [li, line] of lines.entries()) {
-      const segments = line.split(/(\*\*[^*]+\*\*)/g);
-      for (const seg of segments) {
-        if (seg.startsWith("**") && seg.endsWith("**")) {
-          result.push(<strong key={`${li}-${seg}`}>{seg.slice(2, -2)}</strong>);
-        } else if (seg) {
-          result.push(seg);
-        }
+    try {
+      let responseContent: string;
+      if (config?.apiKey) {
+        responseContent = await callAIChat(config, messages, text);
+      } else {
+        await new Promise((r) => setTimeout(r, 800));
+        responseContent = getFallbackResponse(text);
       }
-      if (li < lines.length - 1)
-        result.push(<br key={`br-${li}-${line.slice(0, 8)}`} />);
+      const aiMsg: ChatMessage = {
+        id: `ai-${Date.now()}`,
+        role: "assistant",
+        content: responseContent,
+        timestamp: new Date(),
+      };
+      const finalMessages = [...updatedMessages, aiMsg];
+      setMessages(finalMessages);
+      saveHistory(finalMessages);
+    } catch (err) {
+      const errorMessage =
+        err instanceof Error ? err.message : "AI request failed.";
+      toast.error(errorMessage);
+      const errMsg: ChatMessage = {
+        id: `err-${Date.now()}`,
+        role: "assistant",
+        content: `Sorry, I encountered an error: ${errorMessage}`,
+        timestamp: new Date(),
+        isError: true,
+      };
+      setMessages([...updatedMessages, errMsg]);
+    } finally {
+      setTyping(false);
+      inputRef.current?.focus();
     }
-    return result;
   };
 
   return (
@@ -213,7 +252,7 @@ export default function AIChatPage() {
         <Button
           variant="ghost"
           size="sm"
-          onClick={() => navigate({ to: "/app/ai" })}
+          onClick={() => navigate({ to: `/app/${workspaceId}/ai` as "/" })}
           data-ocid="ai-chat-back"
         >
           <ArrowLeft className="w-4 h-4 mr-1" />
@@ -229,18 +268,45 @@ export default function AIChatPage() {
               Chat Assistant
             </h1>
             <p className="text-xs text-muted-foreground mt-0.5">
-              AI-powered workspace assistant
+              {config?.apiKey
+                ? `Connected · ${config.model}`
+                : "Demo mode — configure AI for real responses"}
             </p>
           </div>
         </div>
-        <Badge className="ml-auto bg-purple-500/10 text-purple-600 border-purple-200 dark:border-purple-800 dark:text-purple-400">
-          <Sparkles className="w-3 h-3 mr-1" />
-          AI Powered
-        </Badge>
+        {config?.apiKey ? (
+          <Badge className="ml-auto bg-purple-500/10 text-purple-600 border-purple-200 dark:border-purple-800 dark:text-purple-400">
+            <Sparkles className="w-3 h-3 mr-1" />
+            AI Connected
+          </Badge>
+        ) : (
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() =>
+              navigate({ to: `/app/${workspaceId}/ai/settings` as "/" })
+            }
+            className="ml-auto text-xs"
+            data-ocid="ai-chat-settings"
+          >
+            <Settings className="w-3 h-3 mr-1.5" />
+            Configure AI
+          </Button>
+        )}
         <Button
           variant="ghost"
           size="sm"
-          onClick={clearConversation}
+          onClick={() => {
+            localStorage.removeItem(CHAT_HISTORY_KEY);
+            setMessages([
+              {
+                id: `welcome-${Date.now()}`,
+                role: "assistant",
+                content: "Conversation cleared. How can I help you today?",
+                timestamp: new Date(),
+              },
+            ]);
+          }}
           className="text-muted-foreground hover:text-destructive"
           data-ocid="ai-chat-clear"
         >
@@ -250,7 +316,7 @@ export default function AIChatPage() {
       </div>
 
       {/* Messages */}
-      <div className="flex-1 overflow-hidden rounded-xl border border-border bg-muted/20">
+      <div className="flex-1 overflow-hidden rounded-xl border border-border/50 bg-muted/20">
         <ScrollArea className="h-full p-4">
           <div
             className="flex flex-col gap-4 pb-4"
@@ -262,11 +328,7 @@ export default function AIChatPage() {
                 className={`flex gap-3 ${msg.role === "user" ? "flex-row-reverse" : "flex-row"}`}
               >
                 <div
-                  className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 mt-0.5 ${
-                    msg.role === "assistant"
-                      ? "bg-gradient-to-br from-purple-500 to-indigo-600"
-                      : "bg-gradient-to-br from-violet-500 to-purple-600"
-                  }`}
+                  className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 mt-0.5 ${msg.role === "assistant" ? (msg.isError ? "bg-destructive/20" : "bg-gradient-to-br from-purple-500 to-indigo-600") : "bg-gradient-to-br from-violet-500 to-purple-600"}`}
                 >
                   {msg.role === "assistant" ? (
                     <Bot className="w-4 h-4 text-white" />
@@ -274,16 +336,11 @@ export default function AIChatPage() {
                     <User className="w-4 h-4 text-white" />
                   )}
                 </div>
-
                 <div
                   className={`max-w-[75%] flex flex-col gap-1 ${msg.role === "user" ? "items-end" : "items-start"}`}
                 >
                   <div
-                    className={`rounded-2xl px-4 py-3 text-sm leading-relaxed ${
-                      msg.role === "user"
-                        ? "bg-gradient-to-br from-violet-600 to-purple-600 text-white rounded-tr-sm"
-                        : "bg-card border border-border text-foreground rounded-tl-sm"
-                    }`}
+                    className={`rounded-2xl px-4 py-3 text-sm leading-relaxed ${msg.role === "user" ? "bg-gradient-to-br from-violet-600 to-purple-600 text-white rounded-tr-sm" : msg.isError ? "bg-destructive/10 border border-destructive/20 text-foreground rounded-tl-sm" : "bg-card border border-border/50 text-foreground rounded-tl-sm"}`}
                   >
                     {renderContent(msg.content)}
                   </div>
@@ -296,13 +353,12 @@ export default function AIChatPage() {
                 </div>
               </div>
             ))}
-
             {typing && (
               <div className="flex gap-3 items-start">
                 <div className="w-8 h-8 rounded-full bg-gradient-to-br from-purple-500 to-indigo-600 flex items-center justify-center shrink-0">
                   <Bot className="w-4 h-4 text-white" />
                 </div>
-                <div className="bg-card border border-border rounded-2xl rounded-tl-sm px-4 py-3">
+                <div className="bg-card border border-border/50 rounded-2xl rounded-tl-sm px-4 py-3">
                   <div className="flex gap-1.5 items-center h-5">
                     <span className="w-2 h-2 rounded-full bg-purple-400 animate-bounce [animation-delay:0ms]" />
                     <span className="w-2 h-2 rounded-full bg-purple-400 animate-bounce [animation-delay:150ms]" />
@@ -311,7 +367,6 @@ export default function AIChatPage() {
                 </div>
               </div>
             )}
-
             <div ref={bottomRef} />
           </div>
         </ScrollArea>
@@ -321,10 +376,19 @@ export default function AIChatPage() {
       <div className="flex gap-3 mt-4 shrink-0">
         <Input
           ref={inputRef}
-          placeholder="Ask me anything about your workspace..."
+          placeholder={
+            config?.apiKey
+              ? "Ask me anything about your workspace..."
+              : "Ask me anything (demo mode)..."
+          }
           value={input}
           onChange={(e) => setInput(e.target.value)}
-          onKeyDown={handleKeyDown}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" && !e.shiftKey) {
+              e.preventDefault();
+              sendMessage();
+            }
+          }}
           disabled={typing}
           className="flex-1"
           data-ocid="ai-chat-input"
@@ -332,7 +396,7 @@ export default function AIChatPage() {
         <Button
           onClick={sendMessage}
           disabled={!input.trim() || typing}
-          className="bg-gradient-to-r from-purple-600 to-indigo-600 text-white border-0 hover:opacity-90 px-5"
+          className="bg-gradient-to-r from-purple-600 to-indigo-600 text-white border-0 hover:opacity-90 px-5 active-press"
           data-ocid="ai-chat-send"
         >
           <Send className="w-4 h-4" />

@@ -1,38 +1,139 @@
+type WorkspaceSpendingLimit = 
+ record {
+   createdAt: Timestamp;
+   currency: text;
+   id: EntityId;
+   maxAmount: float64;
+   role: Role;
+   tenantId: TenantId;
+   updatedAt: Timestamp;
+   workspaceId: WorkspaceId;
+ };
+type WorkspaceRole = 
+ variant {
+   Admin;
+   Guest;
+   Manager;
+   TeamMember;
+ };
+type WorkspaceMember = 
+ record {
+   displayName: text;
+   email: text;
+   joinedAt: Timestamp;
+   role: WorkspaceRole;
+   userId: UserId;
+   workspaceId: WorkspaceId;
+ };
 type WorkspaceInput = record {name: text;};
+type WorkspaceId = text;
 type Workspace = 
  record {
    createdAt: Timestamp;
    id: EntityId;
+   members: vec record {
+                  UserId;
+                  WorkspaceMember;
+                };
    name: text;
    ownerId: UserId;
    tenantId: TenantId;
+ };
+type WhiteboardTemplate = 
+ record {
+   category: text;
+   definition: text;
+   description: text;
+   id: text;
+   name: text;
+ };
+type WhiteboardInput = 
+ record {
+   projectId: opt EntityId;
+   templateId: opt text;
+   templateName: opt text;
+   title: text;
+ };
+type WhiteboardElement = 
+ record {
+   color: text;
+   connectorFrom: opt text;
+   connectorTo: opt text;
+   converted: bool;
+   height: float64;
+   id: EntityId;
+   imageUrl: opt text;
+   linkedTaskId: opt text;
+   points: vec float64;
+   strokeWidth: float64;
+   "text": text;
+   tool: DrawingTool;
+   width: float64;
+   x: float64;
+   y: float64;
+ };
+type Whiteboard = 
+ record {
+   createdAt: Timestamp;
+   createdBy: UserId;
+   elements: vec WhiteboardElement;
+   id: EntityId;
+   projectId: opt EntityId;
+   templateId: opt text;
+   templateName: opt text;
+   tenantId: TenantId;
+   title: text;
+   updatedAt: Timestamp;
+   workspaceId: WorkspaceId;
  };
 type WalletTransaction = 
  record {
    accountId: EntityId;
    amount: nat;
+   approvals: vec TransactionApproval;
    asset: AssetType;
    createdAt: Timestamp;
    fromAddress: opt text;
    id: EntityId;
+   ledgerBlockHeight: opt nat;
+   ledgerTxHash: opt text;
    memo: opt text;
+   memoValue: opt nat64;
+   requiredApprovals: nat;
    status: TransactionStatus;
    tenantId: TenantId;
    toAddress: opt text;
    txType: TransactionType;
+   workspaceId: WorkspaceId;
  };
 type WalletAccount = 
  record {
    accountId: text;
+   accountType: AccountType;
    btcBalance: nat;
    createdAt: Timestamp;
    displayName: text;
    icpBalance: nat;
+   icrc1Account: text;
    id: EntityId;
    principalId: text;
    tenantId: TenantId;
    updatedAt: Timestamp;
    userId: UserId;
+   workspaceId: WorkspaceId;
+ };
+type UserStatus = 
+ record {
+   customStatus: text;
+   id: principal;
+   lastSeen: int;
+   status: variant {
+             away;
+             offline;
+             online;
+           };
+   tenantId: TenantId;
+   workspaceId: WorkspaceId;
  };
 type UserProfileInput = 
  record {
@@ -52,6 +153,20 @@ type UserProfile =
    workspaceId: EntityId;
  };
 type UserId = principal;
+type UnreadEntry = 
+ record {
+   count: nat;
+   userId: principal;
+ };
+type TxFilter = 
+ record {
+   fromDate: opt Timestamp;
+   maxAmount: opt float64;
+   minAmount: opt float64;
+   status: opt TransactionStatus;
+   toDate: opt Timestamp;
+   txType: opt TransactionType;
+ };
 type TransactionType = 
  variant {
    Receive;
@@ -62,19 +177,127 @@ type TransactionType =
  };
 type TransactionStatus = 
  variant {
+   AwaitingApproval;
    Cancelled;
    Completed;
    Failed;
    Pending;
  };
+type TransactionApproval = 
+ record {
+   approved: bool;
+   approver: principal;
+   id: EntityId;
+   tenantId: TenantId;
+   timestamp: Timestamp;
+   txId: EntityId;
+   workspaceId: WorkspaceId;
+ };
 type Timestamp = int;
+type TimeReportFilter = 
+ record {
+   billable: opt bool;
+   fromDate: opt Timestamp;
+   projectId: opt EntityId;
+   toDate: opt Timestamp;
+   userId: opt UserId;
+ };
+type TimeReport = 
+ record {
+   billableHours: float64;
+   byProject: vec record {
+                    EntityId;
+                    float64;
+                  };
+   byUser: vec record {
+                 UserId;
+                 float64;
+               };
+   entries: vec TimeEntry;
+   nonBillableHours: float64;
+   totalHours: float64;
+ };
+type TimeEntryInput = 
+ record {
+   billable: bool;
+   durationMinutes: nat;
+   endTime: opt Timestamp;
+   notes: text;
+   projectId: EntityId;
+   startTime: Timestamp;
+   taskId: opt EntityId;
+ };
+type TimeEntry = 
+ record {
+   billable: bool;
+   createdAt: Timestamp;
+   durationMinutes: nat;
+   endTime: opt Timestamp;
+   id: EntityId;
+   notes: text;
+   projectId: EntityId;
+   startTime: Timestamp;
+   taskId: opt EntityId;
+   tenantId: TenantId;
+   userId: UserId;
+   workspaceId: WorkspaceId;
+ };
 type TenantId = text;
+type TaskWatcher = 
+ record {
+   addedAt: Timestamp;
+   taskId: EntityId;
+   tenantId: TenantId;
+   userId: UserId;
+   workspaceId: WorkspaceId;
+ };
+type TaskTemplateInput = 
+ record {
+   checklistItems: vec text;
+   defaultAssigneeId: opt UserId;
+   defaultPriority: TaskPriority;
+   description: text;
+   name: text;
+   projectId: opt EntityId;
+ };
+type TaskTemplate = 
+ record {
+   checklistItems: vec text;
+   createdAt: Timestamp;
+   defaultAssigneeId: opt UserId;
+   defaultPriority: TaskPriority;
+   description: text;
+   id: EntityId;
+   name: text;
+   projectId: opt EntityId;
+   tenantId: TenantId;
+   updatedAt: Timestamp;
+   workspaceId: WorkspaceId;
+ };
 type TaskStatus = 
  variant {
    Blocked;
    Done;
    InProgress;
    Todo;
+ };
+type TaskRelationshipType = 
+ variant {
+   blockedBy;
+   blocks;
+   duplicateOf;
+   relatedTo;
+ };
+type TaskRelationship = 
+ record {
+   createdAt: Timestamp;
+   createdBy: UserId;
+   id: EntityId;
+   relationshipType: TaskRelationshipType;
+   sourceTaskId: EntityId;
+   targetTaskId: EntityId;
+   tenantId: TenantId;
+   workspaceId: WorkspaceId;
  };
 type TaskPriority = 
  variant {
@@ -93,6 +316,23 @@ type TaskInput =
    projectId: EntityId;
    title: text;
  };
+type TaskCommentInput = 
+ record {
+   content: text;
+   taskId: EntityId;
+ };
+type TaskComment = 
+ record {
+   authorId: UserId;
+   content: text;
+   createdAt: Timestamp;
+   editedAt: opt Timestamp;
+   id: EntityId;
+   taskId: EntityId;
+   tenantId: TenantId;
+   updatedAt: Timestamp;
+   workspaceId: WorkspaceId;
+ };
 type Task = 
  record {
    assigneeId: opt UserId;
@@ -107,12 +347,112 @@ type Task =
    tenantId: TenantId;
    title: text;
    updatedAt: Timestamp;
+   workspaceId: WorkspaceId;
+ };
+type SubtaskInput = 
+ record {
+   assigneeId: opt UserId;
+   description: text;
+   dueDate: opt Timestamp;
+   order: nat;
+   parentTaskId: EntityId;
+   priority: TaskPriority;
+   projectId: EntityId;
+   status: TaskStatus;
+   title: text;
+ };
+type Subtask = 
+ record {
+   assigneeId: opt UserId;
+   createdAt: Timestamp;
+   description: text;
+   dueDate: opt Timestamp;
+   id: EntityId;
+   order: nat;
+   parentTaskId: EntityId;
+   priority: TaskPriority;
+   projectId: EntityId;
+   status: TaskStatus;
+   tenantId: TenantId;
+   title: text;
+   updatedAt: Timestamp;
+   workspaceId: WorkspaceId;
+ };
+type StatusHistoryEntry = 
+ record {
+   changedBy: principal;
+   note: opt text;
+   status: EscrowStatus;
+   timestamp: Timestamp;
+ };
+type SprintStatus = 
+ variant {
+   active;
+   completed;
+   planned;
+ };
+type SprintInput = 
+ record {
+   endDate: Timestamp;
+   goal: text;
+   name: text;
+   projectId: EntityId;
+   startDate: Timestamp;
+   taskIds: vec EntityId;
+ };
+type Sprint = 
+ record {
+   createdAt: Timestamp;
+   endDate: Timestamp;
+   goal: text;
+   id: EntityId;
+   name: text;
+   projectId: EntityId;
+   startDate: Timestamp;
+   status: SprintStatus;
+   taskIds: vec EntityId;
+   tenantId: TenantId;
+   updatedAt: Timestamp;
+   workspaceId: WorkspaceId;
+ };
+type RsvpStatus = 
+ variant {
+   accepted;
+   declined;
+   noResponse;
+   tentative;
  };
 type Role = 
  variant {
    Admin;
    Manager;
    TeamMember;
+ };
+type RecurringTaskInput = 
+ record {
+   assigneeId: opt UserId;
+   description: text;
+   priority: TaskPriority;
+   projectId: EntityId;
+   recurrenceType: RecurrenceType;
+   startDate: Timestamp;
+   title: text;
+ };
+type RecurringTask = 
+ record {
+   assigneeId: opt UserId;
+   createdAt: Timestamp;
+   description: text;
+   id: EntityId;
+   lastCreatedAt: opt Timestamp;
+   nextDueAt: Timestamp;
+   priority: TaskPriority;
+   projectId: EntityId;
+   recurrenceType: RecurrenceType;
+   tenantId: TenantId;
+   title: text;
+   updatedAt: Timestamp;
+   workspaceId: WorkspaceId;
  };
 type RecurringPayment = 
  record {
@@ -126,6 +466,13 @@ type RecurringPayment =
    nextRunAt: Timestamp;
    tenantId: TenantId;
    toAddress: text;
+   workspaceId: WorkspaceId;
+ };
+type RecurrenceType = 
+ variant {
+   daily;
+   monthly;
+   weekly;
  };
 type RecurrenceRule = 
  variant {
@@ -134,6 +481,34 @@ type RecurrenceRule =
    None;
    Weekly;
    Yearly;
+ };
+type Reaction = 
+ record {
+   emoji: text;
+   userIds: vec principal;
+ };
+type PublicKeyResult = 
+ record {
+   currentValue: float64;
+   description: opt text;
+   id: EntityId;
+   status: KRStatus;
+   targetValue: float64;
+   title: text;
+   unit: text;
+ };
+type PublicGoal = 
+ record {
+   checkInCount: nat;
+   description: opt text;
+   endDate: Timestamp;
+   id: EntityId;
+   keyResults: vec PublicKeyResult;
+   period: text;
+   progress: float64;
+   startDate: Timestamp;
+   status: GoalStatus;
+   title: text;
  };
 type ProjectStatus = 
  variant {
@@ -160,31 +535,153 @@ type Project =
    status: ProjectStatus;
    tenantId: TenantId;
    updatedAt: Timestamp;
+   workspaceId: WorkspaceId;
  };
 type PayrollStatus = 
  variant {
    Active;
+   Approved;
    Completed;
    Paused;
+   PendingApproval;
+   Processed;
+   Rejected;
  };
 type PayrollRecord = 
  record {
    amount: nat;
+   approvedAt: opt Timestamp;
+   approvedBy: opt UserId;
    createdAt: Timestamp;
    currency: text;
+   deductionAmount: float64;
    employeeId: EntityId;
+   grossAmount: float64;
    id: EntityId;
+   netAmount: float64;
    period: text;
    processedAt: opt Timestamp;
+   rejectionReason: opt text;
    status: PayrollStatus;
+   taxAmount: float64;
    tenantId: TenantId;
+   workspaceId: WorkspaceId;
+ };
+type PayStub = 
+ record {
+   details: text;
+   employeeId: EntityId;
+   generatedAt: Timestamp;
+   grossPay: float64;
+   id: EntityId;
+   netPay: float64;
+   otherDeductions: float64;
+   payrollRecordId: EntityId;
+   period: text;
+   taxDeductions: float64;
+   tenantId: TenantId;
+   workspaceId: WorkspaceId;
+ };
+type PayScheduleInput = 
+ record {
+   description: text;
+   frequency: PayFrequency;
+   isDefault: bool;
+   name: text;
+ };
+type PaySchedule = 
+ record {
+   createdAt: Timestamp;
+   description: text;
+   frequency: PayFrequency;
+   id: EntityId;
+   isDefault: bool;
+   name: text;
+   tenantId: TenantId;
+   workspaceId: WorkspaceId;
  };
 type PayFrequency = 
  variant {
    BiWeekly;
    Monthly;
    Quarterly;
+   SemiMonthly;
    Weekly;
+ };
+type PageNode = 
+ record {
+   authorId: UserId;
+   blocks: vec Block;
+   coverUrl: opt text;
+   createdAt: Timestamp;
+   crossLinks: vec CrossLink;
+   icon: text;
+   id: EntityId;
+   parentPageId: opt EntityId;
+   tenantId: TenantId;
+   title: text;
+   updatedAt: Timestamp;
+   watchers: vec UserId;
+   workspaceId: WorkspaceId;
+ };
+type PageInput = 
+ record {
+   blocks: vec text;
+   coverUrl: opt text;
+   icon: text;
+   parentPageId: opt EntityId;
+   title: text;
+ };
+type OffCycleStatus = 
+ variant {
+   pending;
+   processed;
+ };
+type OffCycleReason = 
+ variant {
+   adjustment;
+   bonus;
+   reimbursement;
+ };
+type OffCyclePaymentInput = 
+ record {
+   amount: float64;
+   employeeId: EntityId;
+   notes: text;
+   processImmediately: bool;
+   reason: OffCycleReason;
+ };
+type OffCyclePayment = 
+ record {
+   amount: float64;
+   createdAt: Timestamp;
+   employeeId: EntityId;
+   id: EntityId;
+   notes: text;
+   processImmediately: bool;
+   reason: OffCycleReason;
+   status: OffCycleStatus;
+   tenantId: TenantId;
+   workspaceId: WorkspaceId;
+ };
+type NoteTemplateInput = 
+ record {
+   blocksJson: text;
+   description: text;
+   icon: text;
+   name: text;
+ };
+type NoteTemplate = 
+ record {
+   authorId: UserId;
+   blocksJson: text;
+   createdAt: Timestamp;
+   description: text;
+   icon: text;
+   id: EntityId;
+   name: text;
+   tenantId: TenantId;
+   workspaceId: WorkspaceId;
  };
 type NoteInput = 
  record {
@@ -204,6 +701,42 @@ type Note =
    tenantId: TenantId;
    title: text;
    updatedAt: Timestamp;
+   workspaceId: WorkspaceId;
+ };
+type MilestoneStatus__1 = 
+ variant {
+   Approved;
+   Pending;
+   Released;
+   Releasing;
+ };
+type MilestoneStatus = 
+ variant {
+   missed;
+   reached;
+   upcoming;
+ };
+type MilestoneInput = 
+ record {
+   description: text;
+   dueDate: Timestamp;
+   linkedTaskIds: vec EntityId;
+   projectId: EntityId;
+   title: text;
+ };
+type Milestone = 
+ record {
+   createdAt: Timestamp;
+   description: text;
+   dueDate: Timestamp;
+   id: EntityId;
+   linkedTaskIds: vec EntityId;
+   projectId: EntityId;
+   status: MilestoneStatus;
+   tenantId: TenantId;
+   title: text;
+   updatedAt: Timestamp;
+   workspaceId: WorkspaceId;
  };
 type MessageInput = 
  record {
@@ -219,35 +752,372 @@ type Message =
    createdAt: Timestamp;
    crossLinks: vec CrossLink;
    id: EntityId;
+   isThreadReply: opt bool;
+   reactions: opt vec Reaction;
    replyToId: opt EntityId;
    senderId: UserId;
    tenantId: TenantId;
+   threadCount: opt nat;
    updatedAt: Timestamp;
+   workspaceId: WorkspaceId;
+ };
+type MentionEntry = 
+ record {
+   hasMention: bool;
+   userId: principal;
+ };
+type KeyResultInput = 
+ record {
+   description: opt text;
+   goalId: EntityId;
+   targetValue: float64;
+   title: text;
+   unit: text;
+ };
+type KeyResult = 
+ record {
+   createdAt: Timestamp;
+   currentValue: float64;
+   description: opt text;
+   goalId: EntityId;
+   id: EntityId;
+   linkedTaskIds: vec EntityId;
+   status: KRStatus;
+   targetValue: float64;
+   tenantId: TenantId;
+   title: text;
+   unit: text;
+   updatedAt: Timestamp;
+   workspaceId: WorkspaceId;
+ };
+type KRStatus = 
+ variant {
+   AtRisk;
+   Behind;
+   Completed;
+   OnTrack;
+ };
+type IntegrationStatus = 
+ variant {
+   Connected;
+   Disconnected;
+   Error;
+ };
+type IntegrationProvider = 
+ variant {
+   GitHub;
+   GoogleDrive;
+   Slack;
+ };
+type IntegrationInput = 
+ record {
+   accessToken: text;
+   config: text;
+   oauthToken: opt text;
+   provider: IntegrationProvider;
+ };
+type IntegrationEvent = 
+ record {
+   eventType: text;
+   id: EntityId;
+   integrationId: EntityId;
+   payload: text;
+   tenantId: TenantId;
+   timestamp: Timestamp;
+   triggerAction: opt text;
+   workspaceId: WorkspaceId;
+ };
+type Integration = 
+ record {
+   accessToken: text;
+   config: text;
+   createdAt: Timestamp;
+   id: EntityId;
+   lastSyncAt: opt Timestamp;
+   oauthToken: opt text;
+   provider: IntegrationProvider;
+   status: IntegrationStatus;
+   syncStatus: opt text;
+   tenantId: TenantId;
+   updatedAt: Timestamp;
+   workspaceId: WorkspaceId;
+ };
+type GuestUser = 
+ record {
+   createdAt: Timestamp;
+   email: text;
+   id: EntityId;
+   "principal": opt UserId;
+   projectIds: vec EntityId;
+   status: GuestStatus;
+   tenantId: TenantId;
+   workspaceId: WorkspaceId;
+ };
+type GuestStatus = 
+ variant {
+   Active;
+   Pending;
+   Revoked;
+ };
+type GuestInvitationInput = 
+ record {
+   expiresAt: Timestamp;
+   inviteeEmail: text;
+   projectId: EntityId;
+ };
+type GuestInvitation = 
+ record {
+   accepted: bool;
+   createdAt: Timestamp;
+   expiresAt: Timestamp;
+   id: EntityId;
+   inviteToken: text;
+   invitedBy: UserId;
+   inviteeEmail: text;
+   projectId: EntityId;
+   tenantId: TenantId;
+   workspaceId: WorkspaceId;
+ };
+type GoalStatus = 
+ variant {
+   Active;
+   Cancelled;
+   Completed;
+   OnHold;
+ };
+type GoalInput = 
+ record {
+   contributorIds: vec UserId;
+   description: opt text;
+   endDate: Timestamp;
+   period: text;
+   startDate: Timestamp;
+   title: text;
+ };
+type GoalCheckIn = 
+ record {
+   goalId: EntityId;
+   id: EntityId;
+   krId: opt EntityId;
+   newValue: float64;
+   note: text;
+   previousValue: float64;
+   tenantId: TenantId;
+   timestamp: Timestamp;
+   userId: UserId;
+   workspaceId: WorkspaceId;
+ };
+type Goal = 
+ record {
+   contributorIds: vec UserId;
+   createdAt: Timestamp;
+   description: opt text;
+   endDate: Timestamp;
+   id: EntityId;
+   isPublic: bool;
+   keyResults: vec EntityId;
+   ownerId: UserId;
+   period: text;
+   progress: float64;
+   startDate: Timestamp;
+   status: GoalStatus;
+   tenantId: TenantId;
+   title: text;
+   updatedAt: Timestamp;
+   workspaceId: WorkspaceId;
+ };
+type FormSubmissionInput = 
+ record {
+   data: vec record {
+               text;
+               text;
+             };
+   formId: EntityId;
+   submitterEmail: text;
+ };
+type FormSubmission = 
+ record {
+   data: vec record {
+               text;
+               text;
+             };
+   formId: EntityId;
+   id: EntityId;
+   submittedAt: Timestamp;
+   submitterEmail: text;
+   tenantId: TenantId;
+   workspaceId: WorkspaceId;
+ };
+type FormStatus = 
+ variant {
+   Draft;
+   Published;
+ };
+type FormInput = 
+ record {
+   autoCreateTask: opt AutoCreateTaskConfig;
+   branding: opt FormBranding;
+   description: text;
+   fields: vec FormField;
+   formTemplateId: opt text;
+   title: text;
+ };
+type FormFieldType = 
+ variant {
+   Checkbox;
+   Date;
+   Dropdown;
+   Email;
+   Text;
+   Textarea;
+ };
+type FormField = 
+ record {
+   conditionalLogic: opt ConditionalLogic;
+   fieldLabel: text;
+   fieldType: FormFieldType;
+   id: EntityId;
+   options: vec text;
+   required: bool;
+ };
+type FormBranding = 
+ record {
+   backgroundColor: opt text;
+   logoUrl: opt text;
+   primaryColor: opt text;
+ };
+type FormAnalytics = 
+ record {
+   fieldCompletionRates: vec FieldCompletionRate;
+   recentSubmissions: vec FormSubmission;
+   submissionCount: nat;
+ };
+type Form = 
+ record {
+   autoCreateTask: opt AutoCreateTaskConfig;
+   branding: opt FormBranding;
+   createdAt: Timestamp;
+   createdBy: UserId;
+   description: text;
+   fields: vec FormField;
+   formTemplateId: opt text;
+   id: EntityId;
+   publicUrl: text;
+   status: FormStatus;
+   tenantId: TenantId;
+   title: text;
+   updatedAt: Timestamp;
+   workspaceId: WorkspaceId;
+ };
+type FieldCompletionRate = 
+ record {
+   completionRate: float64;
+   fieldId: text;
+ };
+type ExceptionType = 
+ variant {
+   deleted;
+   modified;
+ };
+type EventRsvpInput = 
+ record {
+   eventId: text;
+   status: RsvpStatus;
+ };
+type EventRsvp = 
+ record {
+   eventId: text;
+   id: EntityId;
+   respondedAt: opt Timestamp;
+   status: RsvpStatus;
+   tenantId: TenantId;
+   userId: UserId;
+   workspaceId: WorkspaceId;
  };
 type EventInput = 
  record {
    attendeeIds: vec UserId;
+   calendarId: opt text;
+   category: opt EventCategory;
+   categoryColor: opt text;
    crossLinks: vec CrossLink;
    description: text;
    endTime: Timestamp;
+   isProjectDeadline: opt bool;
+   linkedNoteId: opt text;
+   projectId: opt text;
    recurrence: RecurrenceRule;
+   rsvpRequired: opt bool;
    startTime: Timestamp;
+   timeZone: opt text;
    title: text;
+ };
+type EventExceptionInput = 
+ record {
+   eventId: text;
+   exceptionType: ExceptionType;
+   originalDate: text;
+   overrideData: opt EventInput;
+ };
+type EventException = 
+ record {
+   createdAt: Timestamp;
+   eventId: text;
+   exceptionType: ExceptionType;
+   id: EntityId;
+   originalDate: text;
+   overrideData: opt EventInput;
+   tenantId: TenantId;
+   workspaceId: WorkspaceId;
+ };
+type EventCategory = 
+ variant {
+   deadline;
+   external;
+   internal;
+   meeting;
+   other;
+   pto;
  };
 type Event = 
  record {
    attendeeIds: vec UserId;
+   calendarId: text;
+   category: EventCategory;
+   categoryColor: text;
    createdAt: Timestamp;
    createdBy: UserId;
    crossLinks: vec CrossLink;
    description: text;
    endTime: Timestamp;
    id: EntityId;
+   isProjectDeadline: bool;
+   isRecurringSeries: bool;
+   linkedNoteId: opt text;
+   projectId: opt text;
    recurrence: RecurrenceRule;
+   rsvpRequired: bool;
+   seriesId: opt text;
    startTime: Timestamp;
    tenantId: TenantId;
+   timeZone: text;
    title: text;
    updatedAt: Timestamp;
+   workspaceId: WorkspaceId;
+ };
+type EscrowSummary = 
+ record {
+   amount: nat;
+   conditions: vec text;
+   createdAt: Timestamp;
+   currency: text;
+   id: EntityId;
+   milestoneCount: nat;
+   payeeId: text;
+   payerId: text;
+   status: EscrowStatus;
+   statusHistory: vec StatusHistoryEntry;
+   title: text;
  };
 type EscrowStatus = 
  variant {
@@ -256,6 +1126,26 @@ type EscrowStatus =
    Funded;
    Pending;
    Released;
+ };
+type EscrowMilestoneInput = 
+ record {
+   amount: nat;
+   description: text;
+   title: text;
+ };
+type EscrowMilestone = 
+ record {
+   amount: nat;
+   createdAt: Timestamp;
+   description: text;
+   escrowId: EntityId;
+   id: EntityId;
+   ledgerBlockHeight: opt nat;
+   status: MilestoneStatus__1;
+   tenantId: TenantId;
+   title: text;
+   updatedAt: Timestamp;
+   workspaceId: WorkspaceId;
  };
 type EscrowInput = 
  record {
@@ -268,6 +1158,26 @@ type EscrowInput =
    payeeId: UserId;
    title: text;
  };
+type EscrowFilter = 
+ record {
+   fromDate: opt Timestamp;
+   status: opt EscrowStatus;
+   toDate: opt Timestamp;
+ };
+type EscrowDispute = 
+ record {
+   arbiter: opt principal;
+   createdAt: Timestamp;
+   escrowId: EntityId;
+   id: EntityId;
+   raisedBy: principal;
+   reason: text;
+   resolution: opt text;
+   status: DisputeStatus;
+   tenantId: TenantId;
+   updatedAt: Timestamp;
+   workspaceId: WorkspaceId;
+ };
 type EscrowContract = 
  record {
    amount: nat;
@@ -277,29 +1187,37 @@ type EscrowContract =
    currency: text;
    description: text;
    dueDate: opt Timestamp;
+   fundedAmount: opt nat;
+   fundingBlockHeight: opt nat;
    id: EntityId;
    payeeId: UserId;
    payerId: UserId;
    status: EscrowStatus;
+   statusHistory: vec StatusHistoryEntry;
    tenantId: TenantId;
    title: text;
    updatedAt: Timestamp;
+   workspaceId: WorkspaceId;
  };
 type EntityId = text;
 type EmployeeInput = 
  record {
+   contractorFlag: bool;
    currency: text;
    email: text;
    firstName: text;
    lastName: text;
    payFrequency: PayFrequency;
+   payScheduleId: text;
    salary: nat;
    startDate: Timestamp;
    taxRate: nat;
+   timeZone: text;
    userId: UserId;
  };
 type Employee = 
  record {
+   contractorFlag: bool;
    createdAt: Timestamp;
    currency: text;
    email: text;
@@ -308,11 +1226,76 @@ type Employee =
    isActive: bool;
    lastName: text;
    payFrequency: PayFrequency;
+   payScheduleId: text;
    salary: nat;
    startDate: Timestamp;
    taxRate: nat;
    tenantId: TenantId;
+   timeZone: text;
    userId: UserId;
+   workspaceId: WorkspaceId;
+ };
+type DrawingTool = 
+ variant {
+   Circle;
+   Connector;
+   Eraser;
+   Image;
+   Line;
+   Pen;
+   Rectangle;
+   Sticky;
+   Text;
+ };
+type DisputeStatus = 
+ variant {
+   Open;
+   Resolved;
+ };
+type DeductionType = 
+ variant {
+   postTax;
+   preTax;
+ };
+type DeductionInput = 
+ record {
+   amount: float64;
+   deductionType: DeductionType;
+   employeeId: EntityId;
+   frequency: DeductionFrequency;
+   name: text;
+ };
+type DeductionFrequency = 
+ variant {
+   annual;
+   perRun;
+ };
+type Deduction = 
+ record {
+   amount: float64;
+   createdAt: Timestamp;
+   deductionType: DeductionType;
+   employeeId: EntityId;
+   frequency: DeductionFrequency;
+   id: EntityId;
+   isActive: bool;
+   name: text;
+   tenantId: TenantId;
+   workspaceId: WorkspaceId;
+ };
+type DashboardStats = 
+ record {
+   goalCount: nat;
+   memberCount: nat;
+   noteCount: nat;
+   projectCount: nat;
+   taskCount: nat;
+ };
+type DailyTimesheetEntry = 
+ record {
+   date: Timestamp;
+   entries: vec TimeEntry;
+   totalHours: float64;
  };
 type CrossLink = 
  record {
@@ -320,6 +1303,93 @@ type CrossLink =
    entityType: text;
    linkLabel: text;
    tenantId: TenantId;
+ };
+type ContractorPaymentStatus = 
+ variant {
+   pending;
+   processed;
+ };
+type ContractorPaymentReason = 
+ variant {
+   freelanceInvoice;
+   other;
+   projectMilestone;
+   reimbursement;
+ };
+type ContractorPaymentInput = 
+ record {
+   amount: float64;
+   contractorId: EntityId;
+   notes: text;
+   paymentDate: text;
+   reason: ContractorPaymentReason;
+ };
+type ContractorPayment = 
+ record {
+   amount: float64;
+   contractorId: EntityId;
+   createdAt: Timestamp;
+   id: EntityId;
+   notes: text;
+   paymentDate: text;
+   processedAt: opt Timestamp;
+   reason: ContractorPaymentReason;
+   status: ContractorPaymentStatus;
+   tenantId: TenantId;
+   workspaceId: WorkspaceId;
+ };
+type ContractorInput = 
+ record {
+   currency: text;
+   email: text;
+   name: text;
+   rate: float64;
+   taxId: text;
+ };
+type Contractor = 
+ record {
+   createdAt: Timestamp;
+   currency: text;
+   email: text;
+   id: EntityId;
+   isActive: bool;
+   name: text;
+   rate: float64;
+   taxId: text;
+   tenantId: TenantId;
+   workspaceId: WorkspaceId;
+ };
+type ConditionalLogic = 
+ record {
+   fieldId: text;
+   operator: text;
+   value: text;
+ };
+type ChecklistItemInput = 
+ record {
+   completed: bool;
+   content: text;
+   order: nat;
+   taskId: EntityId;
+ };
+type ChecklistItem = 
+ record {
+   completed: bool;
+   content: text;
+   createdAt: Timestamp;
+   id: EntityId;
+   order: nat;
+   taskId: EntityId;
+   tenantId: TenantId;
+   updatedAt: Timestamp;
+   workspaceId: WorkspaceId;
+ };
+type CheckInInput = 
+ record {
+   goalId: EntityId;
+   krId: opt EntityId;
+   newValue: float64;
+   note: text;
  };
 type ChannelInput = 
  record {
@@ -336,8 +1406,71 @@ type Channel =
    id: EntityId;
    isPublic: bool;
    memberIds: vec UserId;
+   mentionFlags: opt vec MentionEntry;
    name: text;
+   pinnedMessageIds: opt vec text;
    tenantId: TenantId;
+   topic: opt text;
+   unreadCounts: opt vec UnreadEntry;
+   workspaceId: WorkspaceId;
+ };
+type CalendarType = 
+ variant {
+   company;
+   personal;
+   project;
+   team;
+ };
+type CalendarDefInput = 
+ record {
+   calendarType: CalendarType;
+   color: text;
+   isVisible: bool;
+   name: text;
+   projectId: opt text;
+ };
+type CalendarDef = 
+ record {
+   calendarType: CalendarType;
+   color: text;
+   createdAt: Timestamp;
+   id: EntityId;
+   isVisible: bool;
+   name: text;
+   ownerId: UserId;
+   projectId: opt text;
+   tenantId: TenantId;
+   workspaceId: WorkspaceId;
+ };
+type BlockTypeTag = text;
+type Block = 
+ record {
+   blockType: BlockTypeTag;
+   content: text;
+   id: EntityId;
+   metadata: text;
+   order: nat;
+   parentId: opt EntityId;
+ };
+type BenefitInput = 
+ record {
+   employeeId: EntityId;
+   endDate: opt text;
+   monthlyCost: float64;
+   name: text;
+   startDate: text;
+ };
+type Benefit = 
+ record {
+   employeeId: EntityId;
+   endDate: opt text;
+   id: EntityId;
+   isActive: bool;
+   monthlyCost: float64;
+   name: text;
+   startDate: text;
+   tenantId: TenantId;
+   workspaceId: WorkspaceId;
  };
 type BackupStatus = 
  variant {
@@ -356,6 +1489,17 @@ type Backup =
    sizeBytes: opt nat;
    status: BackupStatus;
    tenantId: TenantId;
+   workspaceId: WorkspaceId;
+ };
+type AvailabilitySlot = 
+ record {
+   busyPeriods: vec record {
+                      text;
+                      text;
+                    };
+   date: text;
+   timeZone: text;
+   userId: UserId;
  };
 type AutomationTrigger = 
  variant {
@@ -377,6 +1521,7 @@ type AutomationRule =
    name: text;
    tenantId: TenantId;
    trigger: AutomationTrigger;
+   workspaceId: WorkspaceId;
  };
 type AutomationAction = 
  variant {
@@ -384,6 +1529,24 @@ type AutomationAction =
    RunPayroll;
    SendNotification;
    UpdateStatus;
+ };
+type AutoCreateTaskConfig = 
+ record {
+   assigneeId: opt principal;
+   projectId: text;
+   taskTitle: text;
+ };
+type AuditLogEntry = 
+ record {
+   action: text;
+   details: text;
+   entityId: EntityId;
+   entityType: text;
+   id: EntityId;
+   performedBy: UserId;
+   tenantId: TenantId;
+   timestamp: Timestamp;
+   workspaceId: WorkspaceId;
  };
 type AuditLog = 
  record {
@@ -395,180 +1558,721 @@ type AuditLog =
    tenantId: TenantId;
    timestamp: Timestamp;
    userId: UserId;
+   workspaceId: WorkspaceId;
  };
 type AssetType = 
  variant {
    BTC;
    ICP;
  };
+type ActivityEventType = 
+ variant {
+   checklistItemAdded;
+   checklistItemCompleted;
+   commentAdded;
+   commentEdited;
+   dependencyAdded;
+   milestoneCreated;
+   sprintCompleted;
+   sprintStarted;
+   subtaskAdded;
+   taskAssigned;
+   taskCreated;
+   taskStatusChanged;
+   taskUpdated;
+   watcherAdded;
+ };
+type ActivityEvent = 
+ record {
+   actorId: UserId;
+   createdAt: Timestamp;
+   description: text;
+   eventType: ActivityEventType;
+   id: EntityId;
+   metadata: text;
+   projectId: EntityId;
+   taskId: EntityId;
+   tenantId: TenantId;
+   workspaceId: WorkspaceId;
+ };
+type ActivityEntry = 
+ record {
+   action: text;
+   actorId: text;
+   entityTitle: text;
+   entityType: text;
+   timestamp: int;
+ };
+type AccountType = 
+ variant {
+   personal;
+   treasury;
+ };
+type AIResponse = 
+ record {
+   content: text;
+   createdAt: Timestamp;
+   id: EntityId;
+   model: text;
+   promptId: EntityId;
+   tenantId: TenantId;
+   tokensUsed: nat;
+   workspaceId: WorkspaceId;
+ };
+type AIProvider = 
+ variant {
+   Anthropic;
+   OpenAI;
+ };
+type AIPromptType = 
+ variant {
+   Analyze;
+   Custom;
+   Generate;
+   GenerateTasks;
+   MeetingSummary;
+   SuggestPriorities;
+   Summarize;
+   Translate;
+   WorkspaceQA;
+ };
+type AIPromptInput = 
+ record {
+   content: text;
+   contextData: opt text;
+   contextEntityId: opt EntityId;
+   contextEntityType: opt text;
+   model: text;
+   promptType: AIPromptType;
+ };
+type AIPrompt = 
+ record {
+   content: text;
+   createdAt: Timestamp;
+   id: EntityId;
+   model: text;
+   promptType: AIPromptType;
+   tenantId: TenantId;
+   userId: UserId;
+   workspaceId: WorkspaceId;
+ };
+type AIConfigInput = 
+ record {
+   apiKey: text;
+   model: text;
+   provider: AIProvider;
+ };
+type AIConfig = 
+ record {
+   apiKey: text;
+   createdAt: Timestamp;
+   id: EntityId;
+   model: text;
+   provider: AIProvider;
+   tenantId: TenantId;
+   workspaceId: WorkspaceId;
+ };
 service : {
-  addEmployee: (tenantId: TenantId, input: EmployeeInput) ->
-   (variant {
-      err: text;
-      ok: Employee;
-    });
-  archiveProject: (tenantId: TenantId, id: EntityId) ->
-   (variant {
-      err: text;
-      ok: Project;
-    });
-  cancelEscrow: (tenantId: TenantId, id: EntityId) ->
-   (variant {
-      err: text;
-      ok: EscrowContract;
-    });
-  cancelRecurringPayment: (tenantId: TenantId, id: EntityId) ->
-   (variant {
-      err: text;
-      ok: RecurringPayment;
-    });
-  createAutomationRule: (tenantId: TenantId, name: text, description: 
-   text, trigger: AutomationTrigger, action: AutomationAction) ->
-   (variant {
-      err: text;
-      ok: AutomationRule;
-    });
-  createBackup: (tenantId: TenantId, backupLabel: text) ->
-   (variant {
-      err: text;
-      ok: Backup;
-    });
-  createChannel: (tenantId: TenantId, input: ChannelInput) ->
-   (variant {
-      err: text;
-      ok: Channel;
-    });
-  createEscrow: (tenantId: TenantId, input: EscrowInput) ->
-   (variant {
-      err: text;
-      ok: EscrowContract;
-    });
-  createEvent: (tenantId: TenantId, input: EventInput) ->
-   (variant {
-      err: text;
-      ok: Event;
-    });
-  createNote: (tenantId: TenantId, input: NoteInput) ->
-   (variant {
-      err: text;
-      ok: Note;
-    });
-  createProject: (tenantId: TenantId, input: ProjectInput) ->
-   (variant {
-      err: text;
-      ok: Project;
-    });
-  createRecurringPayment: (tenantId: TenantId, accountId: EntityId,
-   toAddress: text, amount: nat, asset: AssetType, frequency:
-   PayFrequency) -> (variant {
+  acceptGuestInvitation: (tenantId: TenantId, workspaceId: WorkspaceId,
+   token: text) -> (variant {
+                      err: text;
+                      ok: GuestUser;
+                    });
+  addBenefit: (tenantId: TenantId, workspaceId: WorkspaceId, input:
+   BenefitInput) -> (variant {
                        err: text;
-                       ok: RecurringPayment;
+                       ok: Benefit;
                      });
-  createTask: (tenantId: TenantId, input: TaskInput) ->
+  addChecklistItem: (tenantId: TenantId, workspaceId: WorkspaceId, input:
+   ChecklistItemInput) -> (variant {
+                             err: text;
+                             ok: ChecklistItem;
+                           });
+  addComment: (tenantId: TenantId, workspaceId: WorkspaceId, projectId:
+   EntityId, input: TaskCommentInput) ->
    (variant {
       err: text;
-      ok: Task;
+      ok: TaskComment;
     });
-  createWalletAccount: (tenantId: TenantId, displayName: text) ->
+  addContractor: (tenantId: TenantId, workspaceId: WorkspaceId, input:
+   ContractorInput) -> (variant {
+                          err: text;
+                          ok: Contractor;
+                        });
+  addContractorPayment: (tenantId: TenantId, workspaceId: WorkspaceId, input:
+   ContractorPaymentInput) -> (variant {
+                                 err: text;
+                                 ok: ContractorPayment;
+                               });
+  addDeduction: (tenantId: TenantId, workspaceId: WorkspaceId, input:
+   DeductionInput) -> (variant {
+                         err: text;
+                         ok: Deduction;
+                       });
+  addEmployee: (tenantId: TenantId, workspaceId: WorkspaceId, input:
+   EmployeeInput) -> (variant {
+                        err: text;
+                        ok: Employee;
+                      });
+  addEscrowMilestone: (tenantId: TenantId, workspaceId: WorkspaceId,
+   escrowId: EntityId, input: EscrowMilestoneInput) ->
    (variant {
       err: text;
-      ok: WalletAccount;
+      ok: EscrowMilestone;
     });
-  createWorkspace: (tenantId: TenantId, input: WorkspaceInput) ->
+  addIntegrationEvent: (tenantId: TenantId, workspaceId: WorkspaceId,
+   integrationId: EntityId, eventType: text, payload: text) ->
+   (variant {
+      err: text;
+      ok: IntegrationEvent;
+    });
+  addKeyResult: (tenantId: TenantId, workspaceId: WorkspaceId, input:
+   KeyResultInput) -> (variant {
+                         err: text;
+                         ok: KeyResult;
+                       });
+  addOffCyclePayment: (tenantId: TenantId, workspaceId: WorkspaceId, input:
+   OffCyclePaymentInput) -> (variant {
+                               err: text;
+                               ok: OffCyclePayment;
+                             });
+  addPaySchedule: (tenantId: TenantId, workspaceId: WorkspaceId, input:
+   PayScheduleInput) -> (variant {
+                           err: text;
+                           ok: PaySchedule;
+                         });
+  addReaction: (tenantId: TenantId, workspaceId: WorkspaceId, messageId:
+   EntityId, emoji: text) -> (variant {
+                                err: text;
+                                ok: Message;
+                              });
+  addTaskRelationship: (tenantId: TenantId, workspaceId: WorkspaceId,
+   sourceTaskId: EntityId, targetTaskId: EntityId, relType:
+   TaskRelationshipType) -> (variant {
+                               err: text;
+                               ok: TaskRelationship;
+                             });
+  addTaskToSprint: (tenantId: TenantId, workspaceId: WorkspaceId, sprintId:
+   EntityId, taskId: EntityId) -> (variant {
+                                     err: text;
+                                     ok: Sprint;
+                                   });
+  addTaskWatcher: (tenantId: TenantId, workspaceId: WorkspaceId, taskId:
+   EntityId, userId: UserId) -> (variant {
+                                   err: text;
+                                   ok: TaskWatcher;
+                                 });
+  addWorkspaceMember: (tenantId: TenantId, workspaceId: EntityId, userId:
+   UserId, role: WorkspaceRole, displayName: text, email: text) ->
+   (variant {
+      err: text;
+      ok: WorkspaceMember;
+    });
+  approveMilestone: (tenantId: TenantId, workspaceId: WorkspaceId,
+   milestoneId: EntityId) -> (variant {
+                                err: text;
+                                ok: EscrowMilestone;
+                              });
+  approveTransaction: (tenantId: TenantId, workspaceId: WorkspaceId, txId:
+   EntityId, approved: bool) -> (variant {
+                                   err: text;
+                                   ok: WalletTransaction;
+                                 });
+  archiveProject: (tenantId: TenantId, workspaceId: WorkspaceId, id:
+   EntityId) -> (variant {
+                   err: text;
+                   ok: Project;
+                 });
+  assignArbiter: (tenantId: TenantId, workspaceId: WorkspaceId, disputeId:
+   EntityId, arbiter: principal) -> (variant {
+                                       err: text;
+                                       ok: EscrowDispute;
+                                     });
+  bulkApprovePayroll: (tenantId: TenantId, workspaceId: WorkspaceId,
+   recordIds: vec EntityId) -> (variant {
+                                  err: text;
+                                  ok: bool;
+                                });
+  cancelEscrow: (tenantId: TenantId, workspaceId: WorkspaceId, id:
+   EntityId) -> (variant {
+                   err: text;
+                   ok: EscrowContract;
+                 });
+  cancelRecurringPayment: (tenantId: TenantId, workspaceId: WorkspaceId, id:
+   EntityId) -> (variant {
+                   err: text;
+                   ok: RecurringPayment;
+                 });
+  checkSpendingLimit: (tenantId: TenantId, workspaceId: WorkspaceId, role:
+   Role, amount: float64) -> (bool) query;
+  convertWhiteboardElementToTask: (tenantId: TenantId, workspaceId:
+   WorkspaceId, whiteboardId: EntityId, elementId: EntityId, projectId:
+   EntityId) -> (variant {
+                   err: text;
+                   ok: Whiteboard;
+                 });
+  createAutomationRule: (tenantId: TenantId, workspaceId: WorkspaceId, name:
+   text, description: text, trigger: AutomationTrigger, action:
+   AutomationAction) -> (variant {
+                           err: text;
+                           ok: AutomationRule;
+                         });
+  createBackup: (tenantId: TenantId, workspaceId: WorkspaceId, backupLabel:
+   text) -> (variant {
+               err: text;
+               ok: Backup;
+             });
+  createCalendar: (tenantId: TenantId, workspaceId: WorkspaceId, input:
+   CalendarDefInput) -> (variant {
+                           err: text;
+                           ok: CalendarDef;
+                         });
+  createChannel: (tenantId: TenantId, workspaceId: WorkspaceId, input:
+   ChannelInput) -> (variant {
+                       err: text;
+                       ok: Channel;
+                     });
+  createEscrow: (tenantId: TenantId, workspaceId: WorkspaceId, input:
+   EscrowInput) -> (variant {
+                      err: text;
+                      ok: EscrowContract;
+                    });
+  createEvent: (tenantId: TenantId, workspaceId: WorkspaceId, input:
+   EventInput) -> (variant {
+                     err: text;
+                     ok: Event;
+                   });
+  createEventException: (tenantId: TenantId, workspaceId: WorkspaceId, input:
+   EventExceptionInput) -> (variant {
+                              err: text;
+                              ok: EventException;
+                            });
+  createForm: (tenantId: TenantId, workspaceId: WorkspaceId, input:
+   FormInput) -> (variant {
+                    err: text;
+                    ok: Form;
+                  });
+  createGoal: (tenantId: TenantId, workspaceId: WorkspaceId, input:
+   GoalInput) -> (variant {
+                    err: text;
+                    ok: Goal;
+                  });
+  createGuestInvitation: (tenantId: TenantId, workspaceId: WorkspaceId,
+   input: GuestInvitationInput) -> (variant {
+                                      err: text;
+                                      ok: GuestInvitation;
+                                    });
+  createMilestone: (tenantId: TenantId, workspaceId: WorkspaceId, input:
+   MilestoneInput) -> (variant {
+                         err: text;
+                         ok: Milestone;
+                       });
+  createNote: (tenantId: TenantId, workspaceId: WorkspaceId, input:
+   NoteInput) -> (variant {
+                    err: text;
+                    ok: Note;
+                  });
+  createNoteTemplate: (tenantId: TenantId, workspaceId: WorkspaceId, input:
+   NoteTemplateInput) -> (variant {
+                            err: text;
+                            ok: NoteTemplate;
+                          });
+  createPage: (tenantId: TenantId, workspaceId: WorkspaceId, input:
+   PageInput) -> (variant {
+                    err: text;
+                    ok: PageNode;
+                  });
+  createProject: (tenantId: TenantId, workspaceId: WorkspaceId, input:
+   ProjectInput) -> (variant {
+                       err: text;
+                       ok: Project;
+                     });
+  createProjectFromTemplate: (tenantId: TenantId, workspaceId: WorkspaceId,
+   templateId: text, projectName: text, projectDescription: text) ->
+   (variant {
+      err: text;
+      ok: EntityId;
+    });
+  createRecurringPayment: (tenantId: TenantId, workspaceId: WorkspaceId,
+   accountId: EntityId, toAddress: text, amount: nat, asset: AssetType,
+   frequency: PayFrequency) -> (variant {
+                                  err: text;
+                                  ok: RecurringPayment;
+                                });
+  createRecurringTask: (tenantId: TenantId, workspaceId: WorkspaceId, input:
+   RecurringTaskInput) -> (variant {
+                             err: text;
+                             ok: RecurringTask;
+                           });
+  createSprint: (tenantId: TenantId, workspaceId: WorkspaceId, input:
+   SprintInput) -> (variant {
+                      err: text;
+                      ok: Sprint;
+                    });
+  createSubtask: (tenantId: TenantId, workspaceId: WorkspaceId, input:
+   SubtaskInput) -> (variant {
+                       err: text;
+                       ok: Subtask;
+                     });
+  createTask: (tenantId: TenantId, workspaceId: WorkspaceId, input:
+   TaskInput) -> (variant {
+                    err: text;
+                    ok: Task;
+                  });
+  createTaskTemplate: (tenantId: TenantId, workspaceId: WorkspaceId, input:
+   TaskTemplateInput) -> (variant {
+                            err: text;
+                            ok: TaskTemplate;
+                          });
+  createTimeEntry: (tenantId: TenantId, workspaceId: WorkspaceId, input:
+   TimeEntryInput) -> (variant {
+                         err: text;
+                         ok: TimeEntry;
+                       });
+  createWalletAccount: (tenantId: TenantId, workspaceId: WorkspaceId,
+   displayName: text) -> (variant {
+                            err: text;
+                            ok: WalletAccount;
+                          });
+  createWhiteboard: (tenantId: TenantId, workspaceId: WorkspaceId, input:
+   WhiteboardInput) -> (variant {
+                          err: text;
+                          ok: Whiteboard;
+                        });
+  createWorkspace: (tenantId: TenantId, input: WorkspaceInput,
+   ownerDisplayName: text, ownerEmail: text) ->
    (variant {
       err: text;
       ok: Workspace;
     });
-  deactivateEmployee: (tenantId: TenantId, id: EntityId) ->
+  createWorkspaceTreasury: (tenantId: TenantId, workspaceId: WorkspaceId) ->
    (variant {
       err: text;
-      ok: Employee;
+      ok: WalletAccount;
     });
-  deleteEvent: (tenantId: TenantId, id: EntityId) ->
+  deactivateEmployee: (tenantId: TenantId, workspaceId: WorkspaceId, id:
+   EntityId) -> (variant {
+                   err: text;
+                   ok: Employee;
+                 });
+  deleteCalendar: (tenantId: TenantId, workspaceId: WorkspaceId, id:
+   EntityId) -> (variant {
+                   err: text;
+                   ok: bool;
+                 });
+  deleteChannel: (tenantId: TenantId, workspaceId: WorkspaceId, id:
+   EntityId) -> (variant {
+                   err: text;
+                   ok: bool;
+                 });
+  deleteChecklistItem: (tenantId: TenantId, workspaceId: WorkspaceId, itemId:
+   EntityId) -> (variant {
+                   err: text;
+                   ok: bool;
+                 });
+  deleteComment: (tenantId: TenantId, workspaceId: WorkspaceId, commentId:
+   EntityId) -> (variant {
+                   err: text;
+                   ok: bool;
+                 });
+  deleteEvent: (tenantId: TenantId, workspaceId: WorkspaceId, id:
+   EntityId) -> (variant {
+                   err: text;
+                   ok: bool;
+                 });
+  deleteForm: (tenantId: TenantId, workspaceId: WorkspaceId, id: EntityId) ->
    (variant {
       err: text;
       ok: bool;
     });
-  deleteMessage: (tenantId: TenantId, id: EntityId) ->
+  deleteGoal: (tenantId: TenantId, workspaceId: WorkspaceId, id: EntityId) ->
    (variant {
       err: text;
       ok: bool;
     });
-  deleteNote: (tenantId: TenantId, id: EntityId) ->
+  deleteIntegration: (tenantId: TenantId, workspaceId: WorkspaceId, id:
+   EntityId) -> (variant {
+                   err: text;
+                   ok: bool;
+                 });
+  deleteKeyResult: (tenantId: TenantId, workspaceId: WorkspaceId, krId:
+   EntityId) -> (variant {
+                   err: text;
+                   ok: bool;
+                 });
+  deleteMessage: (tenantId: TenantId, workspaceId: WorkspaceId, id:
+   EntityId) -> (variant {
+                   err: text;
+                   ok: bool;
+                 });
+  deleteMilestone: (tenantId: TenantId, workspaceId: WorkspaceId,
+   milestoneId: EntityId) -> (variant {
+                                err: text;
+                                ok: bool;
+                              });
+  deleteNote: (tenantId: TenantId, workspaceId: WorkspaceId, id: EntityId) ->
    (variant {
       err: text;
       ok: bool;
     });
-  deleteTask: (tenantId: TenantId, id: EntityId) ->
+  deleteNoteTemplate: (tenantId: TenantId, workspaceId: WorkspaceId,
+   templateId: EntityId) -> (variant {
+                               err: text;
+                               ok: bool;
+                             });
+  deletePage: (tenantId: TenantId, workspaceId: WorkspaceId, pageId:
+   EntityId) -> (variant {
+                   err: text;
+                   ok: bool;
+                 });
+  deleteRecurringTask: (tenantId: TenantId, workspaceId: WorkspaceId, id:
+   EntityId) -> (variant {
+                   err: text;
+                   ok: bool;
+                 });
+  deleteSprint: (tenantId: TenantId, workspaceId: WorkspaceId, sprintId:
+   EntityId) -> (variant {
+                   err: text;
+                   ok: bool;
+                 });
+  deleteSubtask: (tenantId: TenantId, workspaceId: WorkspaceId, subtaskId:
+   EntityId) -> (variant {
+                   err: text;
+                   ok: bool;
+                 });
+  deleteTask: (tenantId: TenantId, workspaceId: WorkspaceId, id: EntityId) ->
    (variant {
       err: text;
       ok: bool;
     });
-  disputeEscrow: (tenantId: TenantId, id: EntityId) ->
+  deleteTaskTemplate: (tenantId: TenantId, workspaceId: WorkspaceId, id:
+   EntityId) -> (variant {
+                   err: text;
+                   ok: bool;
+                 });
+  deleteTimeEntry: (tenantId: TenantId, workspaceId: WorkspaceId, id:
+   EntityId) -> (variant {
+                   err: text;
+                   ok: bool;
+                 });
+  deleteWhiteboard: (tenantId: TenantId, workspaceId: WorkspaceId, id:
+   EntityId) -> (variant {
+                   err: text;
+                   ok: bool;
+                 });
+  /// Deposit funds into an escrow using the ICRC-2 approve/transfer_from pattern (Protection 3).
+  /// Flow: caller must first call icrc2_approve on the ICP or ckBTC ledger to authorize
+  /// this canister to pull `contract.amount` tokens. Then call this method to execute the pull.
+  /// On success: sets escrow status to #Funded with actual funded amount and block height.
+  /// On failure: escrow remains #Pending, caller can retry after re-approving.
+  depositEscrow: (tenantId: TenantId, workspaceId: WorkspaceId, id:
+   EntityId) -> (variant {
+                   err: text;
+                   ok: EscrowContract;
+                 });
+  disputeEscrow: (tenantId: TenantId, workspaceId: WorkspaceId, id:
+   EntityId) -> (variant {
+                   err: text;
+                   ok: EscrowContract;
+                 });
+  editComment: (tenantId: TenantId, workspaceId: WorkspaceId, commentId:
+   EntityId, content: text) -> (variant {
+                                  err: text;
+                                  ok: TaskComment;
+                                });
+  exportTimeEntries: (workspaceId: WorkspaceId, tenantId: TenantId, filter:
+   TimeReportFilter) -> (text) query;
+  exportTransactions: (tenantId: TenantId, workspaceId: WorkspaceId,
+   accountId: EntityId, filter: opt TxFilter) -> (text) query;
+  fundEscrow: (tenantId: TenantId, workspaceId: WorkspaceId, id: EntityId) ->
    (variant {
       err: text;
       ok: EscrowContract;
     });
-  fundEscrow: (tenantId: TenantId, id: EntityId) ->
-   (variant {
-      err: text;
-      ok: EscrowContract;
-    });
-  getBackup: (tenantId: TenantId, id: EntityId) ->
+  getAIConfig: (tenantId: TenantId, workspaceId: WorkspaceId) ->
+   (opt AIConfig) query;
+  getAIResponses: (tenantId: TenantId, workspaceId: WorkspaceId, promptId:
+   opt EntityId, limit: nat) -> (vec AIResponse) query;
+  getAvailability: (tenantId: TenantId, workspaceId: WorkspaceId, userIds:
+   vec UserId, date: text, timeZone: text) -> (vec AvailabilitySlot) query;
+  getBacklinks: (tenantId: TenantId, workspaceId: WorkspaceId, targetPageId:
+   EntityId) -> (vec PageNode) query;
+  getBackup: (tenantId: TenantId, workspaceId: WorkspaceId, id: EntityId) ->
    (variant {
       err: text;
       ok: Backup;
     }) query;
-  getChannel: (tenantId: TenantId, id: EntityId) ->
+  getCalendar: (tenantId: TenantId, workspaceId: WorkspaceId, id:
+   EntityId) -> (variant {
+                   err: text;
+                   ok: CalendarDef;
+                 }) query;
+  getChannel: (tenantId: TenantId, workspaceId: WorkspaceId, id: EntityId) ->
    (variant {
       err: text;
       ok: Channel;
     }) query;
-  getEmployee: (tenantId: TenantId, id: EntityId) ->
-   (variant {
-      err: text;
-      ok: Employee;
-    }) query;
-  getEscrow: (tenantId: TenantId, id: EntityId) ->
+  getChannelPins: (tenantId: TenantId, workspaceId: WorkspaceId, channelId:
+   EntityId) -> (vec Message) query;
+  getContractor: (tenantId: TenantId, workspaceId: WorkspaceId, id:
+   EntityId) -> (variant {
+                   err: text;
+                   ok: Contractor;
+                 }) query;
+  getEmployee: (tenantId: TenantId, workspaceId: WorkspaceId, id:
+   EntityId) -> (variant {
+                   err: text;
+                   ok: Employee;
+                 }) query;
+  getEscrow: (tenantId: TenantId, workspaceId: WorkspaceId, id: EntityId) ->
    (variant {
       err: text;
       ok: EscrowContract;
     }) query;
-  getEvent: (tenantId: TenantId, id: EntityId) ->
+  getEscrowDispute: (tenantId: TenantId, workspaceId: WorkspaceId, disputeId:
+   EntityId) -> (variant {
+                   err: text;
+                   ok: EscrowDispute;
+                 }) query;
+  getEscrowSummary: (tenantId: TenantId, workspaceId: WorkspaceId, id:
+   EntityId) -> (variant {
+                   err: text;
+                   ok: EscrowSummary;
+                 }) query;
+  getEvent: (tenantId: TenantId, workspaceId: WorkspaceId, id: EntityId) ->
    (variant {
       err: text;
       ok: Event;
     }) query;
-  getMessages: (tenantId: TenantId, channelId: EntityId, limit: nat, before:
-   opt Timestamp) -> (vec Message) query;
+  getEventException: (tenantId: TenantId, workspaceId: WorkspaceId, id:
+   EntityId) -> (variant {
+                   err: text;
+                   ok: EventException;
+                 }) query;
+  getEventRsvps: (tenantId: TenantId, workspaceId: WorkspaceId, eventId:
+   text) -> (vec EventRsvp) query;
+  getForm: (tenantId: TenantId, workspaceId: WorkspaceId, id: EntityId) ->
+   (variant {
+      err: text;
+      ok: Form;
+    }) query;
+  getFormAnalytics: (tenantId: TenantId, workspaceId: WorkspaceId, formId:
+   EntityId) -> (FormAnalytics) query;
+  getGoal: (tenantId: TenantId, workspaceId: WorkspaceId, id: EntityId) ->
+   (variant {
+      err: text;
+      ok: Goal;
+    }) query;
+  getGuestUser: (tenantId: TenantId, workspaceId: WorkspaceId, id:
+   EntityId) -> (opt GuestUser) query;
+  getIntegrationActivityLog: (tenantId: TenantId, workspaceId: WorkspaceId,
+   provider: opt IntegrationProvider, fromDate: opt Timestamp, toDate:
+   opt Timestamp, limit: nat) -> (vec IntegrationEvent) query;
+  getIntegrationEvents: (tenantId: TenantId, workspaceId: WorkspaceId,
+   integrationId: EntityId, limit: nat) -> (vec IntegrationEvent) query;
+  getIntegrations: (tenantId: TenantId, workspaceId: WorkspaceId) ->
+   (vec Integration) query;
+  getMessages: (tenantId: TenantId, workspaceId: WorkspaceId, channelId:
+   EntityId, limit: nat, before: opt Timestamp) -> (vec Message) query;
   getMyProfile: (tenantId: TenantId) -> (opt UserProfile) query;
-  getMyWalletAccount: (tenantId: TenantId) -> (opt WalletAccount) query;
-  getNote: (tenantId: TenantId, id: EntityId) ->
+  /// Returns wallet account with LIVE ICP and ckBTC balances from the real ledger.
+  /// Includes lazy migration: if stored accountId is not a valid 64-char hex, re-derives it.
+  getMyWalletAccount: (tenantId: TenantId, workspaceId: WorkspaceId) ->
+   (opt WalletAccount);
+  getNote: (tenantId: TenantId, workspaceId: WorkspaceId, id: EntityId) ->
    (variant {
       err: text;
       ok: Note;
     }) query;
-  getProject: (tenantId: TenantId, id: EntityId) ->
+  getOrCreateWorkspaceShareToken: (workspaceId: WorkspaceId, tenantId:
+   TenantId) -> (text);
+  getPage: (tenantId: TenantId, workspaceId: WorkspaceId, pageId:
+   EntityId) -> (variant {
+                   err: text;
+                   ok: PageNode;
+                 }) query;
+  getPageHierarchy: (tenantId: TenantId, workspaceId: WorkspaceId) ->
+   (vec PageNode) query;
+  getPendingApprovals: (tenantId: TenantId, workspaceId: WorkspaceId) ->
+   (vec WalletTransaction) query;
+  getProject: (tenantId: TenantId, workspaceId: WorkspaceId, id: EntityId) ->
    (variant {
       err: text;
       ok: Project;
     }) query;
-  getTask: (tenantId: TenantId, id: EntityId) ->
+  getProjectTimeEntries: (tenantId: TenantId, workspaceId: WorkspaceId,
+   projectId: EntityId) -> (vec TimeEntry) query;
+  getPromptHistory: (tenantId: TenantId, workspaceId: WorkspaceId, userId:
+   opt UserId, limit: nat) -> (vec AIPrompt) query;
+  getPublicForm: (publicUrl: text) -> (opt Form) query;
+  getPublicGoals: (shareToken: text) ->
+   (variant {
+      err: text;
+      ok: vec PublicGoal;
+    }) query;
+  getReceiveAddress: (tenantId: TenantId, workspaceId: WorkspaceId,
+   accountId: EntityId) -> (variant {
+                              err: text;
+                              ok: text;
+                            }) query;
+  getSpendingLimit: (tenantId: TenantId, workspaceId: WorkspaceId, role:
+   Role) -> (opt WorkspaceSpendingLimit) query;
+  getSprint: (tenantId: TenantId, workspaceId: WorkspaceId, sprintId:
+   EntityId) -> (variant {
+                   err: text;
+                   ok: Sprint;
+                 }) query;
+  getTask: (tenantId: TenantId, workspaceId: WorkspaceId, id: EntityId) ->
    (variant {
       err: text;
       ok: Task;
     }) query;
-  getWalletAccount: (tenantId: TenantId, id: EntityId) ->
-   (variant {
-      err: text;
-      ok: WalletAccount;
-    }) query;
+  getTaskTemplate: (tenantId: TenantId, workspaceId: WorkspaceId, id:
+   EntityId) -> (variant {
+                   err: text;
+                   ok: TaskTemplate;
+                 }) query;
+  getTaskTimeEntries: (tenantId: TenantId, workspaceId: WorkspaceId, taskId:
+   EntityId) -> (vec TimeEntry) query;
+  getThreadMessages: (tenantId: TenantId, workspaceId: WorkspaceId,
+   parentMessageId: EntityId) -> (vec Message) query;
+  getTimeReport: (workspaceId: WorkspaceId, tenantId: TenantId, filter:
+   TimeReportFilter) -> (TimeReport) query;
+  getUnreadCounts: (tenantId: TenantId, workspaceId: WorkspaceId) ->
+   (vec record {
+          text;
+          nat;
+        }) query;
+  getUserStatus: (tenantId: TenantId, workspaceId: WorkspaceId, userId:
+   principal) -> (opt UserStatus) query;
+  getUserTimeEntries: (tenantId: TenantId, workspaceId: WorkspaceId, userId:
+   UserId) -> (vec TimeEntry) query;
+  getWalletAccount: (tenantId: TenantId, workspaceId: WorkspaceId, id:
+   EntityId) -> (variant {
+                   err: text;
+                   ok: WalletAccount;
+                 }) query;
+  getWeeklyTimesheet: (workspaceId: WorkspaceId, tenantId: TenantId, userId:
+   UserId, weekStart: Timestamp) -> (vec DailyTimesheetEntry) query;
+  getWhiteboard: (tenantId: TenantId, workspaceId: WorkspaceId, id:
+   EntityId) -> (variant {
+                   err: text;
+                   ok: Whiteboard;
+                 }) query;
   getWorkspace: (tenantId: TenantId, id: EntityId) ->
    (variant {
       err: text;
       ok: Workspace;
     }) query;
-  getWorkspaceStats: (tenantId: TenantId) ->
+  /// Returns real workspace statistics aggregated from live backend data.
+  getWorkspaceDashboardStats: (workspaceId: WorkspaceId, tenantId:
+   TenantId) -> (DashboardStats) query;
+  getWorkspaceMember: (tenantId: TenantId, workspaceId: EntityId, userId:
+   UserId) -> (opt WorkspaceMember) query;
+  /// Returns recent activity feed (up to `limit` entries) from real workspace events.
+  getWorkspaceRecentActivity: (workspaceId: WorkspaceId, tenantId: TenantId,
+   limit: nat) -> (vec ActivityEntry) query;
+  getWorkspaceStats: (tenantId: TenantId, workspaceId: WorkspaceId) ->
    (record {
       employeeCount: nat;
       escrowCount: nat;
@@ -576,82 +2280,433 @@ service : {
       projectCount: nat;
       walletAccountCount: nat;
     }) query;
-  joinChannel: (tenantId: TenantId, id: EntityId) ->
+  /// Returns workspace treasury account with LIVE ICP and ckBTC balances from the real ledger.
+  /// Treasury address is derived from the CANISTER's own principal + workspace subaccount,
+  /// guaranteeing it is always distinct from any user's personal wallet address.
+  /// Includes lazy migration: if stored accountId is not a valid 64-char hex, re-derives it
+  /// using the canister principal + workspace subaccount (the correct treasury derivation).
+  getWorkspaceTreasury: (tenantId: TenantId, workspaceId: WorkspaceId) ->
+   (opt WalletAccount);
+  isWatching: (tenantId: TenantId, workspaceId: WorkspaceId, taskId:
+   EntityId, userId: UserId) -> (bool) query;
+  joinChannel: (tenantId: TenantId, workspaceId: WorkspaceId, id:
+   EntityId) -> (variant {
+                   err: text;
+                   ok: Channel;
+                 });
+  leaveChannel: (tenantId: TenantId, workspaceId: WorkspaceId, id:
+   EntityId) -> (variant {
+                   err: text;
+                   ok: Channel;
+                 });
+  linkTaskToKR: (tenantId: TenantId, workspaceId: WorkspaceId, krId:
+   EntityId, taskId: EntityId) -> (variant {
+                                     err: text;
+                                     ok: KeyResult;
+                                   });
+  listActivityEvents: (tenantId: TenantId, workspaceId: WorkspaceId, taskId:
+   EntityId) -> (vec ActivityEvent) query;
+  listAuditLogs: (tenantId: TenantId, workspaceId: WorkspaceId, limit:
+   nat) -> (vec AuditLog) query;
+  listAutomationRules: (tenantId: TenantId, workspaceId: WorkspaceId) ->
+   (vec AutomationRule) query;
+  listBackups: (tenantId: TenantId, workspaceId: WorkspaceId) ->
+   (vec Backup) query;
+  listBenefits: (tenantId: TenantId, workspaceId: WorkspaceId, employeeId:
+   opt EntityId) -> (vec Benefit) query;
+  listCalendars: (tenantId: TenantId, workspaceId: WorkspaceId, ownerId:
+   opt UserId) -> (vec CalendarDef) query;
+  listChannels: (tenantId: TenantId, workspaceId: WorkspaceId) ->
+   (vec Channel) query;
+  listCheckIns: (tenantId: TenantId, workspaceId: WorkspaceId, goalId:
+   EntityId) -> (vec GoalCheckIn) query;
+  listChecklistItems: (tenantId: TenantId, workspaceId: WorkspaceId, taskId:
+   EntityId) -> (vec ChecklistItem) query;
+  listComments: (tenantId: TenantId, workspaceId: WorkspaceId, taskId:
+   EntityId) -> (vec TaskComment) query;
+  listContractorPayments: (tenantId: TenantId, workspaceId: WorkspaceId,
+   contractorId: opt EntityId) -> (vec ContractorPayment) query;
+  listContractors: (tenantId: TenantId, workspaceId: WorkspaceId) ->
+   (vec Contractor) query;
+  listDeductions: (tenantId: TenantId, workspaceId: WorkspaceId, employeeId:
+   opt EntityId) -> (vec Deduction) query;
+  listEmployees: (tenantId: TenantId, workspaceId: WorkspaceId) ->
+   (vec Employee) query;
+  listEscrowDisputes: (tenantId: TenantId, workspaceId: WorkspaceId,
+   escrowId: EntityId) -> (vec EscrowDispute) query;
+  listEscrowMilestones: (tenantId: TenantId, workspaceId: WorkspaceId,
+   escrowId: EntityId) -> (vec EscrowMilestone) query;
+  listEscrows: (tenantId: TenantId, workspaceId: WorkspaceId, filter:
+   opt EscrowFilter) -> (vec EscrowContract) query;
+  listEventExceptions: (tenantId: TenantId, workspaceId: WorkspaceId,
+   eventId: text) -> (vec EventException) query;
+  listEventRsvps: (tenantId: TenantId, workspaceId: WorkspaceId, userId:
+   UserId) -> (vec EventRsvp) query;
+  listEvents: (tenantId: TenantId, workspaceId: WorkspaceId, from: Timestamp,
+   to: Timestamp) -> (vec Event) query;
+  listFormSubmissions: (tenantId: TenantId, workspaceId: WorkspaceId, formId:
+   EntityId) -> (vec FormSubmission) query;
+  listForms: (tenantId: TenantId, workspaceId: WorkspaceId) ->
+   (vec Form) query;
+  listGoals: (tenantId: TenantId, workspaceId: WorkspaceId) ->
+   (vec Goal) query;
+  listGuestUsers: (tenantId: TenantId, workspaceId: WorkspaceId) ->
+   (vec GuestUser) query;
+  listKeyResults: (tenantId: TenantId, workspaceId: WorkspaceId, goalId:
+   EntityId) -> (vec KeyResult) query;
+  listMessages: (tenantId: TenantId, workspaceId: WorkspaceId, channelId:
+   EntityId, limit: nat, before: opt Timestamp) -> (vec Message) query;
+  listMilestones: (tenantId: TenantId, workspaceId: WorkspaceId, projectId:
+   EntityId) -> (vec Milestone) query;
+  listMyEvents: (tenantId: TenantId, workspaceId: WorkspaceId) ->
+   (vec Event) query;
+  listNoteTemplates: (tenantId: TenantId, workspaceId: WorkspaceId) ->
+   (vec NoteTemplate) query;
+  listNotes: (tenantId: TenantId, workspaceId: WorkspaceId) ->
+   (vec Note) query;
+  listOffCyclePayments: (tenantId: TenantId, workspaceId: WorkspaceId,
+   employeeId: opt EntityId) -> (vec OffCyclePayment) query;
+  listPages: (tenantId: TenantId, workspaceId: WorkspaceId, parentPageId:
+   opt EntityId) -> (vec PageNode) query;
+  listPaySchedules: (tenantId: TenantId, workspaceId: WorkspaceId) ->
+   (vec PaySchedule) query;
+  listPayStubs: (tenantId: TenantId, workspaceId: WorkspaceId, employeeId:
+   opt EntityId) -> (vec PayStub) query;
+  listPayrollAuditLog: (tenantId: TenantId, workspaceId: WorkspaceId, limit:
+   nat) -> (vec AuditLogEntry) query;
+  listPayrollRecords: (tenantId: TenantId, workspaceId: WorkspaceId,
+   employeeId: opt EntityId) -> (vec PayrollRecord) query;
+  listProfiles: (tenantId: TenantId) -> (vec UserProfile) query;
+  listProjectDeadlines: (tenantId: TenantId, workspaceId: WorkspaceId) ->
+   (vec Event) query;
+  listProjects: (tenantId: TenantId, workspaceId: WorkspaceId) ->
+   (vec Project) query;
+  listRecurringPayments: (tenantId: TenantId, workspaceId: WorkspaceId,
+   accountId: EntityId) -> (vec RecurringPayment) query;
+  listRecurringTasks: (tenantId: TenantId, workspaceId: WorkspaceId,
+   projectId: EntityId) -> (vec RecurringTask) query;
+  listSprints: (tenantId: TenantId, workspaceId: WorkspaceId, projectId:
+   EntityId) -> (vec Sprint) query;
+  listSubtasks: (tenantId: TenantId, workspaceId: WorkspaceId, parentTaskId:
+   EntityId) -> (vec Subtask) query;
+  listTaskRelationships: (tenantId: TenantId, workspaceId: WorkspaceId,
+   taskId: EntityId) -> (vec TaskRelationship) query;
+  listTaskTemplates: (tenantId: TenantId, workspaceId: WorkspaceId) ->
+   (vec TaskTemplate) query;
+  listTaskWatchers: (tenantId: TenantId, workspaceId: WorkspaceId, taskId:
+   EntityId) -> (vec TaskWatcher) query;
+  listTasks: (tenantId: TenantId, workspaceId: WorkspaceId, projectId:
+   EntityId) -> (vec Task) query;
+  listTransactions: (tenantId: TenantId, workspaceId: WorkspaceId, accountId:
+   EntityId, filter: opt TxFilter) -> (vec WalletTransaction) query;
+  listWhiteboardTemplates: () -> (vec WhiteboardTemplate) query;
+  listWhiteboards: (tenantId: TenantId, workspaceId: WorkspaceId) ->
+   (vec Whiteboard) query;
+  listWorkspaceMembers: (tenantId: TenantId, workspaceId: EntityId) ->
+   (vec WorkspaceMember) query;
+  listWorkspaces: (tenantId: TenantId) -> (vec Workspace) query;
+  markChannelRead: (tenantId: TenantId, workspaceId: WorkspaceId, channelId:
+   EntityId) -> (variant {
+                   err: text;
+                   ok: bool;
+                 });
+  pinMessage: (tenantId: TenantId, workspaceId: WorkspaceId, channelId:
+   EntityId, messageId: text) -> (variant {
+                                    err: text;
+                                    ok: Channel;
+                                  });
+  processIntegrationTrigger: (tenantId: TenantId, workspaceId: WorkspaceId,
+   provider: IntegrationProvider, eventType: text, payload: text,
+   triggerAction: text) -> (variant {
+                              err: text;
+                              ok: IntegrationEvent;
+                            });
+  processPayroll: (tenantId: TenantId, workspaceId: WorkspaceId, employeeId:
+   EntityId, period: text) -> (variant {
+                                 err: text;
+                                 ok: PayrollRecord;
+                               });
+  raiseEscrowDispute: (tenantId: TenantId, workspaceId: WorkspaceId,
+   escrowId: EntityId, reason: text) ->
+   (variant {
+      err: text;
+      ok: EscrowDispute;
+    });
+  recordCheckIn: (tenantId: TenantId, workspaceId: WorkspaceId, input:
+   CheckInInput) -> (variant {
+                       err: text;
+                       ok: GoalCheckIn;
+                     });
+  regenerateWorkspaceShareToken: (workspaceId: WorkspaceId, tenantId:
+   TenantId) -> (text);
+  rejectPayrollRecord: (tenantId: TenantId, workspaceId: WorkspaceId,
+   recordId: EntityId, reason: text) ->
+   (variant {
+      err: text;
+      ok: PayrollRecord;
+    });
+  releaseEscrow: (tenantId: TenantId, workspaceId: WorkspaceId, id:
+   EntityId) -> (variant {
+                   err: text;
+                   ok: EscrowContract;
+                 });
+  /// Release milestone funds via the real ICP ledger.
+  /// Protection 1 (state-before-transfer): sets milestone to #Releasing BEFORE the async ledger call.
+  /// Protection 2 (unique memo): increments txMemoCounter and passes it as the ICP transfer memo.
+  /// On ledger success: marks milestone #Released with block height.
+  /// On ledger failure: reverts milestone back to #Approved so it can be retried.
+  releaseMilestoneFunds: (tenantId: TenantId, workspaceId: WorkspaceId,
+   milestoneId: EntityId) -> (variant {
+                                err: text;
+                                ok: EscrowMilestone;
+                              });
+  removeReaction: (tenantId: TenantId, workspaceId: WorkspaceId, messageId:
+   EntityId, emoji: text) -> (variant {
+                                err: text;
+                                ok: Message;
+                              });
+  removeTaskFromSprint: (tenantId: TenantId, workspaceId: WorkspaceId,
+   sprintId: EntityId, taskId: EntityId) -> (variant {
+                                               err: text;
+                                               ok: Sprint;
+                                             });
+  removeTaskRelationship: (tenantId: TenantId, workspaceId: WorkspaceId,
+   relationshipId: EntityId) -> (variant {
+                                   err: text;
+                                   ok: bool;
+                                 });
+  removeTaskWatcher: (tenantId: TenantId, workspaceId: WorkspaceId, taskId:
+   EntityId, userId: UserId) -> (variant {
+                                   err: text;
+                                   ok: bool;
+                                 });
+  removeWorkspaceMember: (tenantId: TenantId, workspaceId: EntityId,
+   targetUserId: UserId) -> (variant {
+                               err: text;
+                               ok;
+                             });
+  resolveDispute: (tenantId: TenantId, workspaceId: WorkspaceId, disputeId:
+   EntityId, resolution: text) -> (variant {
+                                     err: text;
+                                     ok: EscrowDispute;
+                                   });
+  respondToEvent: (tenantId: TenantId, workspaceId: WorkspaceId, input:
+   EventRsvpInput) -> (variant {
+                         err: text;
+                         ok: EventRsvp;
+                       });
+  saveAIConfig: (tenantId: TenantId, workspaceId: WorkspaceId, input:
+   AIConfigInput) -> (variant {
+                        err: text;
+                        ok: AIConfig;
+                      });
+  saveIntegration: (tenantId: TenantId, workspaceId: WorkspaceId, input:
+   IntegrationInput) -> (variant {
+                           err: text;
+                           ok: Integration;
+                         });
+  searchMessages: (tenantId: TenantId, workspaceId: WorkspaceId, searchQuery:
+   text, channelId: opt EntityId, senderId: opt principal, fromTime: 
+   opt int, toTime: opt int) -> (vec Message) query;
+  searchNotes: (tenantId: TenantId, workspaceId: WorkspaceId, searchQuery:
+   text) -> (vec Note) query;
+  /// Send ICP or ckBTC via the real on-chain ledger.
+  /// For ICP: calls icpLedger.transfer() with standard fee of 10_000 e8s.
+  /// For ckBTC: calls ckBTCLedger.icrc1_transfer() to recipient principal.
+  /// On ledger error: returns #err — transaction is NOT recorded.
+  sendAsset: (tenantId: TenantId, workspaceId: WorkspaceId, accountId:
+   EntityId, asset: AssetType, amount: nat, toAddress: text, memo: opt text,
+   requiredApprovals: nat) -> (variant {
+                                 err: text;
+                                 ok: WalletTransaction;
+                               });
+  sendMessage: (tenantId: TenantId, workspaceId: WorkspaceId, input:
+   MessageInput) -> (variant {
+                       err: text;
+                       ok: Message;
+                     });
+  setSpendingLimit: (tenantId: TenantId, workspaceId: WorkspaceId, role:
+   Role, maxAmount: float64, currency: text) ->
+   (variant {
+      err: text;
+      ok: WorkspaceSpendingLimit;
+    });
+  setUserStatus: (tenantId: TenantId, workspaceId: WorkspaceId, status:
+   variant {
+     away;
+     offline;
+     online;
+   }, customStatus: text) -> (variant {
+                                err: text;
+                                ok: UserStatus;
+                              });
+  submitAIPrompt: (tenantId: TenantId, workspaceId: WorkspaceId, input:
+   AIPromptInput) -> (variant {
+                        err: text;
+                        ok: AIResponse;
+                      });
+  submitFormResponse: (input: FormSubmissionInput) ->
+   (variant {
+      err: text;
+      ok: FormSubmission;
+    });
+  toggleAutomationRule: (tenantId: TenantId, workspaceId: WorkspaceId, id:
+   EntityId) -> (variant {
+                   err: text;
+                   ok: AutomationRule;
+                 });
+  toggleGoalPublic: (goalId: EntityId, workspaceId: WorkspaceId, tenantId:
+   TenantId) -> (variant {
+                   err: text;
+                   ok: Goal;
+                 });
+  unlinkTaskFromKR: (tenantId: TenantId, workspaceId: WorkspaceId, krId:
+   EntityId, taskId: EntityId) -> (variant {
+                                     err: text;
+                                     ok: KeyResult;
+                                   });
+  unpinMessage: (tenantId: TenantId, workspaceId: WorkspaceId, channelId:
+   EntityId, messageId: text) -> (variant {
+                                    err: text;
+                                    ok: Channel;
+                                  });
+  updateCalendar: (tenantId: TenantId, workspaceId: WorkspaceId, id:
+   EntityId, input: CalendarDefInput) ->
+   (variant {
+      err: text;
+      ok: CalendarDef;
+    });
+  updateChannel: (tenantId: TenantId, workspaceId: WorkspaceId, channelId:
+   EntityId, name: text, description: text, topic: text) ->
    (variant {
       err: text;
       ok: Channel;
     });
-  listAuditLogs: (tenantId: TenantId, limit: nat) -> (vec AuditLog) query;
-  listAutomationRules: (tenantId: TenantId) -> (vec AutomationRule) query;
-  listBackups: (tenantId: TenantId) -> (vec Backup) query;
-  listChannels: (tenantId: TenantId) -> (vec Channel) query;
-  listEmployees: (tenantId: TenantId) -> (vec Employee) query;
-  listEscrows: (tenantId: TenantId) -> (vec EscrowContract) query;
-  listEvents: (tenantId: TenantId, from: Timestamp, to: Timestamp) ->
-   (vec Event) query;
-  listMyEvents: (tenantId: TenantId) -> (vec Event) query;
-  listNotes: (tenantId: TenantId) -> (vec Note) query;
-  listPayrollRecords: (tenantId: TenantId, employeeId: opt EntityId) ->
-   (vec PayrollRecord) query;
-  listProfiles: (tenantId: TenantId) -> (vec UserProfile) query;
-  listProjects: (tenantId: TenantId) -> (vec Project) query;
-  listRecurringPayments: (tenantId: TenantId, accountId: EntityId) ->
-   (vec RecurringPayment) query;
-  listTasks: (tenantId: TenantId, projectId: EntityId) -> (vec Task) query;
-  listTransactions: (tenantId: TenantId, accountId: EntityId) ->
-   (vec WalletTransaction) query;
-  listWorkspaces: (tenantId: TenantId) -> (vec Workspace) query;
-  processPayroll: (tenantId: TenantId, employeeId: EntityId, period: 
+  updateChannelTopic: (tenantId: TenantId, workspaceId: WorkspaceId,
+   channelId: EntityId, topic: text) -> (variant {
+                                           err: text;
+                                           ok: Channel;
+                                         });
+  updateChecklistItem: (tenantId: TenantId, workspaceId: WorkspaceId, itemId:
+   EntityId, content: text, completed: bool) ->
+   (variant {
+      err: text;
+      ok: ChecklistItem;
+    });
+  updateContractor: (tenantId: TenantId, workspaceId: WorkspaceId, id:
+   EntityId, input: ContractorInput) -> (variant {
+                                           err: text;
+                                           ok: Contractor;
+                                         });
+  updateDeduction: (tenantId: TenantId, workspaceId: WorkspaceId, id:
+   EntityId, isActive: bool, amount: float64) ->
+   (variant {
+      err: text;
+      ok: Deduction;
+    });
+  updateEmployee: (tenantId: TenantId, workspaceId: WorkspaceId, id:
+   EntityId, input: EmployeeInput) -> (variant {
+                                         err: text;
+                                         ok: Employee;
+                                       });
+  updateEscrowMilestone: (tenantId: TenantId, workspaceId: WorkspaceId,
+   milestoneId: EntityId, input: EscrowMilestoneInput) ->
+   (variant {
+      err: text;
+      ok: EscrowMilestone;
+    });
+  updateEvent: (tenantId: TenantId, workspaceId: WorkspaceId, id: EntityId,
+   input: EventInput) -> (variant {
+                            err: text;
+                            ok: Event;
+                          });
+  updateForm: (tenantId: TenantId, workspaceId: WorkspaceId, id: EntityId,
+   input: FormInput) -> (variant {
+                           err: text;
+                           ok: Form;
+                         });
+  updateGoal: (tenantId: TenantId, workspaceId: WorkspaceId, id: EntityId,
+   input: GoalInput, status: GoalStatus) -> (variant {
+                                               err: text;
+                                               ok: Goal;
+                                             });
+  updateGuestStatus: (tenantId: TenantId, workspaceId: WorkspaceId, id:
+   EntityId, status: GuestStatus) -> (variant {
+                                        err: text;
+                                        ok: GuestUser;
+                                      });
+  updateIntegrationSyncStatus: (tenantId: TenantId, workspaceId: WorkspaceId,
+   id: EntityId, status: text, timestamp: Timestamp) ->
+   (variant {
+      err: text;
+      ok: bool;
+    });
+  updateKeyResult: (tenantId: TenantId, workspaceId: WorkspaceId, krId:
+   EntityId, currentValue: float64, status: KRStatus) ->
+   (variant {
+      err: text;
+      ok: KeyResult;
+    });
+  updateMilestone: (tenantId: TenantId, workspaceId: WorkspaceId,
+   milestoneId: EntityId, title: text, status: MilestoneStatus, dueDate:
+   Timestamp) -> (variant {
+                    err: text;
+                    ok: Milestone;
+                  });
+  updateNote: (tenantId: TenantId, workspaceId: WorkspaceId, id: EntityId,
+   input: NoteInput) -> (variant {
+                           err: text;
+                           ok: Note;
+                         });
+  updatePage: (tenantId: TenantId, workspaceId: WorkspaceId, pageId:
+   EntityId, title: text, icon: text, coverUrl: opt text, blocks:
+   vec Block) -> (variant {
+                    err: text;
+                    ok: PageNode;
+                  });
+  updateProject: (tenantId: TenantId, workspaceId: WorkspaceId, id: EntityId,
+   input: ProjectInput) -> (variant {
+                              err: text;
+                              ok: Project;
+                            });
+  updateSprint: (tenantId: TenantId, workspaceId: WorkspaceId, sprintId:
+   EntityId, name: text, goal: text, status: SprintStatus, taskIds:
+   vec EntityId) -> (variant {
+                       err: text;
+                       ok: Sprint;
+                     });
+  updateSubtask: (tenantId: TenantId, workspaceId: WorkspaceId, subtaskId:
+   EntityId, title: text, status: TaskStatus) ->
+   (variant {
+      err: text;
+      ok: Subtask;
+    });
+  updateTask: (tenantId: TenantId, workspaceId: WorkspaceId, id: EntityId,
+   input: TaskInput) -> (variant {
+                           err: text;
+                           ok: Task;
+                         });
+  updateTimeEntry: (tenantId: TenantId, workspaceId: WorkspaceId, id:
+   EntityId, input: TimeEntryInput) -> (variant {
+                                          err: text;
+                                          ok: TimeEntry;
+                                        });
+  updateWhiteboardElements: (tenantId: TenantId, workspaceId: WorkspaceId,
+   id: EntityId, elements: vec WhiteboardElement) ->
+   (variant {
+      err: text;
+      ok: Whiteboard;
+    });
+  updateWorkspace: (tenantId: TenantId, workspaceId: EntityId, name: 
    text) -> (variant {
                err: text;
-               ok: PayrollRecord;
+               ok: Workspace;
              });
-  releaseEscrow: (tenantId: TenantId, id: EntityId) ->
+  updateWorkspaceMemberRole: (tenantId: TenantId, workspaceId: EntityId,
+   targetUserId: UserId, newRole: WorkspaceRole) ->
    (variant {
       err: text;
-      ok: EscrowContract;
-    });
-  searchNotes: (tenantId: TenantId, searchQuery: text) -> (vec Note) query;
-  sendAsset: (tenantId: TenantId, accountId: EntityId, asset: AssetType,
-   amount: nat, toAddress: text, memo: opt text) ->
-   (variant {
-      err: text;
-      ok: WalletTransaction;
-    });
-  sendMessage: (tenantId: TenantId, input: MessageInput) ->
-   (variant {
-      err: text;
-      ok: Message;
-    });
-  toggleAutomationRule: (tenantId: TenantId, id: EntityId) ->
-   (variant {
-      err: text;
-      ok: AutomationRule;
-    });
-  updateEmployee: (tenantId: TenantId, id: EntityId, input: EmployeeInput) ->
-   (variant {
-      err: text;
-      ok: Employee;
-    });
-  updateEvent: (tenantId: TenantId, id: EntityId, input: EventInput) ->
-   (variant {
-      err: text;
-      ok: Event;
-    });
-  updateNote: (tenantId: TenantId, id: EntityId, input: NoteInput) ->
-   (variant {
-      err: text;
-      ok: Note;
-    });
-  updateProject: (tenantId: TenantId, id: EntityId, input: ProjectInput) ->
-   (variant {
-      err: text;
-      ok: Project;
-    });
-  updateTask: (tenantId: TenantId, id: EntityId, input: TaskInput) ->
-   (variant {
-      err: text;
-      ok: Task;
+      ok: WorkspaceMember;
     });
   upsertProfile: (tenantId: TenantId, input: UserProfileInput) ->
    (variant {

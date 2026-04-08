@@ -2,6 +2,7 @@ import Time "mo:core/Time";
 
 module {
   public type TenantId = Text;
+  public type WorkspaceId = Text;
   public type UserId = Principal;
   public type EntityId = Text;
   public type Timestamp = Int;
@@ -22,6 +23,7 @@ module {
   public type PayFrequency = {
     #Weekly;
     #BiWeekly;
+    #SemiMonthly;
     #Monthly;
     #Quarterly;
   };
