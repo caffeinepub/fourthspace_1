@@ -210,6 +210,29 @@ module {
     }
   };
 
+  public func updateTaskStatus(
+    store : [(Common.EntityId, Types.Task)],
+    tenantId : Common.TenantId,
+    workspaceId : Common.WorkspaceId,
+    id : Common.EntityId,
+    status : Types.TaskStatus,
+  ) : (?Types.Task, [(Common.EntityId, Types.Task)]) {
+    let m = toTaskMap(store);
+    switch (m.get(id)) {
+      case (?existing) {
+        if (existing.tenantId != tenantId or existing.workspaceId != workspaceId) return (null, store);
+        let updated : Types.Task = {
+          existing with
+          status;
+          updatedAt = Time.now();
+        };
+        m.add(id, updated);
+        (?updated, m.toArray())
+      };
+      case null (null, store);
+    }
+  };
+
   public func deleteTask(
     store : [(Common.EntityId, Types.Task)],
     tenantId : Common.TenantId,

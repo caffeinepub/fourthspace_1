@@ -10,15 +10,17 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
 import {
+  AlertTriangle,
   ArrowLeft,
   CheckCircle2,
   Layers,
   Plus,
   Shield,
   Trash2,
+  Wallet,
 } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
@@ -26,7 +28,12 @@ import type { EscrowMilestoneInput } from "../../backend";
 import { CrossLinkPicker } from "../../components/CrossLinkPicker";
 import { useBackend } from "../../hooks/useBackend";
 import { getTenantId, useWorkspace } from "../../hooks/useWorkspace";
-import type { CrossLink, EscrowInput, UserId } from "../../types";
+import type {
+  CrossLink,
+  EscrowInput,
+  UserId,
+  WalletAccount,
+} from "../../types";
 
 const CURRENCIES = ["ICP", "ckBTC", "USD"];
 
@@ -59,6 +66,47 @@ function newMilestone(): MilestoneItem {
   };
 }
 
+function formatIcp(balance: bigint): string {
+  return (Number(balance) / 1_000_000_00).toFixed(4);
+}
+
+/** Inline banner shown when treasury has no funds. */
+function InsufficientFundsBanner({
+  onFundWallet,
+  balanceText,
+}: {
+  onFundWallet: () => void;
+  balanceText?: string;
+}) {
+  return (
+    <div
+      className="flex items-start gap-3 rounded-xl border border-amber-400/40 bg-amber-500/8 px-4 py-3"
+      data-ocid="escrow-insufficient-funds-banner"
+      role="alert"
+    >
+      <AlertTriangle className="h-4 w-4 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
+      <div className="flex-1 min-w-0">
+        <p className="text-sm font-medium text-foreground">
+          {balanceText
+            ? `Amount exceeds workspace treasury balance (${balanceText} ICP available)`
+            : "Your workspace wallet has no funds. You need to fund it before creating an escrow."}
+        </p>
+      </div>
+      <Button
+        type="button"
+        size="sm"
+        variant="outline"
+        onClick={onFundWallet}
+        className="shrink-0 gap-1.5 border-amber-400/60 text-amber-700 dark:text-amber-400 hover:bg-amber-500/10"
+        data-ocid="escrow-fund-wallet-btn"
+      >
+        <Wallet className="h-3.5 w-3.5" />
+        Fund Wallet
+      </Button>
+    </div>
+  );
+}
+
 export default function EscrowNewPage() {
   const { actor } = useBackend();
   const tenantId = getTenantId();
@@ -78,6 +126,32 @@ export default function EscrowNewPage() {
   const [dueDate, setDueDate] = useState("");
   const [crossLinks, setCrossLinks] = useState<CrossLink[]>([]);
   const [milestones, setMilestones] = useState<MilestoneItem[]>([]);
+  const [submitError, setSubmitError] = useState<string | null>(null);
+
+  // Fetch workspace treasury
+  const { data: treasury, isLoading: treasuryLoading } =
+    useQuery<WalletAccount | null>({
+      queryKey: ["workspaceTreasury", tenantId, workspaceId],
+      queryFn: async () => {
+        if (!actor) return null;
+        return actor.getWorkspaceTreasury(tenantId, workspaceId);
+      },
+      enabled: !!actor && !!workspaceId,
+    });
+
+  const icpBalance = treasury?.icpBalance ?? BigInt(0);
+  // icpBalance is in e8s (1 ICP = 100_000_000 e8s)
+  const icpBalanceFloat = Number(icpBalance) / 1_000_000_00;
+  const hasNoFunds = !treasuryLoading && icpBalance === BigInt(0);
+
+  // Amount-exceeds-balance check (only for ICP escrows)
+  const amountFloat = Number.parseFloat(amount) || 0;
+  const amountExceedsBalance =
+    !treasuryLoading &&
+    currency === "ICP" &&
+    amountFloat > 0 &&
+    icpBalance > BigInt(0) &&
+    amountFloat > icpBalanceFloat;
 
   const createMutation = useMutation({
     mutationFn: async ({
@@ -114,7 +188,12 @@ export default function EscrowNewPage() {
         params: { escrowId: contract.id },
       });
     },
-    onError: (err: Error) => toast.error(err.message),
+    onError: (err: Error) => {
+      // Surface backend error inline, not just in a toast
+      const msg = err.message;
+      setSubmitError(msg);
+      toast.error(msg);
+    },
   });
 
   const handleAddCondition = () =>
@@ -149,8 +228,17 @@ export default function EscrowNewPage() {
     contractAmount > 0 &&
     Math.abs(totalMilestoneAmount - contractAmount) > 0.01;
 
+  const isSubmitDisabled =
+    createMutation.isPending ||
+    !title.trim() ||
+    !amount ||
+    !payeeId.trim() ||
+    hasNoFunds ||
+    amountExceedsBalance;
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setSubmitError(null);
     if (!title.trim() || !amount || !payeeId.trim()) {
       toast.error("Please fill in all required fields");
       return;
@@ -204,6 +292,8 @@ export default function EscrowNewPage() {
     createMutation.mutate({ input, milestoneInputs });
   };
 
+  const goFundWallet = () => navigate({ to: `/app/${workspaceId}/wallet` });
+
   return (
     <div className="animate-fade-in-up p-6 md:p-8 max-w-2xl mx-auto space-y-6">
       {/* Header */}
@@ -226,6 +316,38 @@ export default function EscrowNewPage() {
           </p>
         </div>
       </div>
+
+      {/* Treasury balance chip */}
+      {!treasuryLoading && treasury && (
+        <div className="flex items-center gap-2 rounded-lg border border-border bg-card px-3 py-2 w-fit">
+          <Wallet className="h-3.5 w-3.5 text-muted-foreground" />
+          <span className="text-xs text-muted-foreground">
+            Workspace Treasury:
+          </span>
+          <span
+            className={`text-xs font-semibold tabular-nums ${
+              icpBalance === BigInt(0) ? "text-destructive" : "text-foreground"
+            }`}
+          >
+            {formatIcp(icpBalance)} ICP
+          </span>
+        </div>
+      )}
+
+      {/* No-funds banner */}
+      {hasNoFunds && <InsufficientFundsBanner onFundWallet={goFundWallet} />}
+
+      {/* Submit error (e.g. backend returns Insufficient treasury balance) */}
+      {submitError && !hasNoFunds && (
+        <InsufficientFundsBanner
+          onFundWallet={goFundWallet}
+          balanceText={
+            submitError.toLowerCase().includes("insufficient")
+              ? formatIcp(icpBalance)
+              : undefined
+          }
+        />
+      )}
 
       <form onSubmit={handleSubmit} className="space-y-5">
         {/* Basic Info */}
@@ -272,10 +394,21 @@ export default function EscrowNewPage() {
                   step="0.01"
                   placeholder="0.00"
                   value={amount}
-                  onChange={(e) => setAmount(e.target.value)}
+                  onChange={(e) => {
+                    setAmount(e.target.value);
+                    setSubmitError(null);
+                  }}
                   data-ocid="escrow-amount"
                   required
                 />
+                {/* Amount exceeds balance inline error */}
+                {amountExceedsBalance && (
+                  <p className="text-xs text-destructive flex items-center gap-1 mt-1">
+                    <AlertTriangle className="h-3 w-3" />
+                    Amount exceeds workspace treasury balance (
+                    {formatIcp(icpBalance)} ICP available)
+                  </p>
+                )}
               </div>
               <div className="space-y-1.5">
                 <Label htmlFor="currency">Currency</Label>
@@ -459,7 +592,7 @@ export default function EscrowNewPage() {
                 <div
                   className={`flex items-center justify-between rounded-lg px-3 py-2 text-xs font-medium ${
                     milestoneAmountMismatch
-                      ? "bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-600 dark:text-red-400"
+                      ? "bg-destructive/10 border border-destructive/30 text-destructive"
                       : "bg-muted text-muted-foreground"
                   }`}
                 >
@@ -568,14 +701,16 @@ export default function EscrowNewPage() {
           </Button>
           <Button
             type="submit"
-            disabled={
-              createMutation.isPending ||
-              !title.trim() ||
-              !amount ||
-              !payeeId.trim()
-            }
+            disabled={isSubmitDisabled}
             data-ocid="escrow-save-btn"
-            className="bg-amber-500 hover:bg-amber-600 text-white min-w-[120px]"
+            className="bg-amber-500 hover:bg-amber-600 text-white min-w-[120px] disabled:opacity-60"
+            title={
+              hasNoFunds
+                ? "Fund your workspace wallet before creating an escrow"
+                : amountExceedsBalance
+                  ? "Amount exceeds treasury balance"
+                  : undefined
+            }
           >
             {createMutation.isPending ? "Creating..." : "Create Escrow"}
           </Button>

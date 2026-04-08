@@ -25,16 +25,16 @@ import type { CrossLink, NoteInput } from "../../types";
 
 // ─── Template definitions ────────────────────────────────────────────────────
 
-interface NoteTemplate {
+interface NoteTemplateLocal {
   id: string;
   emoji: string;
   name: string;
   description: string;
-  preview: string; // first ~2 lines shown in card
-  content: string; // full pre-filled content
+  preview: string;
+  content: string;
 }
 
-const NOTE_TEMPLATES: NoteTemplate[] = [
+const NOTE_TEMPLATES: NoteTemplateLocal[] = [
   {
     id: "meeting-notes",
     emoji: "📋",
@@ -574,18 +574,6 @@ How did you conduct this research?
 **Evidence:** [Data, quotes, or observations]
 **Significance:** [Why this matters]
 
-### Finding 3: [Headline observation]
-**Evidence:** [Data, quotes, or observations]
-**Significance:** [Why this matters]
-
----
-
-## Data Summary
-| Metric | Value | Source |
-|--------|-------|--------|
-| [Metric 1] | [X%] | [Source] |
-| [Metric 2] | [X] | [Source] |
-
 ---
 
 ## Conclusions
@@ -599,148 +587,6 @@ Does the evidence support or refute your hypothesis?
 1. [Actionable recommendation based on the research]
 2. [Actionable recommendation]
 3. [Actionable recommendation]
-
----
-
-## Open Questions & Next Steps
-- [ ] [Unresolved question] → [Who will investigate, by when]
-- [ ] [Follow-up research needed] → [Owner]
-`,
-  },
-  {
-    id: "user-story",
-    emoji: "👤",
-    name: "User Story",
-    description: "Detailed user story with acceptance criteria and edge cases.",
-    preview: "## Story: [Title]\nAs a [role], I want [action]…",
-    content: `## Story: [Story Title]
-**Epic:** [Parent epic or feature area]
-**Author:** [Name]
-**Status:** 📝 Backlog / 🔵 In Dev / ✅ Done
-**Points:** [Story points]
-**Sprint:** [Sprint name/number]
-
----
-
-## User Story
-As a **[role/persona]**,
-I want to **[specific action or capability]**,
-so that **[benefit or value delivered]**.
-
-> Example: "As a **project manager**, I want to **filter tasks by assignee**, so that **I can quickly see workload distribution across my team**."
-
----
-
-## Context & Background
-[Why is this story important? What triggered it — user feedback, analytics, stakeholder request?]
-
----
-
-## Acceptance Criteria
-All criteria must pass for the story to be "done":
-- [ ] **Given** [precondition], **when** [action], **then** [expected outcome]
-- [ ] **Given** [precondition], **when** [action], **then** [expected outcome]
-- [ ] **Given** [precondition], **when** [action], **then** [expected outcome]
-- [ ] UI matches approved designs (link to Figma)
-- [ ] Works on mobile (320px+) and desktop
-
----
-
-## Design Notes
-- [Link to Figma / Storybook]
-- [Key interaction or animation detail]
-- [Responsive behavior note]
-
----
-
-## Technical Notes
-- [Implementation approach or constraint]
-- [API endpoint or data model affected]
-- [Performance consideration]
-
----
-
-## Edge Cases
-- **Edge case:** [Scenario] → **Expected behavior:** [What should happen]
-- **Edge case:** [Scenario] → **Expected behavior:** [What should happen]
-- **Error state:** [What fails] → **User message:** [What they see]
-
----
-
-## Definition of Done
-- [ ] Code reviewed and approved
-- [ ] Unit tests written and passing
-- [ ] QA signed off
-- [ ] Feature flag enabled in staging
-- [ ] Documentation updated (if applicable)
-`,
-  },
-  {
-    id: "release-notes",
-    emoji: "🚢",
-    name: "Release Notes",
-    description:
-      "Communicate what changed, what's fixed, and what's new in a release.",
-    preview: "## v[X.Y] Release Notes\nNew · Fixed · Breaking changes",
-    content: `## v[X.Y.Z] Release Notes
-**Release Date:** [Date]
-**Release Type:** [Major / Minor / Patch / Hotfix]
-**Release Manager:** [Name]
-
----
-
-## 🎉 What's New
-These features are available to all users starting [date].
-
-### [Feature 1 Name]
-[1–2 sentence description of the feature and why it matters to users]
-- [Specific capability 1]
-- [Specific capability 2]
-*How to access: [Navigation path or instruction]*
-
-### [Feature 2 Name]
-[Description]
-- [Specific capability]
-*How to access: [Instruction]*
-
----
-
-## 🔧 Improvements
-- **[Area]:** [What improved and how — e.g. "Dashboard load time reduced by 40% by caching workspace data"]
-- **[Area]:** [Improvement]
-- **[Area]:** [Improvement]
-
----
-
-## 🐛 Bug Fixes
-- Fixed: [Brief description of what was wrong and now works correctly]
-- Fixed: [Brief description]
-- Fixed: [Brief description]
-
----
-
-## ⚠️ Breaking Changes
-> If none, write "None in this release."
-
-- **[Change]:** [What changed] → **Action required:** [What users/developers need to do]
-
----
-
-## 📦 Dependencies Updated
-| Package | From | To | Notes |
-|---------|------|----|-------|
-| [package] | [old] | [new] | [security fix / new feature] |
-
----
-
-## 🗺️ What's Next
-Preview of what's coming in the next release:
-- [Upcoming feature 1]
-- [Upcoming feature 2]
-
----
-
-*Questions? Reach out to [contact] or visit [support link].*
 `,
   },
   {
@@ -792,11 +638,6 @@ The key factors that this decision must satisfy:
 - [Disadvantage]
 **Estimated effort:** [Low / Medium / High]
 
-### Option C: Do Nothing
-**Description:** Keep the current approach
-**Pros:** [No migration cost, no risk]
-**Cons:** [What problem remains unsolved]
-
 ---
 
 ## Decision
@@ -816,119 +657,10 @@ Rationale: [2–3 sentences explaining WHY this option was chosen over the other
 - [Known downside we are accepting and why]
 - [Known downside]
 
-### Risks
-- [Risk] → [Mitigation plan]
-
 ---
 
 ## Follow-up Actions
 - [ ] [Action required] → **Owner:** @person, **Due:** [date]
-`,
-  },
-  {
-    id: "architecture-doc",
-    emoji: "🏗️",
-    name: "Architecture Doc",
-    description:
-      "Document system design, data flow, and component interactions.",
-    preview: "## Architecture: [System]\nOverview · Components · Data flow",
-    content: `## Architecture: [System or Component Name]
-**Author:** [Name]
-**Date:** [Date]
-**Version:** 1.0
-**Status:** 🔵 Draft / ✅ Approved
-
----
-
-## Overview
-[2–4 sentences describing what this system does, who uses it, and why it exists.]
-
----
-
-## Goals & Non-Goals
-**Goals:**
-- [What this system is designed to do]
-- [What this system is designed to do]
-
-**Non-Goals:**
-- [What this system intentionally does NOT do]
-- [What this system intentionally does NOT do]
-
----
-
-## System Context Diagram
-\`\`\`
-[User] ──── [Frontend] ──── [API Gateway]
-                               │
-              ┌────────────────┼────────────────┐
-              │                │                │
-         [Service A]      [Service B]      [Service C]
-              │
-         [Database]
-\`\`\`
-*Replace with actual diagram tool link or ASCII art of your system.*
-
----
-
-## Components
-
-### [Component 1 Name]
-- **Responsibility:** [What it does in one sentence]
-- **Technology:** [Language, framework, or runtime]
-- **Interfaces:** [API, events, or queues it exposes]
-- **Dependencies:** [What it depends on]
-
-### [Component 2 Name]
-- **Responsibility:** [What it does]
-- **Technology:** [Stack]
-- **Interfaces:** [API or events]
-- **Dependencies:** [Dependencies]
-
----
-
-## Data Flow
-Describe the most important data flows through the system:
-
-**Flow 1: [Name, e.g. "User authentication"]**
-1. User submits credentials via [Client]
-2. [Service A] validates and issues [token/session]
-3. Token stored in [location] and sent in [header/cookie]
-4. Downstream services validate token via [mechanism]
-
----
-
-## Data Model
-\`\`\`
-Entity: [Name]
-  id: string (UUID)
-  tenantId: string
-  [field]: [type]
-  [field]: [type]
-  createdAt: timestamp
-  updatedAt: timestamp
-\`\`\`
-
----
-
-## Security Considerations
-- **Authentication:** [How users are authenticated]
-- **Authorization:** [How access is controlled]
-- **Data in transit:** [TLS, encryption approach]
-- **Data at rest:** [Encryption, key management]
-- **Known attack vectors:** [XSS, CSRF, injection — and mitigations]
-
----
-
-## Performance & Scalability
-- **Expected load:** [Requests/sec, data volume]
-- **Bottlenecks identified:** [Component or query that could be a bottleneck]
-- **Caching strategy:** [What's cached, TTL, invalidation]
-- **Scaling approach:** [Horizontal, vertical, or sharding]
-
----
-
-## Open Questions
-- [ ] [Unresolved design question] → **Owner:** @person, **Due:** [date]
 `,
   },
   {
@@ -959,17 +691,8 @@ Entity: [Name]
 |------------|--------|---------|--------|
 | [Measurable KR 1] | [X%] | [Y%] | 🔴🟡🟢 |
 | [Measurable KR 2] | [X] | [Y] | 🔴🟡🟢 |
-| [Measurable KR 3] | [X] | [Y] | 🔴🟡🟢 |
 
 ### Objective 2: [Outcome-oriented goal]
-*Why this matters: [1–2 sentences]*
-
-| Key Result | Target | Current | Status |
-|------------|--------|---------|--------|
-| [Measurable KR 1] | [X] | [Y] | 🔴🟡🟢 |
-| [Measurable KR 2] | [X] | [Y] | 🔴🟡🟢 |
-
-### Objective 3: [Outcome-oriented goal]
 *Why this matters: [1–2 sentences]*
 
 | Key Result | Target | Current | Status |
@@ -984,12 +707,10 @@ Entity: [Name]
 |-----------|-------------|----------|--------|
 | [Milestone 1] | [What gets shipped or decided] | [date] | ⬜ / ✅ |
 | [Milestone 2] | [Description] | [date] | ⬜ / ✅ |
-| [Milestone 3] | [Description] | [date] | ⬜ / ✅ |
 
 ---
 
 ## 🚫 What I'm NOT doing this quarter
-Being intentional about what's out of scope:
 - [Deprioritized item and why]
 - [Deprioritized item and why]
 
@@ -1000,15 +721,6 @@ Being intentional about what's out of scope:
 |------|----------|----------|------------|
 | Week 1 | [Summary] | [Blockers] | 🟡 On track |
 | Week 2 | [Summary] | [Blockers] | 🟢 Ahead |
-| Week 3 | | | |
-
----
-
-## 🔚 End-of-Quarter Reflection
-*(Fill in at the end)*
-- **What I'm proud of:** ...
-- **What I'd do differently:** ...
-- **Carry-over to next quarter:** ...
 `,
   },
   {
@@ -1024,7 +736,6 @@ Being intentional about what's out of scope:
 **Incident Commander:** [Name]
 **Start Time:** [Datetime in UTC]
 **End Time:** [Datetime in UTC] / [Ongoing]
-**Total Duration:** [X hours Y minutes]
 
 ---
 
@@ -1036,7 +747,6 @@ Being intentional about what's out of scope:
 ## Impact
 - **Users affected:** [X users / % of user base / specific cohort]
 - **Services affected:** [List impacted services]
-- **Data affected:** [None / [describe any data loss or corruption]]
 - **Revenue impact:** [$X estimated / Not quantified]
 
 ---
@@ -1046,8 +756,6 @@ Being intentional about what's out of scope:
 |------------|-------|
 | [HH:MM] | [First alert or detection — what triggered it] |
 | [HH:MM] | [Incident declared — who declared it] |
-| [HH:MM] | [Initial diagnosis — what was investigated first] |
-| [HH:MM] | [Mitigation attempt — what was tried] |
 | [HH:MM] | [Root cause identified] |
 | [HH:MM] | [Fix deployed — what was changed] |
 | [HH:MM] | [Incident resolved — confirmed by monitoring] |
@@ -1058,21 +766,8 @@ Being intentional about what's out of scope:
 **Root cause:** [The fundamental reason this happened, not just the proximate cause]
 
 **Contributing factors:**
-- [Factor 1: e.g. "No alerting on this specific metric"]
-- [Factor 2: e.g. "Config change was not reviewed before deploy"]
-- [Factor 3: e.g. "Runbook for this scenario was out of date"]
-
----
-
-## What Went Well
-- [E.g. "Incident was detected within 2 minutes by automated alerting"]
-- [E.g. "Team communication was clear and centralized in incident channel"]
-
----
-
-## What Could Be Improved
-- [E.g. "Time to mitigation was 45 min — root cause was known at 15 min but deploy process slowed response"]
-- [E.g. "Customer communication template did not exist — had to write from scratch"]
+- [Factor 1]
+- [Factor 2]
 
 ---
 
@@ -1081,13 +776,6 @@ Being intentional about what's out of scope:
 |--------|-------|-----|----------|
 | [Add monitoring for X] | @person | [date] | P1 |
 | [Update runbook for Y] | @person | [date] | P2 |
-| [Fix underlying bug Z] | @person | [date] | P1 |
-
----
-
-## Communication Sent
-- [HH:MM] Status page updated: "[message]"
-- [HH:MM] Customer email sent to [segment]: "[subject]"
 `,
   },
   {
@@ -1114,8 +802,8 @@ Being intentional about what's out of scope:
 
 ## Prerequisites
 Before following these steps, make sure you have:
-- [ ] [Prerequisite 1 — e.g. "An active Fourthspace account"]
-- [ ] [Prerequisite 2 — e.g. "An authenticator app installed (e.g. Authy, Google Authenticator)"]
+- [ ] [Prerequisite 1]
+- [ ] [Prerequisite 2]
 
 ---
 
@@ -1134,18 +822,7 @@ Before following these steps, make sure you have:
 
 ---
 
-## Common Use Cases
-- **[Use case 1]:** [How to handle this scenario]
-- **[Use case 2]:** [How to handle this scenario]
-- **[Use case 3]:** [How to handle this scenario]
-
----
-
 ## Troubleshooting
-
-### Problem: [Issue description]
-**Cause:** [Why this happens]
-**Solution:** [Steps to fix it]
 
 ### Problem: [Issue description]
 **Cause:** [Why this happens]
@@ -1157,9 +834,6 @@ Before following these steps, make sure you have:
 **Q: [Common question]?**
 A: [Clear, direct answer]
 
-**Q: [Common question]?**
-A: [Answer]
-
 ---
 
 ## Related Articles
@@ -1168,9 +842,7 @@ A: [Answer]
 
 ---
 
-## Feedback
-Was this article helpful? [Yes / No — link to feedback form]
-*Last reviewed by [Name] on [date]. [Report an issue with this article.]*
+*Last reviewed by [Name] on [date].*
 `,
   },
 ];
@@ -1178,11 +850,11 @@ Was this article helpful? [Yes / No — link to feedback form]
 // ─── Template Picker Component ───────────────────────────────────────────────
 
 interface TemplatePickerProps {
-  onSelect: (template: NoteTemplate | null) => void;
+  onSelect: (template: NoteTemplateLocal | null) => void;
 }
 
 function TemplatePicker({ onSelect }: TemplatePickerProps) {
-  const [selected, setSelected] = useState<NoteTemplate | null>(null);
+  const [selected, setSelected] = useState<NoteTemplateLocal | null>(null);
   const [search, setSearch] = useState("");
 
   const filtered = useMemo(() => {
@@ -1246,7 +918,6 @@ function TemplatePicker({ onSelect }: TemplatePickerProps) {
           <ArrowRight className="ml-auto h-4 w-4 text-muted-foreground group-hover:text-primary transition-colors shrink-0" />
         </button>
 
-        {/* Templates */}
         {filtered.length === 0 ? (
           <div className="text-center py-16 text-muted-foreground">
             <p className="text-sm">No templates match "{search}"</p>
@@ -1327,9 +998,7 @@ export default function NoteNewPage() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
 
-  // Template picker step — null means not yet chosen
   const [pickerDone, setPickerDone] = useState(false);
-
   const [title, setTitle] = useState("");
   const [content, setContent] = useState("");
   const [tagInput, setTagInput] = useState("");
@@ -1374,8 +1043,7 @@ export default function NoteNewPage() {
     createNote({ title: title.trim(), content, tags, crossLinks });
   };
 
-  // Handle template selection (null = blank)
-  const handleTemplateSelect = (tpl: NoteTemplate | null) => {
+  const handleTemplateSelect = (tpl: NoteTemplateLocal | null) => {
     if (tpl) {
       setTitle(tpl.name);
       setContent(tpl.content);
@@ -1383,12 +1051,8 @@ export default function NoteNewPage() {
     setPickerDone(true);
   };
 
-  // ── Step 1: Template picker ──────────────────────────────────────────────
-  if (!pickerDone) {
-    return <TemplatePicker onSelect={handleTemplateSelect} />;
-  }
+  if (!pickerDone) return <TemplatePicker onSelect={handleTemplateSelect} />;
 
-  // ── Step 2: Note creation form ───────────────────────────────────────────
   return (
     <div className="animate-fade-in-up p-6 max-w-2xl">
       {/* Header */}

@@ -76,4 +76,46 @@ module {
   ) : [NTypes.Note] {
     Notes.searchNotes(store, tenantId, workspaceId, searchQuery)
   };
+
+  // ── Presence API ──────────────────────────────────────────────────────────────
+
+  public func updateNotePresence(
+    presenceStore : [(Text, NTypes.NotePresenceEntry)],
+    noteId : Common.EntityId,
+    tenantId : Common.TenantId,
+    workspaceId : Common.WorkspaceId,
+    caller : Common.UserId,
+    displayName : Text,
+  ) : [(Text, NTypes.NotePresenceEntry)] {
+    Notes.updateNotePresence(presenceStore, noteId, tenantId, workspaceId, caller, displayName)
+  };
+
+  public func getNoteActiveEditors(
+    presenceStore : [(Text, NTypes.NotePresenceEntry)],
+    noteId : Common.EntityId,
+    tenantId : Common.TenantId,
+    workspaceId : Common.WorkspaceId,
+  ) : [NTypes.NoteEditorPresence] {
+    Notes.getNoteActiveEditors(presenceStore, noteId, tenantId, workspaceId)
+  };
+
+  public func updateLastEdit(
+    lastEditStore : [(Text, NTypes.NoteLastEditEntry)],
+    noteId : Common.EntityId,
+    tenantId : Common.TenantId,
+    workspaceId : Common.WorkspaceId,
+    caller : Common.UserId,
+    displayName : Text,
+  ) : [(Text, NTypes.NoteLastEditEntry)] {
+    Notes.updateLastEdit(lastEditStore, noteId, tenantId, workspaceId, caller, displayName)
+  };
+
+  public func getLastNoteEdit(
+    lastEditStore : [(Text, NTypes.NoteLastEditEntry)],
+    noteId : Common.EntityId,
+    tenantId : Common.TenantId,
+    workspaceId : Common.WorkspaceId,
+  ) : ?NTypes.NoteLastEdit {
+    Notes.getLastNoteEdit(lastEditStore, noteId, tenantId, workspaceId)
+  };
 };

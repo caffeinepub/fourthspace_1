@@ -5,7 +5,7 @@ import Nat "mo:core/Nat";
 import Nat64 "mo:core/Nat64";
 import Int "mo:core/Int";
 import Principal "mo:core/Principal";
-import Migration "migration";
+
 
 
 
@@ -47,6 +47,8 @@ import LedgerLib "lib/ledger";
 import EscLib "lib/escrow";
 import WalletLib "lib/wallet";
 import DashboardLib "lib/dashboard";
+import Migration "migration";
+
 
 
 
@@ -119,6 +121,8 @@ actor self {
   stable var taskTemplates    : [(Common.EntityId, PTypes.TaskTemplate)]         = [];
   stable var statusStore      : [(Text, CTypes.UserStatus)]                       = [];
   stable var threadNotifications : [(Text, CTypes.ThreadNotification)]            = [];
+  stable var notePresenceStore : [(Text, NTypes.NotePresenceEntry)]               = [];
+  stable var noteLastEditStore : [(Text, NTypes.NoteLastEditEntry)]               = [];
 
   include WorkspaceApi(workspacesRef, profilesRef);
 
@@ -126,9 +130,22 @@ actor self {
   public shared ({ caller }) func createNote(tenantId : Common.TenantId, workspaceId : Common.WorkspaceId, input : NTypes.NoteInput) : async { #ok : NTypes.Note; #err : Text } { let r = NotesApi.createNote(notes, tenantId, workspaceId, caller, input); notes := r.store; r.result };
   public shared query ({ caller }) func getNote(tenantId : Common.TenantId, workspaceId : Common.WorkspaceId, id : Common.EntityId) : async { #ok : NTypes.Note; #err : Text } { NotesApi.getNote(notes, tenantId, workspaceId, id) };
   public shared query ({ caller }) func listNotes(tenantId : Common.TenantId, workspaceId : Common.WorkspaceId) : async [NTypes.Note] { NotesApi.listNotes(notes, tenantId, workspaceId) };
-  public shared ({ caller }) func updateNote(tenantId : Common.TenantId, workspaceId : Common.WorkspaceId, id : Common.EntityId, input : NTypes.NoteInput) : async { #ok : NTypes.Note; #err : Text } { let r = NotesApi.updateNote(notes, tenantId, workspaceId, id, caller, input); notes := r.store; r.result };
+  public shared ({ caller }) func updateNote(tenantId : Common.TenantId, workspaceId : Common.WorkspaceId, id : Common.EntityId, input : NTypes.NoteInput) : async { #ok : NTypes.Note; #err : Text } {
+    let r = NotesApi.updateNote(notes, tenantId, workspaceId, id, caller, input);
+    notes := r.store;
+    switch (r.result) {
+      case (#ok _) {
+        noteLastEditStore := NotesApi.updateLastEdit(noteLastEditStore, id, tenantId, workspaceId, caller, caller.toText());
+      };
+      case (#err _) {};
+    };
+    r.result
+  };
   public shared ({ caller }) func deleteNote(tenantId : Common.TenantId, workspaceId : Common.WorkspaceId, id : Common.EntityId) : async { #ok : Bool; #err : Text } { let r = NotesApi.deleteNote(notes, tenantId, workspaceId, id, caller); notes := r.store; r.result };
   public shared query ({ caller }) func searchNotes(tenantId : Common.TenantId, workspaceId : Common.WorkspaceId, searchQuery : Text) : async [NTypes.Note] { NotesApi.searchNotes(notes, tenantId, workspaceId, searchQuery) };
+  public shared ({ caller }) func updateNotePresence(tenantId : Common.TenantId, workspaceId : Common.WorkspaceId, noteId : Common.EntityId, displayName : Text) : async () { notePresenceStore := NotesApi.updateNotePresence(notePresenceStore, noteId, tenantId, workspaceId, caller, displayName) };
+  public shared query ({ caller }) func getNoteActiveEditors(tenantId : Common.TenantId, workspaceId : Common.WorkspaceId, noteId : Common.EntityId) : async [NTypes.NoteEditorPresence] { NotesApi.getNoteActiveEditors(notePresenceStore, noteId, tenantId, workspaceId) };
+  public shared query ({ caller }) func getLastNoteEdit(tenantId : Common.TenantId, workspaceId : Common.WorkspaceId, noteId : Common.EntityId) : async ?NTypes.NoteLastEdit { NotesApi.getLastNoteEdit(noteLastEditStore, noteId, tenantId, workspaceId) };
 
   // Projects
   public shared ({ caller }) func createProject(tenantId : Common.TenantId, workspaceId : Common.WorkspaceId, input : PTypes.ProjectInput) : async { #ok : PTypes.Project; #err : Text } { let r = ProjApi.createProject(projects, tenantId, workspaceId, caller, input); projects := r.store; r.result };
@@ -140,6 +157,7 @@ actor self {
   public shared query ({ caller }) func getTask(tenantId : Common.TenantId, workspaceId : Common.WorkspaceId, id : Common.EntityId) : async { #ok : PTypes.Task; #err : Text } { ProjApi.getTask(tasks, tenantId, workspaceId, id) };
   public shared query ({ caller }) func listTasks(tenantId : Common.TenantId, workspaceId : Common.WorkspaceId, projectId : Common.EntityId) : async [PTypes.Task] { ProjApi.listTasks(tasks, tenantId, workspaceId, projectId) };
   public shared ({ caller }) func updateTask(tenantId : Common.TenantId, workspaceId : Common.WorkspaceId, id : Common.EntityId, input : PTypes.TaskInput) : async { #ok : PTypes.Task; #err : Text } { let r = ProjApi.updateTask(tasks, tenantId, workspaceId, id, caller, input); tasks := r.store; r.result };
+  public shared ({ caller }) func updateTaskStatus(tenantId : Common.TenantId, workspaceId : Common.WorkspaceId, id : Common.EntityId, status : PTypes.TaskStatus) : async { #ok : PTypes.Task; #err : Text } { let r = ProjApi.updateTaskStatus(tasks, tenantId, workspaceId, id, status); tasks := r.store; r.result };
   public shared ({ caller }) func deleteTask(tenantId : Common.TenantId, workspaceId : Common.WorkspaceId, id : Common.EntityId) : async { #ok : Bool; #err : Text } { let r = ProjApi.deleteTask(tasks, tenantId, workspaceId, id, caller); tasks := r.store; r.result };
   public shared ({ caller }) func createProjectFromTemplate(tenantId : Common.TenantId, workspaceId : Common.WorkspaceId, templateId : Text, projectName : Text, projectDescription : Text) : async { #ok : Common.EntityId; #err : Text } {
     let r = ProjApi.createProjectFromTemplate(projects, tasks, milestones, whiteboards, tenantId, workspaceId, caller, templateId, projectName, projectDescription);
@@ -159,7 +177,7 @@ actor self {
   public shared ({ caller }) func deleteChannel(tenantId : Common.TenantId, workspaceId : Common.WorkspaceId, id : Common.EntityId) : async { #ok : Bool; #err : Text } { let (res, s) = ChatApi.deleteChannel(channels, tenantId, workspaceId, caller, id); channels := s; res };
   public shared ({ caller }) func updateChannel(tenantId : Common.TenantId, workspaceId : Common.WorkspaceId, channelId : Common.EntityId, name : Text, description : Text, topic : Text) : async { #ok : CTypes.Channel; #err : Text } { let (res, s) = ChatApi.updateChannel(channels, tenantId, workspaceId, channelId, name, description, topic); channels := s; res };
   public shared ({ caller }) func updateChannelTopic(tenantId : Common.TenantId, workspaceId : Common.WorkspaceId, channelId : Common.EntityId, topic : Text) : async { #ok : CTypes.Channel; #err : Text } { let (res, s) = ChatApi.updateChannelTopic(channels, tenantId, workspaceId, channelId, topic); channels := s; res };
-  public shared ({ caller }) func sendMessage(tenantId : Common.TenantId, workspaceId : Common.WorkspaceId, input : CTypes.MessageInput) : async { #ok : CTypes.Message; #err : Text } { let (res, ms, ns) = ChatApi.sendMessage(channels, messages, threadNotifications, tenantId, workspaceId, caller, input); messages := ms; threadNotifications := ns; res };
+  public shared ({ caller }) func sendMessage(tenantId : Common.TenantId, workspaceId : Common.WorkspaceId, input : CTypes.MessageInput) : async { #ok : CTypes.Message; #err : Text } { let (res, ms, cs, ns) = ChatApi.sendMessage(channels, messages, threadNotifications, tenantId, workspaceId, caller, input); messages := ms; channels := cs; threadNotifications := ns; res };
   public shared query ({ caller }) func getMessages(tenantId : Common.TenantId, workspaceId : Common.WorkspaceId, channelId : Common.EntityId, limit : Nat, before : ?Common.Timestamp) : async [CTypes.Message] { ChatApi.getMessages(messages, tenantId, workspaceId, channelId, limit, before) };
   public shared query ({ caller }) func listMessages(tenantId : Common.TenantId, workspaceId : Common.WorkspaceId, channelId : Common.EntityId, limit : Nat, before : ?Common.Timestamp) : async [CTypes.Message] { ChatApi.listMessages(messages, tenantId, workspaceId, channelId, limit, before) };
   public shared ({ caller }) func deleteMessage(tenantId : Common.TenantId, workspaceId : Common.WorkspaceId, id : Common.EntityId) : async { #ok : Bool; #err : Text } { let (res, s) = ChatApi.deleteMessage(messages, tenantId, workspaceId, caller, id); messages := s; res };
@@ -171,9 +189,12 @@ actor self {
   public shared ({ caller }) func unpinMessage(tenantId : Common.TenantId, workspaceId : Common.WorkspaceId, channelId : Common.EntityId, messageId : Text) : async { #ok : CTypes.Channel; #err : Text } { let (res, s) = ChatApi.unpinMessage(channels, tenantId, workspaceId, channelId, messageId); channels := s; res };
   public shared query ({ caller }) func getChannelPins(tenantId : Common.TenantId, workspaceId : Common.WorkspaceId, channelId : Common.EntityId) : async [CTypes.Message] { ChatApi.getChannelPins(channels, messages, tenantId, workspaceId, channelId) };
   public shared ({ caller }) func setUserStatus(tenantId : Common.TenantId, workspaceId : Common.WorkspaceId, status : { #online; #away; #offline }, customStatus : Text) : async { #ok : CTypes.UserStatus; #err : Text } { let (res, s) = ChatApi.setUserStatus(statusStore, tenantId, workspaceId, caller, status, customStatus); statusStore := s; res };
+  public shared ({ caller }) func updatePresence(tenantId : Common.TenantId, workspaceId : Common.WorkspaceId) : async { #ok : CTypes.UserStatus; #err : Text } { let (res, s) = ChatApi.updatePresence(statusStore, tenantId, workspaceId, caller); statusStore := s; res };
   public shared query ({ caller }) func getUserStatus(tenantId : Common.TenantId, workspaceId : Common.WorkspaceId, userId : Principal) : async ?CTypes.UserStatus { ChatApi.getUserStatus(statusStore, tenantId, workspaceId, userId) };
+  public shared query ({ caller }) func listWorkspaceStatuses(tenantId : Common.TenantId, workspaceId : Common.WorkspaceId) : async [CTypes.UserStatus] { ChatApi.listWorkspaceStatuses(statusStore, tenantId, workspaceId) };
   public shared ({ caller }) func markChannelRead(tenantId : Common.TenantId, workspaceId : Common.WorkspaceId, channelId : Common.EntityId) : async { #ok : Bool; #err : Text } { let (res, s) = ChatApi.markChannelRead(channels, tenantId, workspaceId, channelId, caller); channels := s; res };
   public shared query ({ caller }) func getUnreadCounts(tenantId : Common.TenantId, workspaceId : Common.WorkspaceId) : async [(Text, Nat)] { ChatApi.getUnreadCounts(channels, tenantId, workspaceId, caller) };
+  public shared ({ caller }) func createOrGetDMChannel(tenantId : Common.TenantId, workspaceId : Common.WorkspaceId, targetUserId : Common.UserId) : async { #ok : CTypes.Channel; #err : Text } { let (res, s) = ChatApi.createOrGetDMChannel(channels, tenantId, workspaceId, caller, targetUserId); channels := s; res };
 
   // Calendar
   public shared ({ caller }) func createEvent(tenantId : Common.TenantId, workspaceId : Common.WorkspaceId, input : CalTypes.EventInput) : async { #ok : CalTypes.Event; #err : Text } { let (res, s) = CalApi.createEvent(events, tenantId, workspaceId, caller, input); events := s; res };
@@ -202,15 +223,51 @@ actor self {
   public shared query ({ caller }) func listEmployees(tenantId : Common.TenantId, workspaceId : Common.WorkspaceId) : async [PayTypes.Employee] { PayApi.listEmployees(employees, tenantId, workspaceId) };
   public shared ({ caller }) func updateEmployee(tenantId : Common.TenantId, workspaceId : Common.WorkspaceId, id : Common.EntityId, input : PayTypes.EmployeeInput) : async { #ok : PayTypes.Employee; #err : Text } { switch (PayApi.updateEmployee(employees, tenantId, workspaceId, id, caller, input)) { case (#err e) #err e; case (#ok(v, s)) { employees := s; #ok v } } };
   public shared ({ caller }) func deactivateEmployee(tenantId : Common.TenantId, workspaceId : Common.WorkspaceId, id : Common.EntityId) : async { #ok : PayTypes.Employee; #err : Text } { switch (PayApi.deactivateEmployee(employees, tenantId, workspaceId, id, caller)) { case (#err e) #err e; case (#ok(v, s)) { employees := s; #ok v } } };
-  public shared ({ caller }) func processPayroll(tenantId : Common.TenantId, workspaceId : Common.WorkspaceId, employeeId : Common.EntityId, period : Text) : async { #ok : PayTypes.PayrollRecord; #err : Text } { switch (PayApi.processPayroll(employees, payrollRecords, payDeductions, payStubs, payAuditLog, idCounter, tenantId, workspaceId, caller, employeeId, period)) { case (#err e) #err e; case (#ok(v, rs, ss, al, n)) { payrollRecords := rs; payStubs := ss; payAuditLog := al; idCounter := n; #ok v } } };
+
+  /// Process payroll for one employee — requires sufficient treasury balance.
+  public shared ({ caller }) func processPayroll(tenantId : Common.TenantId, workspaceId : Common.WorkspaceId, employeeId : Common.EntityId, period : Text) : async { #ok : PayTypes.PayrollRecord; #err : Text } {
+    let canisterPrincipal = Principal.fromActor(self);
+    let wsSub = WalletLib.workspaceSubaccount(workspaceId);
+    let treasuryBalance : Nat = try {
+      let accountIdBlob = LedgerLib.deriveAccountId(canisterPrincipal, ?wsSub);
+      let bal = await LedgerLib.icpLedger.account_balance({ account = accountIdBlob });
+      Nat.fromNat64(bal.e8s)
+    } catch (_) { 0 };
+    switch (PayApi.processPayroll(employees, payrollRecords, payDeductions, payStubs, payAuditLog, idCounter, tenantId, workspaceId, caller, employeeId, period, treasuryBalance)) { case (#err e) #err e; case (#ok(v, rs, ss, al, n)) { payrollRecords := rs; payStubs := ss; payAuditLog := al; idCounter := n; #ok v } }
+  };
+
   public shared query ({ caller }) func listPayrollRecords(tenantId : Common.TenantId, workspaceId : Common.WorkspaceId, employeeId : ?Common.EntityId) : async [PayTypes.PayrollRecord] { PayApi.listPayrollRecords(payrollRecords, tenantId, workspaceId, employeeId) };
-  public shared ({ caller }) func bulkApprovePayroll(tenantId : Common.TenantId, workspaceId : Common.WorkspaceId, recordIds : [Common.EntityId]) : async { #ok : Bool; #err : Text } { switch (PayApi.bulkApprovePayroll(payrollRecords, payAuditLog, idCounter, tenantId, workspaceId, caller, recordIds)) { case (#err e) #err e; case (#ok(rs, al, n)) { payrollRecords := rs; payAuditLog := al; idCounter := n; #ok true } } };
+
+  /// Bulk approve payroll records — sums all amounts and checks treasury balance once BEFORE approving.
+  public shared ({ caller }) func bulkApprovePayroll(tenantId : Common.TenantId, workspaceId : Common.WorkspaceId, recordIds : [Common.EntityId]) : async { #ok : Bool; #err : Text } {
+    let canisterPrincipal = Principal.fromActor(self);
+    let wsSub = WalletLib.workspaceSubaccount(workspaceId);
+    let treasuryBalance : Nat = try {
+      let accountIdBlob = LedgerLib.deriveAccountId(canisterPrincipal, ?wsSub);
+      let bal = await LedgerLib.icpLedger.account_balance({ account = accountIdBlob });
+      Nat.fromNat64(bal.e8s)
+    } catch (_) { 0 };
+    switch (PayApi.bulkApprovePayroll(payrollRecords, payAuditLog, idCounter, tenantId, workspaceId, caller, recordIds, treasuryBalance)) { case (#err e) #err e; case (#ok(rs, al, n)) { payrollRecords := rs; payAuditLog := al; idCounter := n; #ok true } }
+  };
   public shared ({ caller }) func rejectPayrollRecord(tenantId : Common.TenantId, workspaceId : Common.WorkspaceId, recordId : Common.EntityId, reason : Text) : async { #ok : PayTypes.PayrollRecord; #err : Text } { switch (PayApi.rejectPayrollRecord(payrollRecords, payAuditLog, idCounter, tenantId, workspaceId, caller, recordId, reason)) { case (#err e) #err e; case (#ok(v, rs, al, n)) { payrollRecords := rs; payAuditLog := al; idCounter := n; #ok v } } };
   public shared ({ caller }) func addContractor(tenantId : Common.TenantId, workspaceId : Common.WorkspaceId, input : PayTypes.ContractorInput) : async { #ok : PayTypes.Contractor; #err : Text } { switch (PayApi.addContractor(contractors, idCounter, tenantId, workspaceId, input)) { case (#err e) #err e; case (#ok(v, s, n)) { contractors := s; idCounter := n; #ok v } } };
   public shared query ({ caller }) func getContractor(tenantId : Common.TenantId, workspaceId : Common.WorkspaceId, id : Common.EntityId) : async { #ok : PayTypes.Contractor; #err : Text } { PayApi.getContractor(contractors, tenantId, workspaceId, id) };
   public shared query ({ caller }) func listContractors(tenantId : Common.TenantId, workspaceId : Common.WorkspaceId) : async [PayTypes.Contractor] { PayApi.listContractors(contractors, tenantId, workspaceId) };
   public shared ({ caller }) func updateContractor(tenantId : Common.TenantId, workspaceId : Common.WorkspaceId, id : Common.EntityId, input : PayTypes.ContractorInput) : async { #ok : PayTypes.Contractor; #err : Text } { switch (PayApi.updateContractor(contractors, tenantId, workspaceId, id, input)) { case (#err e) #err e; case (#ok(v, s)) { contractors := s; #ok v } } };
-  public shared ({ caller }) func addContractorPayment(tenantId : Common.TenantId, workspaceId : Common.WorkspaceId, input : PayTypes.ContractorPaymentInput) : async { #ok : PayTypes.ContractorPayment; #err : Text } { switch (PayApi.addContractorPayment(contractorPayments, idCounter, tenantId, workspaceId, input)) { case (#err e) #err e; case (#ok(v, s, n)) { contractorPayments := s; idCounter := n; #ok v } } };
+  /// Add a contractor payment — requires sufficient treasury balance.
+  public shared ({ caller }) func addContractorPayment(tenantId : Common.TenantId, workspaceId : Common.WorkspaceId, input : PayTypes.ContractorPaymentInput) : async { #ok : PayTypes.ContractorPayment; #err : Text } {
+    let canisterPrincipal = Principal.fromActor(self);
+    let wsSub = WalletLib.workspaceSubaccount(workspaceId);
+    let treasuryBalance : Nat = try {
+      let accountIdBlob = LedgerLib.deriveAccountId(canisterPrincipal, ?wsSub);
+      let bal = await LedgerLib.icpLedger.account_balance({ account = accountIdBlob });
+      Nat.fromNat64(bal.e8s)
+    } catch (_) { 0 };
+    if (treasuryBalance.toFloat() < input.amount) {
+      return #err("Insufficient treasury balance. Please fund your workspace wallet before processing contractor payments.");
+    };
+    switch (PayApi.addContractorPayment(contractorPayments, idCounter, tenantId, workspaceId, input)) { case (#err e) #err e; case (#ok(v, s, n)) { contractorPayments := s; idCounter := n; #ok v } }
+  };
   public shared query ({ caller }) func listContractorPayments(tenantId : Common.TenantId, workspaceId : Common.WorkspaceId, contractorId : ?Common.EntityId) : async [PayTypes.ContractorPayment] { PayApi.listContractorPayments(contractorPayments, tenantId, workspaceId, contractorId) };
   public shared ({ caller }) func addPaySchedule(tenantId : Common.TenantId, workspaceId : Common.WorkspaceId, input : PayTypes.PayScheduleInput) : async { #ok : PayTypes.PaySchedule; #err : Text } { switch (PayApi.addPaySchedule(paySchedules, idCounter, tenantId, workspaceId, input)) { case (#err e) #err e; case (#ok(v, s, n)) { paySchedules := s; idCounter := n; #ok v } } };
   public shared query ({ caller }) func listPaySchedules(tenantId : Common.TenantId, workspaceId : Common.WorkspaceId) : async [PayTypes.PaySchedule] { PayApi.listPaySchedules(paySchedules, tenantId, workspaceId) };
@@ -220,18 +277,120 @@ actor self {
   public shared ({ caller }) func addBenefit(tenantId : Common.TenantId, workspaceId : Common.WorkspaceId, input : PayTypes.BenefitInput) : async { #ok : PayTypes.Benefit; #err : Text } { switch (PayApi.addBenefit(payBenefits, idCounter, tenantId, workspaceId, input)) { case (#err e) #err e; case (#ok(v, s, n)) { payBenefits := s; idCounter := n; #ok v } } };
   public shared query ({ caller }) func listBenefits(tenantId : Common.TenantId, workspaceId : Common.WorkspaceId, employeeId : ?Common.EntityId) : async [PayTypes.Benefit] { PayApi.listBenefits(payBenefits, tenantId, workspaceId, employeeId) };
   public shared query ({ caller }) func listPayStubs(tenantId : Common.TenantId, workspaceId : Common.WorkspaceId, employeeId : ?Common.EntityId) : async [PayTypes.PayStub] { PayApi.listPayStubs(payStubs, tenantId, workspaceId, employeeId) };
-  public shared ({ caller }) func addOffCyclePayment(tenantId : Common.TenantId, workspaceId : Common.WorkspaceId, input : PayTypes.OffCyclePaymentInput) : async { #ok : PayTypes.OffCyclePayment; #err : Text } { switch (PayApi.addOffCyclePayment(offCyclePayments, idCounter, tenantId, workspaceId, input)) { case (#err e) #err e; case (#ok(v, s, n)) { offCyclePayments := s; idCounter := n; #ok v } } };
+  /// Add an off-cycle payment — requires sufficient treasury balance if processImmediately.
+  public shared ({ caller }) func addOffCyclePayment(tenantId : Common.TenantId, workspaceId : Common.WorkspaceId, input : PayTypes.OffCyclePaymentInput) : async { #ok : PayTypes.OffCyclePayment; #err : Text } {
+    if (input.processImmediately) {
+      let canisterPrincipal = Principal.fromActor(self);
+      let wsSub = WalletLib.workspaceSubaccount(workspaceId);
+      let treasuryBalance : Nat = try {
+        let accountIdBlob = LedgerLib.deriveAccountId(canisterPrincipal, ?wsSub);
+        let bal = await LedgerLib.icpLedger.account_balance({ account = accountIdBlob });
+        Nat.fromNat64(bal.e8s)
+      } catch (_) { 0 };
+      if (treasuryBalance.toFloat() < input.amount) {
+        return #err("Insufficient treasury balance. Please fund your workspace wallet before processing off-cycle payments.");
+      };
+    };
+    switch (PayApi.addOffCyclePayment(offCyclePayments, idCounter, tenantId, workspaceId, input)) { case (#err e) #err e; case (#ok(v, s, n)) { offCyclePayments := s; idCounter := n; #ok v } }
+  };
   public shared query ({ caller }) func listOffCyclePayments(tenantId : Common.TenantId, workspaceId : Common.WorkspaceId, employeeId : ?Common.EntityId) : async [PayTypes.OffCyclePayment] { PayApi.listOffCyclePayments(offCyclePayments, tenantId, workspaceId, employeeId) };
   public shared query ({ caller }) func listPayrollAuditLog(tenantId : Common.TenantId, workspaceId : Common.WorkspaceId, limit : Nat) : async [PayTypes.AuditLogEntry] { PayApi.listPayrollAuditLog(payAuditLog, tenantId, workspaceId, limit) };
 
   // Escrow
-  public shared ({ caller }) func createEscrow(tenantId : Common.TenantId, workspaceId : Common.WorkspaceId, input : EscTypes.EscrowInput) : async { #ok : EscTypes.EscrowContract; #err : Text } { switch (EscApi.createEscrow(escrowContracts, idCounter, tenantId, workspaceId, caller, input)) { case (#err e) #err e; case (#ok(v, s, n)) { escrowContracts := s; idCounter := n; #ok v } } };
+  /// Create an escrow — requires the caller (payer) to have sufficient treasury balance.
+  /// Queries the live ICP/ckBTC ledger balance BEFORE creating the record.
+  public shared ({ caller }) func createEscrow(tenantId : Common.TenantId, workspaceId : Common.WorkspaceId, input : EscTypes.EscrowInput) : async { #ok : EscTypes.EscrowContract; #err : Text } {
+    // Query live treasury balance for the workspace (canister principal + workspace subaccount)
+    let canisterPrincipal = Principal.fromActor(self);
+    let wsSub = WalletLib.workspaceSubaccount(workspaceId);
+    let treasuryBalance : Nat = try {
+      if (input.currency == "ckBTC") {
+        await LedgerLib.ckBTCLedger.icrc1_balance_of({ owner = canisterPrincipal; subaccount = ?wsSub })
+      } else {
+        let accountIdBlob = LedgerLib.deriveAccountId(canisterPrincipal, ?wsSub);
+        let bal = await LedgerLib.icpLedger.account_balance({ account = accountIdBlob });
+        Nat.fromNat64(bal.e8s)
+      }
+    } catch (_) { 0 };
+    if (treasuryBalance < input.amount) {
+      return #err("Insufficient treasury balance. Please fund your workspace wallet before creating an escrow.");
+    };
+    switch (EscApi.createEscrow(escrowContracts, idCounter, tenantId, workspaceId, caller, input)) { case (#err e) #err e; case (#ok(v, s, n)) { escrowContracts := s; idCounter := n; #ok v } }
+  };
   public shared query ({ caller }) func getEscrow(tenantId : Common.TenantId, workspaceId : Common.WorkspaceId, id : Common.EntityId) : async { #ok : EscTypes.EscrowContract; #err : Text } { EscApi.getEscrow(escrowContracts, tenantId, workspaceId, id) };
   public shared query ({ caller }) func listEscrows(tenantId : Common.TenantId, workspaceId : Common.WorkspaceId, filter : ?EscTypes.EscrowFilter) : async [EscTypes.EscrowContract] { EscApi.listEscrows(escrowContracts, tenantId, workspaceId, caller, filter) };
   public shared ({ caller }) func fundEscrow(tenantId : Common.TenantId, workspaceId : Common.WorkspaceId, id : Common.EntityId) : async { #ok : EscTypes.EscrowContract; #err : Text } { switch (EscApi.fundEscrow(escrowContracts, tenantId, workspaceId, id, caller)) { case (#err e) #err e; case (#ok(v, s)) { escrowContracts := s; #ok v } } };
   public shared ({ caller }) func releaseEscrow(tenantId : Common.TenantId, workspaceId : Common.WorkspaceId, id : Common.EntityId) : async { #ok : EscTypes.EscrowContract; #err : Text } { switch (EscApi.releaseEscrow(escrowContracts, tenantId, workspaceId, id, caller)) { case (#err e) #err e; case (#ok(v, s)) { escrowContracts := s; #ok v } } };
   public shared ({ caller }) func disputeEscrow(tenantId : Common.TenantId, workspaceId : Common.WorkspaceId, id : Common.EntityId) : async { #ok : EscTypes.EscrowContract; #err : Text } { switch (EscApi.disputeEscrow(escrowContracts, tenantId, workspaceId, id, caller)) { case (#err e) #err e; case (#ok(v, s)) { escrowContracts := s; #ok v } } };
   public shared ({ caller }) func cancelEscrow(tenantId : Common.TenantId, workspaceId : Common.WorkspaceId, id : Common.EntityId) : async { #ok : EscTypes.EscrowContract; #err : Text } { switch (EscApi.cancelEscrow(escrowContracts, tenantId, workspaceId, id, caller)) { case (#err e) #err e; case (#ok(v, s)) { escrowContracts := s; #ok v } } };
+
+  /// Refund a funded or disputed escrow back to the payer via the real ICP ledger.
+  /// State-before-transfer: escrow is cancelled in state BEFORE the async ledger call.
+  /// If the ledger transfer fails, escrow state is already cancelled — caller must retry or resolve manually.
+  public shared ({ caller }) func refundEscrow(tenantId : Common.TenantId, workspaceId : Common.WorkspaceId, id : Common.EntityId) : async { #ok : EscTypes.EscrowContract; #err : Text } {
+    // Look up the escrow to verify status and get amount
+    let maybeContract = EscApi.getEscrow(escrowContracts, tenantId, workspaceId, id);
+    switch (maybeContract) {
+      case (#err e) { #err e };
+      case (#ok contract) {
+        if (contract.payerId != caller) {
+          return #err("Only the payer can refund this escrow.");
+        };
+        if (contract.status != #Funded and contract.status != #Disputed) {
+          return #err("Escrow must be Funded or Disputed to refund.");
+        };
+        // Protection 1: update state to #Cancelled BEFORE the async ledger call
+        switch (EscApi.refundEscrow(escrowContracts, tenantId, workspaceId, id, caller, ?"Refunded by payer")) {
+          case (#err e) { #err e };
+          case (#ok(updatedContract, updatedContracts)) {
+            escrowContracts := updatedContracts;
+            // Determine refund amount (use fundedAmount if available, otherwise agreed amount)
+            let refundAmount = switch (updatedContract.fundedAmount) {
+              case (?fa) fa;
+              case null updatedContract.amount;
+            };
+            if (refundAmount == 0) { return #ok updatedContract };
+            // Execute on-chain refund to payer
+            txMemoCounter += 1;
+            let uniqueMemo = txMemoCounter;
+            try {
+              if (updatedContract.currency == "ckBTC") {
+                let memoBlob : Blob = uniqueMemo.toText().encodeUtf8();
+                let result = await LedgerLib.ckBTCLedger.icrc1_transfer({
+                  to = { owner = contract.payerId; subaccount = null };
+                  amount = refundAmount;
+                  fee = null;
+                  memo = ?memoBlob;
+                  from_subaccount = ?WalletLib.workspaceSubaccount(workspaceId);
+                  created_at_time = ?Int.abs(Time.now()).toNat64();
+                });
+                switch (result) {
+                  case (#Ok _) { #ok updatedContract };
+                  case (#Err e) { #err("Refund transfer failed: " # LedgerLib.icrc1TransferErrorText(e)) };
+                }
+              } else {
+                let payerAccountBlob = LedgerLib.deriveAccountId(contract.payerId, null);
+                let result = await LedgerLib.icpLedger.transfer({
+                  to = payerAccountBlob;
+                  amount = { e8s = refundAmount.toNat64() };
+                  fee = { e8s = (10_000 : Nat64) };
+                  memo = uniqueMemo;
+                  from_subaccount = ?WalletLib.workspaceSubaccount(workspaceId);
+                  created_at_time = ?{ timestamp_nanos = Int.abs(Time.now()).toNat64() };
+                });
+                switch (result) {
+                  case (#Ok _) { #ok updatedContract };
+                  case (#Err e) { #err("Refund transfer failed: " # LedgerLib.icpTransferErrorText(e)) };
+                }
+              }
+            } catch (_) {
+              #err("Ledger call failed — escrow state is cancelled but on-chain refund was not completed. Contact support.")
+            }
+          };
+        };
+      };
+    }
+  };
 
   /// Deposit funds into an escrow using the ICRC-2 approve/transfer_from pattern (Protection 3).
   /// Flow: caller must first call icrc2_approve on the ICP or ckBTC ledger to authorize
@@ -294,7 +453,7 @@ actor self {
   };
   public shared ({ caller }) func addEscrowMilestone(tenantId : Common.TenantId, workspaceId : Common.WorkspaceId, escrowId : Common.EntityId, input : EscTypes.EscrowMilestoneInput) : async { #ok : EscTypes.EscrowMilestone; #err : Text } { switch (EscApi.addEscrowMilestone(escrowMilestones, idCounter, tenantId, workspaceId, escrowId, input)) { case (#err e) #err e; case (#ok(v, s, n)) { escrowMilestones := s; idCounter := n; #ok v } } };
   public shared ({ caller }) func updateEscrowMilestone(tenantId : Common.TenantId, workspaceId : Common.WorkspaceId, milestoneId : Common.EntityId, input : EscTypes.EscrowMilestoneInput) : async { #ok : EscTypes.EscrowMilestone; #err : Text } { switch (EscApi.updateEscrowMilestone(escrowMilestones, tenantId, workspaceId, milestoneId, input)) { case (#err e) #err e; case (#ok(v, s)) { escrowMilestones := s; #ok v } } };
-  public shared ({ caller }) func approveMilestone(tenantId : Common.TenantId, workspaceId : Common.WorkspaceId, milestoneId : Common.EntityId) : async { #ok : EscTypes.EscrowMilestone; #err : Text } { switch (EscApi.approveMilestone(escrowMilestones, tenantId, workspaceId, milestoneId)) { case (#err e) #err e; case (#ok(v, s)) { escrowMilestones := s; #ok v } } };
+  public shared ({ caller }) func approveMilestone(tenantId : Common.TenantId, workspaceId : Common.WorkspaceId, milestoneId : Common.EntityId) : async { #ok : EscTypes.EscrowMilestone; #err : Text } { switch (EscApi.approveMilestone(escrowContracts, escrowMilestones, tenantId, workspaceId, milestoneId, caller)) { case (#err e) #err e; case (#ok(v, s)) { escrowMilestones := s; #ok v } } };
 
   /// Release milestone funds via the real ICP ledger.
   /// Protection 1 (state-before-transfer): sets milestone to #Releasing BEFORE the async ledger call.

@@ -6,6 +6,7 @@ import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
+import { useInternetIdentity } from "@caffeineai/core-infrastructure";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate, useParams } from "@tanstack/react-router";
 import {
@@ -33,12 +34,7 @@ import type {
 } from "../../backend";
 import { useBackend } from "../../hooks/useBackend";
 import { getTenantId, useWorkspace } from "../../hooks/useWorkspace";
-import {
-  DisputeStatus,
-  type EscrowContract,
-  EscrowStatus,
-  MilestoneStatus__1,
-} from "../../types";
+import { type EscrowContract, EscrowStatus } from "../../types";
 
 // Use backend types directly for variant checks
 import { DisputeStatus as DS, MilestoneStatus__1 as MS } from "../../backend";
@@ -209,6 +205,10 @@ export default function EscrowDetailPage() {
   const workspaceId = activeWorkspaceId ?? "";
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+
+  // Get current user identity to determine if they are the payer
+  const { identity } = useInternetIdentity();
+  const currentPrincipalText = identity?.getPrincipal().toString() ?? "";
 
   const [activeTab, setActiveTab] = useState<TabId>("overview");
   const [disputeReason, setDisputeReason] = useState("");
@@ -402,7 +402,6 @@ export default function EscrowDetailPage() {
       toast.error("Summary not available");
       return;
     }
-    // Format EscrowSummary object as text
     const lines = [
       "Escrow Summary",
       "==============",
@@ -468,6 +467,11 @@ export default function EscrowDetailPage() {
   const milestoneList = milestones ?? [];
   const disputeList = disputes ?? [];
   const openDispute = disputeList.find((d) => d.status === DS.Open) ?? null;
+
+  // The payer is the creator of the escrow — only they can approve milestones
+  const isPayer =
+    currentPrincipalText.length > 0 &&
+    contract.payerId.toString() === currentPrincipalText;
 
   const TABS: { id: TabId; label: string; icon: React.ElementType }[] = [
     { id: "overview", label: "Overview", icon: Shield },
@@ -541,7 +545,7 @@ export default function EscrowDetailPage() {
         )}
       </div>
 
-      {/* Action buttons */}
+      {/* Action buttons — visible to all workspace members for viewing context, but only payer can trigger fund/release */}
       {!isTerminal && (
         <Card className="border-amber-200 dark:border-amber-800 bg-amber-50/50 dark:bg-amber-900/10">
           <CardHeader className="pb-3">
@@ -721,12 +725,19 @@ export default function EscrowDetailPage() {
                   <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-0.5">
                     Payer
                   </p>
-                  <p
-                    className="text-xs text-foreground font-mono truncate"
-                    title={contract.payerId.toString()}
-                  >
-                    {contract.payerId.toString().slice(0, 24)}…
-                  </p>
+                  <div className="flex items-center gap-1.5">
+                    <p
+                      className="text-xs text-foreground font-mono truncate"
+                      title={contract.payerId.toString()}
+                    >
+                      {contract.payerId.toString().slice(0, 24)}…
+                    </p>
+                    {isPayer && (
+                      <span className="shrink-0 text-[10px] font-semibold text-amber-600 dark:text-amber-400 bg-amber-100 dark:bg-amber-900/30 rounded px-1.5 py-0.5">
+                        You
+                      </span>
+                    )}
+                  </div>
                 </div>
                 <Separator />
                 <div>
@@ -842,7 +853,7 @@ export default function EscrowDetailPage() {
         </div>
       )}
 
-      {/* Tab: Milestones */}
+      {/* Tab: Milestones — visible to all workspace members, approve only for payer */}
       {activeTab === "milestones" && (
         <div className="space-y-3">
           {milestoneList.length === 0 ? (
@@ -883,7 +894,8 @@ export default function EscrowDetailPage() {
                         {formatAmount(milestone.amount, contract.currency)}
                       </p>
                       <div className="flex gap-1.5 justify-end">
-                        {milestone.status === MS.Pending && (
+                        {/* Approve milestone — payer only */}
+                        {milestone.status === MS.Pending && isPayer && (
                           <Button
                             size="sm"
                             onClick={() =>
@@ -895,6 +907,13 @@ export default function EscrowDetailPage() {
                           >
                             Approve
                           </Button>
+                        )}
+                        {/* Show pending indicator to non-payers */}
+                        {milestone.status === MS.Pending && !isPayer && (
+                          <span className="flex items-center gap-1 text-xs text-muted-foreground">
+                            <Clock className="h-3.5 w-3.5" />
+                            Awaiting payer
+                          </span>
                         )}
                         {milestone.status === MS.Approved && (
                           <Button
@@ -925,14 +944,12 @@ export default function EscrowDetailPage() {
         </div>
       )}
 
-      {/* Tab: Status History / Timeline */}
+      {/* Tab: Status History — visible to all workspace members */}
       {activeTab === "timeline" && (
         <div>
-          {contract.crossLinks.length === 0 && (
+          {!summary && (
             <div className="space-y-0">
-              {/* We use the statusHistory from the summary or just show contract status */}
               <div className="relative pl-8">
-                {/* Current status */}
                 <div className="absolute left-0 top-2 flex h-6 w-6 items-center justify-center rounded-full bg-amber-500 text-white">
                   <StatusIcon className="h-3 w-3" />
                 </div>
@@ -961,9 +978,9 @@ export default function EscrowDetailPage() {
             </div>
           )}
 
-          {/* Summary with status history */}
+          {/* Full status history from summary */}
           {summary && summary.statusHistory.length > 0 && (
-            <Card className="mt-3">
+            <Card>
               <CardHeader className="pb-3">
                 <CardTitle className="text-sm font-semibold text-foreground flex items-center gap-2">
                   <ChevronRight className="h-4 w-4 text-amber-500" />
@@ -1011,7 +1028,7 @@ export default function EscrowDetailPage() {
         </div>
       )}
 
-      {/* Tab: Dispute */}
+      {/* Tab: Dispute — visible to all workspace members */}
       {activeTab === "dispute" && (
         <div className="space-y-4">
           {disputeList.length === 0 && !showDisputeForm ? (

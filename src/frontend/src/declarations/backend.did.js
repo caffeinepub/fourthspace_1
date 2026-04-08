@@ -873,18 +873,24 @@ export const NoteInput = IDL.Record({
   'title' : IDL.Text,
   'content' : IDL.Text,
   'tags' : IDL.Vec(IDL.Text),
+  'iconEmoji' : IDL.Opt(IDL.Text),
+  'coverGradient' : IDL.Opt(IDL.Text),
   'crossLinks' : IDL.Vec(CrossLink),
 });
 export const Note = IDL.Record({
   'id' : EntityId,
   'title' : IDL.Text,
   'content' : IDL.Text,
+  'lastEditedAt' : IDL.Opt(Timestamp),
+  'lastEditedBy' : IDL.Opt(UserId),
   'authorId' : UserId,
   'createdAt' : Timestamp,
   'tags' : IDL.Vec(IDL.Text),
   'tenantId' : TenantId,
   'updatedAt' : Timestamp,
+  'iconEmoji' : IDL.Opt(IDL.Text),
   'workspaceId' : WorkspaceId,
+  'coverGradient' : IDL.Opt(IDL.Text),
   'crossLinks' : IDL.Vec(CrossLink),
 });
 export const NoteTemplateInput = IDL.Record({
@@ -1232,6 +1238,11 @@ export const Integration = IDL.Record({
   'config' : IDL.Text,
   'syncStatus' : IDL.Opt(IDL.Text),
 });
+export const NoteLastEdit = IDL.Record({
+  'displayName' : IDL.Text,
+  'userId' : UserId,
+  'editedAt' : IDL.Int,
+});
 export const UserProfile = IDL.Record({
   'displayName' : IDL.Text,
   'userId' : UserId,
@@ -1240,6 +1251,11 @@ export const UserProfile = IDL.Record({
   'email' : IDL.Text,
   'tenantId' : TenantId,
   'workspaceId' : EntityId,
+});
+export const NoteEditorPresence = IDL.Record({
+  'displayName' : IDL.Text,
+  'userId' : UserId,
+  'lastSeen' : IDL.Int,
 });
 export const AIPromptType = IDL.Variant({
   'SuggestPriorities' : IDL.Null,
@@ -1703,6 +1719,11 @@ export const idlService = IDL.Service({
       [IDL.Variant({ 'ok' : NoteTemplate, 'err' : IDL.Text })],
       [],
     ),
+  'createOrGetDMChannel' : IDL.Func(
+      [TenantId, WorkspaceId, UserId],
+      [IDL.Variant({ 'ok' : Channel, 'err' : IDL.Text })],
+      [],
+    ),
   'createPage' : IDL.Func(
       [TenantId, WorkspaceId, PageInput],
       [IDL.Variant({ 'ok' : PageNode, 'err' : IDL.Text })],
@@ -2043,6 +2064,11 @@ export const idlService = IDL.Service({
       [IDL.Vec(Integration)],
       ['query'],
     ),
+  'getLastNoteEdit' : IDL.Func(
+      [TenantId, WorkspaceId, EntityId],
+      [IDL.Opt(NoteLastEdit)],
+      ['query'],
+    ),
   'getMessages' : IDL.Func(
       [TenantId, WorkspaceId, EntityId, IDL.Nat, IDL.Opt(Timestamp)],
       [IDL.Vec(Message)],
@@ -2057,6 +2083,11 @@ export const idlService = IDL.Service({
   'getNote' : IDL.Func(
       [TenantId, WorkspaceId, EntityId],
       [IDL.Variant({ 'ok' : Note, 'err' : IDL.Text })],
+      ['query'],
+    ),
+  'getNoteActiveEditors' : IDL.Func(
+      [TenantId, WorkspaceId, EntityId],
+      [IDL.Vec(NoteEditorPresence)],
       ['query'],
     ),
   'getOrCreateWorkspaceShareToken' : IDL.Func(
@@ -2467,6 +2498,11 @@ export const idlService = IDL.Service({
       [IDL.Vec(WorkspaceMember)],
       ['query'],
     ),
+  'listWorkspaceStatuses' : IDL.Func(
+      [TenantId, WorkspaceId],
+      [IDL.Vec(UserStatus)],
+      ['query'],
+    ),
   'listWorkspaces' : IDL.Func([TenantId], [IDL.Vec(Workspace)], ['query']),
   'markChannelRead' : IDL.Func(
       [TenantId, WorkspaceId, EntityId],
@@ -2503,6 +2539,11 @@ export const idlService = IDL.Service({
   'recordCheckIn' : IDL.Func(
       [TenantId, WorkspaceId, CheckInInput],
       [IDL.Variant({ 'ok' : GoalCheckIn, 'err' : IDL.Text })],
+      [],
+    ),
+  'refundEscrow' : IDL.Func(
+      [TenantId, WorkspaceId, EntityId],
+      [IDL.Variant({ 'ok' : EscrowContract, 'err' : IDL.Text })],
       [],
     ),
   'regenerateWorkspaceShareToken' : IDL.Func(
@@ -2736,6 +2777,11 @@ export const idlService = IDL.Service({
       [IDL.Variant({ 'ok' : Note, 'err' : IDL.Text })],
       [],
     ),
+  'updateNotePresence' : IDL.Func(
+      [TenantId, WorkspaceId, EntityId, IDL.Text],
+      [],
+      [],
+    ),
   'updatePage' : IDL.Func(
       [
         TenantId,
@@ -2747,6 +2793,11 @@ export const idlService = IDL.Service({
         IDL.Vec(Block),
       ],
       [IDL.Variant({ 'ok' : PageNode, 'err' : IDL.Text })],
+      [],
+    ),
+  'updatePresence' : IDL.Func(
+      [TenantId, WorkspaceId],
+      [IDL.Variant({ 'ok' : UserStatus, 'err' : IDL.Text })],
       [],
     ),
   'updateProject' : IDL.Func(
@@ -2774,6 +2825,11 @@ export const idlService = IDL.Service({
     ),
   'updateTask' : IDL.Func(
       [TenantId, WorkspaceId, EntityId, TaskInput],
+      [IDL.Variant({ 'ok' : Task, 'err' : IDL.Text })],
+      [],
+    ),
+  'updateTaskStatus' : IDL.Func(
+      [TenantId, WorkspaceId, EntityId, TaskStatus],
       [IDL.Variant({ 'ok' : Task, 'err' : IDL.Text })],
       [],
     ),
@@ -3672,18 +3728,24 @@ export const idlFactory = ({ IDL }) => {
     'title' : IDL.Text,
     'content' : IDL.Text,
     'tags' : IDL.Vec(IDL.Text),
+    'iconEmoji' : IDL.Opt(IDL.Text),
+    'coverGradient' : IDL.Opt(IDL.Text),
     'crossLinks' : IDL.Vec(CrossLink),
   });
   const Note = IDL.Record({
     'id' : EntityId,
     'title' : IDL.Text,
     'content' : IDL.Text,
+    'lastEditedAt' : IDL.Opt(Timestamp),
+    'lastEditedBy' : IDL.Opt(UserId),
     'authorId' : UserId,
     'createdAt' : Timestamp,
     'tags' : IDL.Vec(IDL.Text),
     'tenantId' : TenantId,
     'updatedAt' : Timestamp,
+    'iconEmoji' : IDL.Opt(IDL.Text),
     'workspaceId' : WorkspaceId,
+    'coverGradient' : IDL.Opt(IDL.Text),
     'crossLinks' : IDL.Vec(CrossLink),
   });
   const NoteTemplateInput = IDL.Record({
@@ -4031,6 +4093,11 @@ export const idlFactory = ({ IDL }) => {
     'config' : IDL.Text,
     'syncStatus' : IDL.Opt(IDL.Text),
   });
+  const NoteLastEdit = IDL.Record({
+    'displayName' : IDL.Text,
+    'userId' : UserId,
+    'editedAt' : IDL.Int,
+  });
   const UserProfile = IDL.Record({
     'displayName' : IDL.Text,
     'userId' : UserId,
@@ -4039,6 +4106,11 @@ export const idlFactory = ({ IDL }) => {
     'email' : IDL.Text,
     'tenantId' : TenantId,
     'workspaceId' : EntityId,
+  });
+  const NoteEditorPresence = IDL.Record({
+    'displayName' : IDL.Text,
+    'userId' : UserId,
+    'lastSeen' : IDL.Int,
   });
   const AIPromptType = IDL.Variant({
     'SuggestPriorities' : IDL.Null,
@@ -4502,6 +4574,11 @@ export const idlFactory = ({ IDL }) => {
         [IDL.Variant({ 'ok' : NoteTemplate, 'err' : IDL.Text })],
         [],
       ),
+    'createOrGetDMChannel' : IDL.Func(
+        [TenantId, WorkspaceId, UserId],
+        [IDL.Variant({ 'ok' : Channel, 'err' : IDL.Text })],
+        [],
+      ),
     'createPage' : IDL.Func(
         [TenantId, WorkspaceId, PageInput],
         [IDL.Variant({ 'ok' : PageNode, 'err' : IDL.Text })],
@@ -4842,6 +4919,11 @@ export const idlFactory = ({ IDL }) => {
         [IDL.Vec(Integration)],
         ['query'],
       ),
+    'getLastNoteEdit' : IDL.Func(
+        [TenantId, WorkspaceId, EntityId],
+        [IDL.Opt(NoteLastEdit)],
+        ['query'],
+      ),
     'getMessages' : IDL.Func(
         [TenantId, WorkspaceId, EntityId, IDL.Nat, IDL.Opt(Timestamp)],
         [IDL.Vec(Message)],
@@ -4856,6 +4938,11 @@ export const idlFactory = ({ IDL }) => {
     'getNote' : IDL.Func(
         [TenantId, WorkspaceId, EntityId],
         [IDL.Variant({ 'ok' : Note, 'err' : IDL.Text })],
+        ['query'],
+      ),
+    'getNoteActiveEditors' : IDL.Func(
+        [TenantId, WorkspaceId, EntityId],
+        [IDL.Vec(NoteEditorPresence)],
         ['query'],
       ),
     'getOrCreateWorkspaceShareToken' : IDL.Func(
@@ -5266,6 +5353,11 @@ export const idlFactory = ({ IDL }) => {
         [IDL.Vec(WorkspaceMember)],
         ['query'],
       ),
+    'listWorkspaceStatuses' : IDL.Func(
+        [TenantId, WorkspaceId],
+        [IDL.Vec(UserStatus)],
+        ['query'],
+      ),
     'listWorkspaces' : IDL.Func([TenantId], [IDL.Vec(Workspace)], ['query']),
     'markChannelRead' : IDL.Func(
         [TenantId, WorkspaceId, EntityId],
@@ -5302,6 +5394,11 @@ export const idlFactory = ({ IDL }) => {
     'recordCheckIn' : IDL.Func(
         [TenantId, WorkspaceId, CheckInInput],
         [IDL.Variant({ 'ok' : GoalCheckIn, 'err' : IDL.Text })],
+        [],
+      ),
+    'refundEscrow' : IDL.Func(
+        [TenantId, WorkspaceId, EntityId],
+        [IDL.Variant({ 'ok' : EscrowContract, 'err' : IDL.Text })],
         [],
       ),
     'regenerateWorkspaceShareToken' : IDL.Func(
@@ -5535,6 +5632,11 @@ export const idlFactory = ({ IDL }) => {
         [IDL.Variant({ 'ok' : Note, 'err' : IDL.Text })],
         [],
       ),
+    'updateNotePresence' : IDL.Func(
+        [TenantId, WorkspaceId, EntityId, IDL.Text],
+        [],
+        [],
+      ),
     'updatePage' : IDL.Func(
         [
           TenantId,
@@ -5546,6 +5648,11 @@ export const idlFactory = ({ IDL }) => {
           IDL.Vec(Block),
         ],
         [IDL.Variant({ 'ok' : PageNode, 'err' : IDL.Text })],
+        [],
+      ),
+    'updatePresence' : IDL.Func(
+        [TenantId, WorkspaceId],
+        [IDL.Variant({ 'ok' : UserStatus, 'err' : IDL.Text })],
         [],
       ),
     'updateProject' : IDL.Func(
@@ -5573,6 +5680,11 @@ export const idlFactory = ({ IDL }) => {
       ),
     'updateTask' : IDL.Func(
         [TenantId, WorkspaceId, EntityId, TaskInput],
+        [IDL.Variant({ 'ok' : Task, 'err' : IDL.Text })],
+        [],
+      ),
+    'updateTaskStatus' : IDL.Func(
+        [TenantId, WorkspaceId, EntityId, TaskStatus],
         [IDL.Variant({ 'ok' : Task, 'err' : IDL.Text })],
         [],
       ),

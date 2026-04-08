@@ -1,8 +1,8 @@
 import Map "mo:core/Map";
-import Iter "mo:core/Iter";
 import Text "mo:core/Text";
 import Time "mo:core/Time";
 import Int "mo:core/Int";
+import Principal "mo:core/Principal";
 import Types "../types/notes";
 import Common "../types/common";
 
@@ -22,6 +22,11 @@ module {
   func genId(salt : Text) : Common.EntityId {
     let ts = Time.now();
     ts.toText() # "-" # salt
+  };
+
+  // Presence store key: "noteId:userId"
+  func presenceKey(noteId : Common.EntityId, userId : Common.UserId) : Text {
+    noteId # ":" # userId.toText()
   };
 
   // ── CRUD ─────────────────────────────────────────────────────────────────────
@@ -46,6 +51,10 @@ module {
       crossLinks = input.crossLinks;
       createdAt = now;
       updatedAt = now;
+      lastEditedBy = null;
+      lastEditedAt = null;
+      coverGradient = input.coverGradient;
+      iconEmoji = input.iconEmoji;
     };
     let m = toMap(store);
     m.add(id, note);
@@ -90,13 +99,18 @@ module {
     switch (m.get(id)) {
       case (?existing) {
         if (existing.tenantId != tenantId or existing.workspaceId != workspaceId) return (null, store);
+        let now = Time.now();
         let updated : Types.Note = {
           existing with
           title = input.title;
           content = input.content;
           tags = input.tags;
           crossLinks = input.crossLinks;
-          updatedAt = Time.now();
+          updatedAt = now;
+          lastEditedBy = ?caller;
+          lastEditedAt = ?now;
+          coverGradient = input.coverGradient;
+          iconEmoji = input.iconEmoji;
         };
         m.add(id, updated);
         (?updated, toStore(m))
@@ -139,5 +153,89 @@ module {
           )
         },
       ).toArray()
+  };
+
+  // ── Presence Tracking ─────────────────────────────────────────────────────────
+
+  // 30 seconds in nanoseconds
+  let presenceWindowNs : Int = 30_000_000_000;
+
+  public func updateNotePresence(
+    presenceStore : [(Text, Types.NotePresenceEntry)],
+    noteId : Common.EntityId,
+    tenantId : Common.TenantId,
+    workspaceId : Common.WorkspaceId,
+    caller : Common.UserId,
+    displayName : Text,
+  ) : [(Text, Types.NotePresenceEntry)] {
+    let m : Map.Map<Text, Types.NotePresenceEntry> = Map.fromArray(presenceStore);
+    let key = presenceKey(noteId, caller);
+    let entry : Types.NotePresenceEntry = {
+      noteId;
+      tenantId;
+      workspaceId;
+      userId = caller;
+      displayName;
+      lastSeen = Time.now();
+    };
+    m.add(key, entry);
+    m.toArray()
+  };
+
+  public func getNoteActiveEditors(
+    presenceStore : [(Text, Types.NotePresenceEntry)],
+    noteId : Common.EntityId,
+    tenantId : Common.TenantId,
+    workspaceId : Common.WorkspaceId,
+  ) : [Types.NoteEditorPresence] {
+    let m : Map.Map<Text, Types.NotePresenceEntry> = Map.fromArray(presenceStore);
+    let now = Time.now();
+    let cutoff = now - presenceWindowNs;
+    m.values()
+      .filter(func(e : Types.NotePresenceEntry) : Bool {
+        e.noteId == noteId and e.tenantId == tenantId and e.workspaceId == workspaceId and e.lastSeen >= cutoff
+      })
+      .map<Types.NotePresenceEntry, Types.NoteEditorPresence>(func(e : Types.NotePresenceEntry) : Types.NoteEditorPresence {
+        { userId = e.userId; displayName = e.displayName; lastSeen = e.lastSeen }
+      })
+      .toArray()
+  };
+
+  public func updateLastEdit(
+    lastEditStore : [(Text, Types.NoteLastEditEntry)],
+    noteId : Common.EntityId,
+    tenantId : Common.TenantId,
+    workspaceId : Common.WorkspaceId,
+    caller : Common.UserId,
+    displayName : Text,
+  ) : [(Text, Types.NoteLastEditEntry)] {
+    let m : Map.Map<Text, Types.NoteLastEditEntry> = Map.fromArray(lastEditStore);
+    let entry : Types.NoteLastEditEntry = {
+      noteId;
+      tenantId;
+      workspaceId;
+      userId = caller;
+      displayName;
+      editedAt = Time.now();
+    };
+    m.add(noteId, entry);
+    m.toArray()
+  };
+
+  public func getLastNoteEdit(
+    lastEditStore : [(Text, Types.NoteLastEditEntry)],
+    noteId : Common.EntityId,
+    tenantId : Common.TenantId,
+    workspaceId : Common.WorkspaceId,
+  ) : ?Types.NoteLastEdit {
+    let m : Map.Map<Text, Types.NoteLastEditEntry> = Map.fromArray(lastEditStore);
+    switch (m.get(noteId)) {
+      case (?e) {
+        if (e.tenantId == tenantId and e.workspaceId == workspaceId) {
+          ?{ userId = e.userId; displayName = e.displayName; editedAt = e.editedAt }
+        } else null
+      };
+      case null null;
+    }
   };
 };

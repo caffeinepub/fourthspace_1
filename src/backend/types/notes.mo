@@ -13,6 +13,12 @@ module {
     crossLinks : [C.CrossLink];
     createdAt : C.Timestamp;
     updatedAt : C.Timestamp;
+    // Presence/edit tracking fields
+    lastEditedBy : ?C.UserId;
+    lastEditedAt : ?C.Timestamp;
+    // Cover and icon customisation
+    coverGradient : ?Text;
+    iconEmoji : ?Text;
   };
 
   public type NoteInput = {
@@ -20,6 +26,8 @@ module {
     content : Text;
     tags : [Text];
     crossLinks : [C.CrossLink];
+    coverGradient : ?Text;
+    iconEmoji : ?Text;
   };
 
   // ── Block system (flat list approach — avoids recursive type limitation) ─
@@ -91,5 +99,39 @@ module {
     sourcePageTitle : Text;
     targetPageId : C.EntityId;
     createdAt : C.Timestamp;
+  };
+
+  // ── Presence tracking ────────────────────────────────────────────────────
+  // Stored in a separate stable var keyed by "noteId:userId"
+  public type NoteEditorPresence = {
+    userId : C.UserId;
+    displayName : Text;
+    lastSeen : Int;
+  };
+
+  public type NoteLastEdit = {
+    userId : C.UserId;
+    displayName : Text;
+    editedAt : Int;
+  };
+
+  // Internal record for the presence store (includes noteId + workspaceId for filtering)
+  public type NotePresenceEntry = {
+    noteId : C.EntityId;
+    tenantId : C.TenantId;
+    workspaceId : C.WorkspaceId;
+    userId : C.UserId;
+    displayName : Text;
+    lastSeen : Int;
+  };
+
+  // Internal record for last-edit store
+  public type NoteLastEditEntry = {
+    noteId : C.EntityId;
+    tenantId : C.TenantId;
+    workspaceId : C.WorkspaceId;
+    userId : C.UserId;
+    displayName : Text;
+    editedAt : Int;
   };
 };

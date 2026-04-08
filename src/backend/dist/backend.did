@@ -683,20 +683,38 @@ type NoteTemplate =
    tenantId: TenantId;
    workspaceId: WorkspaceId;
  };
+type NoteLastEdit = 
+ record {
+   displayName: text;
+   editedAt: int;
+   userId: UserId;
+ };
 type NoteInput = 
  record {
    content: text;
+   coverGradient: opt text;
    crossLinks: vec CrossLink;
+   iconEmoji: opt text;
    tags: vec text;
    title: text;
+ };
+type NoteEditorPresence = 
+ record {
+   displayName: text;
+   lastSeen: int;
+   userId: UserId;
  };
 type Note = 
  record {
    authorId: UserId;
    content: text;
+   coverGradient: opt text;
    createdAt: Timestamp;
    crossLinks: vec CrossLink;
+   iconEmoji: opt text;
    id: EntityId;
+   lastEditedAt: opt Timestamp;
+   lastEditedBy: opt UserId;
    tags: vec text;
    tenantId: TenantId;
    title: text;
@@ -1699,6 +1717,7 @@ service : {
                           err: text;
                           ok: Contractor;
                         });
+  /// Add a contractor payment — requires sufficient treasury balance.
   addContractorPayment: (tenantId: TenantId, workspaceId: WorkspaceId, input:
    ContractorPaymentInput) -> (variant {
                                  err: text;
@@ -1731,6 +1750,7 @@ service : {
                          err: text;
                          ok: KeyResult;
                        });
+  /// Add an off-cycle payment — requires sufficient treasury balance if processImmediately.
   addOffCyclePayment: (tenantId: TenantId, workspaceId: WorkspaceId, input:
    OffCyclePaymentInput) -> (variant {
                                err: text;
@@ -1788,6 +1808,7 @@ service : {
                                        err: text;
                                        ok: EscrowDispute;
                                      });
+  /// Bulk approve payroll records — sums all amounts and checks treasury balance once BEFORE approving.
   bulkApprovePayroll: (tenantId: TenantId, workspaceId: WorkspaceId,
    recordIds: vec EntityId) -> (variant {
                                   err: text;
@@ -1832,6 +1853,8 @@ service : {
                        err: text;
                        ok: Channel;
                      });
+  /// Create an escrow — requires the caller (payer) to have sufficient treasury balance.
+  /// Queries the live ICP/ckBTC ledger balance BEFORE creating the record.
   createEscrow: (tenantId: TenantId, workspaceId: WorkspaceId, input:
    EscrowInput) -> (variant {
                       err: text;
@@ -1877,6 +1900,11 @@ service : {
                             err: text;
                             ok: NoteTemplate;
                           });
+  createOrGetDMChannel: (tenantId: TenantId, workspaceId: WorkspaceId,
+   targetUserId: UserId) -> (variant {
+                               err: text;
+                               ok: Channel;
+                             });
   createPage: (tenantId: TenantId, workspaceId: WorkspaceId, input:
    PageInput) -> (variant {
                     err: text;
@@ -2172,6 +2200,8 @@ service : {
    integrationId: EntityId, limit: nat) -> (vec IntegrationEvent) query;
   getIntegrations: (tenantId: TenantId, workspaceId: WorkspaceId) ->
    (vec Integration) query;
+  getLastNoteEdit: (tenantId: TenantId, workspaceId: WorkspaceId, noteId:
+   EntityId) -> (opt NoteLastEdit) query;
   getMessages: (tenantId: TenantId, workspaceId: WorkspaceId, channelId:
    EntityId, limit: nat, before: opt Timestamp) -> (vec Message) query;
   getMyProfile: (tenantId: TenantId) -> (opt UserProfile) query;
@@ -2184,6 +2214,8 @@ service : {
       err: text;
       ok: Note;
     }) query;
+  getNoteActiveEditors: (tenantId: TenantId, workspaceId: WorkspaceId,
+   noteId: EntityId) -> (vec NoteEditorPresence) query;
   getOrCreateWorkspaceShareToken: (workspaceId: WorkspaceId, tenantId:
    TenantId) -> (text);
   getPage: (tenantId: TenantId, workspaceId: WorkspaceId, pageId:
@@ -2404,6 +2436,8 @@ service : {
    (vec Whiteboard) query;
   listWorkspaceMembers: (tenantId: TenantId, workspaceId: EntityId) ->
    (vec WorkspaceMember) query;
+  listWorkspaceStatuses: (tenantId: TenantId, workspaceId: WorkspaceId) ->
+   (vec UserStatus) query;
   listWorkspaces: (tenantId: TenantId) -> (vec Workspace) query;
   markChannelRead: (tenantId: TenantId, workspaceId: WorkspaceId, channelId:
    EntityId) -> (variant {
@@ -2421,6 +2455,7 @@ service : {
                               err: text;
                               ok: IntegrationEvent;
                             });
+  /// Process payroll for one employee — requires sufficient treasury balance.
   processPayroll: (tenantId: TenantId, workspaceId: WorkspaceId, employeeId:
    EntityId, period: text) -> (variant {
                                  err: text;
@@ -2437,6 +2472,14 @@ service : {
                        err: text;
                        ok: GoalCheckIn;
                      });
+  /// Refund a funded or disputed escrow back to the payer via the real ICP ledger.
+  /// State-before-transfer: escrow is cancelled in state BEFORE the async ledger call.
+  /// If the ledger transfer fails, escrow state is already cancelled — caller must retry or resolve manually.
+  refundEscrow: (tenantId: TenantId, workspaceId: WorkspaceId, id:
+   EntityId) -> (variant {
+                   err: text;
+                   ok: EscrowContract;
+                 });
   regenerateWorkspaceShareToken: (workspaceId: WorkspaceId, tenantId:
    TenantId) -> (text);
   rejectPayrollRecord: (tenantId: TenantId, workspaceId: WorkspaceId,
@@ -2658,12 +2701,19 @@ service : {
                            err: text;
                            ok: Note;
                          });
+  updateNotePresence: (tenantId: TenantId, workspaceId: WorkspaceId, noteId:
+   EntityId, displayName: text) -> ();
   updatePage: (tenantId: TenantId, workspaceId: WorkspaceId, pageId:
    EntityId, title: text, icon: text, coverUrl: opt text, blocks:
    vec Block) -> (variant {
                     err: text;
                     ok: PageNode;
                   });
+  updatePresence: (tenantId: TenantId, workspaceId: WorkspaceId) ->
+   (variant {
+      err: text;
+      ok: UserStatus;
+    });
   updateProject: (tenantId: TenantId, workspaceId: WorkspaceId, id: EntityId,
    input: ProjectInput) -> (variant {
                               err: text;
@@ -2686,6 +2736,11 @@ service : {
                            err: text;
                            ok: Task;
                          });
+  updateTaskStatus: (tenantId: TenantId, workspaceId: WorkspaceId, id:
+   EntityId, status: TaskStatus) -> (variant {
+                                       err: text;
+                                       ok: Task;
+                                     });
   updateTimeEntry: (tenantId: TenantId, workspaceId: WorkspaceId, id:
    EntityId, input: TimeEntryInput) -> (variant {
                                           err: text;

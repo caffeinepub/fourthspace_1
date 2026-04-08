@@ -1,5 +1,13 @@
-import { ChevronRight, GripVertical } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import {
+  Bold,
+  ChevronRight,
+  Code,
+  GripVertical,
+  Italic,
+  Link as LinkIcon,
+  Strikethrough,
+} from "lucide-react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { Block } from "../../types";
 import type { BlockType } from "../../types";
 
@@ -17,6 +25,79 @@ function makeBlock(type: BlockType, order: number): Block {
     metadata: "",
     order: BigInt(order),
   };
+}
+
+// ── Markdown Shortcuts ──────────────────────────────────────────────────────
+
+function applyMarkdownShortcut(
+  value: string,
+): { type: BlockType; content: string } | null {
+  if (value === "* " || value === "- ")
+    return { type: "bulletList", content: "" };
+  if (value === "## ") return { type: "heading2", content: "" };
+  if (value === "### ") return { type: "heading3", content: "" };
+  if (value === "# ") return { type: "heading1", content: "" };
+  if (value === "> ") return { type: "quote", content: "" };
+  if (value === "``` ") return { type: "code", content: "" };
+  return null;
+}
+
+// ── Floating Formatting Toolbar ────────────────────────────────────────────
+
+interface FormattingToolbarProps {
+  position: { top: number; left: number };
+  onFormat: (
+    format: "bold" | "italic" | "strikethrough" | "code" | "link",
+  ) => void;
+}
+
+function FormattingToolbar({ position, onFormat }: FormattingToolbarProps) {
+  return (
+    <div
+      className="fixed z-50 flex items-center gap-0.5 rounded-lg border border-border bg-popover shadow-xl px-1 py-1"
+      style={{ top: position.top - 44, left: Math.max(8, position.left) }}
+      onMouseDown={(e) => e.preventDefault()}
+    >
+      {[
+        {
+          key: "bold" as const,
+          icon: <Bold className="h-3.5 w-3.5" />,
+          label: "Bold",
+        },
+        {
+          key: "italic" as const,
+          icon: <Italic className="h-3.5 w-3.5" />,
+          label: "Italic",
+        },
+        {
+          key: "strikethrough" as const,
+          icon: <Strikethrough className="h-3.5 w-3.5" />,
+          label: "Strikethrough",
+        },
+        {
+          key: "code" as const,
+          icon: <Code className="h-3.5 w-3.5" />,
+          label: "Inline code",
+        },
+        {
+          key: "link" as const,
+          icon: <LinkIcon className="h-3.5 w-3.5" />,
+          label: "Link",
+        },
+      ].map(({ key, icon, label }) => (
+        <button
+          key={key}
+          type="button"
+          aria-label={label}
+          title={label}
+          onClick={() => onFormat(key)}
+          className="h-7 w-7 flex items-center justify-center rounded-md text-foreground hover:bg-primary/10 hover:text-primary transition-colors duration-150"
+        >
+          {icon}
+        </button>
+      ))}
+    </div>
+  );
 }
 
 // ── Slash Menu ──────────────────────────────────────────────────────────────
@@ -126,9 +207,7 @@ function SlashCommandMenu({
         e.preventDefault();
         if (filtered[activeIdx]) onSelect(filtered[activeIdx].type);
       }
-      if (e.key === "Escape") {
-        onClose();
-      }
+      if (e.key === "Escape") onClose();
     }
     document.addEventListener("keydown", handler, true);
     return () => document.removeEventListener("keydown", handler, true);
@@ -155,11 +234,7 @@ function SlashCommandMenu({
               e.preventDefault();
               onSelect(opt.type);
             }}
-            className={`w-full flex items-center gap-3 px-3 py-2 text-left transition-colors duration-150 ${
-              idx === activeIdx
-                ? "bg-primary/10 text-primary"
-                : "hover:bg-muted text-foreground"
-            }`}
+            className={`w-full flex items-center gap-3 px-3 py-2 text-left transition-colors duration-150 ${idx === activeIdx ? "bg-primary/10 text-primary" : "hover:bg-muted text-foreground"}`}
           >
             <span className="w-8 h-8 rounded-md bg-muted flex items-center justify-center text-sm font-mono shrink-0 text-foreground">
               {opt.icon}
@@ -179,6 +254,38 @@ function SlashCommandMenu({
 
 // ── Single Block ─────────────────────────────────────────────────────────────
 
+const TYPE_TO_CLASS: Record<BlockType, string> = {
+  paragraph: "text-base text-foreground leading-relaxed",
+  heading1: "text-3xl font-bold text-foreground mt-4 mb-1 font-display",
+  heading2: "text-2xl font-semibold text-foreground mt-3 mb-0.5 font-display",
+  heading3: "text-xl font-medium text-foreground mt-2 font-display",
+  bulletList:
+    "text-base text-foreground before:content-['•'] before:mr-2 before:text-primary pl-5",
+  numberedList: "text-base text-foreground pl-5 list-decimal",
+  toggle: "text-base font-medium text-foreground",
+  callout: "text-sm text-foreground",
+  code: "text-sm font-mono text-foreground",
+  divider: "",
+  quote: "italic text-muted-foreground text-base",
+  table: "text-sm text-foreground",
+  image: "text-sm text-muted-foreground",
+};
+
+function renderFormattedContent(raw: string): string {
+  return raw
+    .replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>")
+    .replace(/\*(.+?)\*/g, "<em>$1</em>")
+    .replace(/~~(.+?)~~/g, "<s>$1</s>")
+    .replace(
+      /`(.+?)`/g,
+      '<code class="bg-muted px-1 rounded text-xs font-mono">$1</code>',
+    )
+    .replace(
+      /\[(.+?)\]\((.+?)\)/g,
+      '<a href="$2" class="text-primary underline underline-offset-2 hover:text-primary/80" target="_blank" rel="noopener noreferrer">$1</a>',
+    );
+}
+
 function BlockRow({
   block,
   index,
@@ -188,6 +295,7 @@ function BlockRow({
   onContentChange,
   onKeyDown,
   onTypeChange: _onTypeChange,
+  onApplyFormat: _onApplyFormat,
 }: {
   block: Block;
   index: number;
@@ -201,18 +309,28 @@ function BlockRow({
     index: number,
   ) => void;
   onTypeChange: (id: string, type: BlockType) => void;
+  onApplyFormat: (
+    id: string,
+    format: "bold" | "italic" | "strikethrough" | "code" | "link",
+  ) => void;
 }) {
   const [open, setOpen] = useState(false);
   const divRef = useRef<HTMLDivElement>(null);
+  const renderedRef = useRef<HTMLDivElement>(null);
 
-  // Sync content from external changes
+  // Sync contenteditable with external content
   useEffect(() => {
     const el = divRef.current;
     if (!el || document.activeElement === el) return;
-    if (el.textContent !== block.content) {
-      el.textContent = block.content;
-    }
+    if (el.textContent !== block.content) el.textContent = block.content;
   }, [block.content]);
+
+  // Sync read-only rendered content
+  useEffect(() => {
+    if (readOnly && renderedRef.current) {
+      renderedRef.current.innerHTML = renderFormattedContent(block.content);
+    }
+  }, [readOnly, block.content]);
 
   const handleInput = (e: React.FormEvent<HTMLDivElement>) => {
     onContentChange(block.id, e.currentTarget.textContent ?? "");
@@ -230,10 +348,7 @@ function BlockRow({
     className: "outline-none min-h-[1.5em] break-words",
   };
 
-  const wrapClass = `group relative flex items-start gap-1 rounded-sm px-2 py-0.5 transition-colors ${
-    isActive ? "bg-primary/5" : "hover:bg-muted/50"
-  }`;
-
+  const wrapClass = `group relative flex items-start gap-1 rounded-sm px-2 py-0.5 transition-colors ${isActive ? "bg-primary/5" : "hover:bg-muted/50"}`;
   const DragHandle = () => (
     <span
       className="opacity-0 group-hover:opacity-40 cursor-grab active:cursor-grabbing shrink-0 mt-1 text-muted-foreground transition-opacity duration-150"
@@ -242,6 +357,8 @@ function BlockRow({
       <GripVertical className="h-4 w-4" />
     </span>
   );
+
+  const typeClass = TYPE_TO_CLASS[block.blockType];
 
   if (block.blockType === "divider") {
     return (
@@ -310,21 +427,6 @@ function BlockRow({
             <span className="text-xs text-muted-foreground font-mono">
               {lang}
             </span>
-            <button
-              type="button"
-              onClick={() => {
-                const newLang = prompt(
-                  "Language (e.g. javascript, python):",
-                  lang,
-                );
-                if (newLang !== null) {
-                  // metadata update via onTypeChange hack — store in block
-                }
-              }}
-              className="text-xs text-muted-foreground hover:text-foreground transition-colors"
-            >
-              Change language
-            </button>
           </div>
           <div
             {...baseProps}
@@ -385,30 +487,61 @@ function BlockRow({
     );
   }
 
-  const typeToClass: Record<BlockType, string> = {
-    paragraph: "text-base text-foreground leading-relaxed",
-    heading1: "text-3xl font-bold text-foreground mt-4 mb-1 font-display",
-    heading2: "text-2xl font-semibold text-foreground mt-3 mb-0.5 font-display",
-    heading3: "text-xl font-medium text-foreground mt-2 font-display",
-    bulletList:
-      "text-base text-foreground before:content-['•'] before:mr-2 before:text-primary pl-5",
-    numberedList: "text-base text-foreground pl-5 list-decimal",
-    toggle: "text-base font-medium text-foreground",
-    callout: "text-sm text-foreground",
-    code: "text-sm font-mono text-foreground",
-    divider: "",
-    quote: "italic text-muted-foreground text-base",
-    table: "text-sm text-foreground",
-    image: "text-sm text-muted-foreground",
-  };
+  if (readOnly && block.content) {
+    return (
+      <div className={wrapClass}>
+        <DragHandle />
+        <div
+          ref={renderedRef}
+          className={`flex-1 ${typeClass} min-h-[1.5em] break-words`}
+        />
+      </div>
+    );
+  }
 
   return (
     <div className={wrapClass}>
       <DragHandle />
       <div
         {...baseProps}
-        className={`flex-1 ${typeToClass[block.blockType]} ${baseProps.className} empty:before:content-[attr(data-placeholder)] empty:before:text-muted-foreground/50 empty:before:pointer-events-none`}
+        className={`flex-1 ${typeClass} ${baseProps.className} empty:before:content-[attr(data-placeholder)] empty:before:text-muted-foreground/50 empty:before:pointer-events-none`}
       />
+    </div>
+  );
+}
+
+// ── Table of Contents ─────────────────────────────────────────────────────────
+
+interface TocEntry {
+  id: string;
+  level: 1 | 2 | 3;
+  text: string;
+}
+
+function TableOfContents({
+  entries,
+  onNavigate,
+}: { entries: TocEntry[]; onNavigate: (id: string) => void }) {
+  if (entries.length < 3) return null;
+  return (
+    <div className="hidden lg:block w-48 xl:w-56 shrink-0">
+      <div className="sticky top-4 rounded-xl border border-border/60 bg-card/60 p-3">
+        <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">
+          On this page
+        </p>
+        <nav className="space-y-0.5">
+          {entries.map((e) => (
+            <button
+              key={e.id}
+              type="button"
+              onClick={() => onNavigate(e.id)}
+              className={`w-full text-left text-xs py-0.5 hover:text-primary transition-colors duration-150 truncate ${e.level === 1 ? "text-foreground font-medium" : e.level === 2 ? "pl-3 text-muted-foreground" : "pl-5 text-muted-foreground/80"}`}
+            >
+              {e.text || `Heading ${e.level}`}
+            </button>
+          ))}
+        </nav>
+      </div>
     </div>
   );
 }
@@ -435,12 +568,13 @@ export function BlockEditor({
     query: string;
     position: { top: number; left: number };
   } | null>(null);
+  const [formattingToolbar, setFormattingToolbar] = useState<{
+    position: { top: number; left: number };
+    blockId: string;
+  } | null>(null);
 
-  // Sync incoming blocks from parent (e.g., after load)
   useEffect(() => {
-    if (initialBlocks.length > 0) {
-      setBlocks(initialBlocks);
-    }
+    if (initialBlocks.length > 0) setBlocks(initialBlocks);
   }, [initialBlocks]);
 
   const update = (next: Block[]) => {
@@ -448,10 +582,58 @@ export function BlockEditor({
     onChange(next);
   };
 
+  // Table of contents derived from heading blocks
+  const tocEntries: TocEntry[] = blocks
+    .filter(
+      (b) =>
+        b.blockType === "heading1" ||
+        b.blockType === "heading2" ||
+        b.blockType === "heading3",
+    )
+    .map((b) => ({
+      id: b.id,
+      level: (b.blockType === "heading1"
+        ? 1
+        : b.blockType === "heading2"
+          ? 2
+          : 3) as 1 | 2 | 3,
+      text: b.content,
+    }));
+
+  const navigateToBlock = useCallback((blockId: string) => {
+    const el = document.querySelector(
+      `[data-block-id="${blockId}"]`,
+    ) as HTMLElement | null;
+    el?.scrollIntoView({ behavior: "smooth", block: "center" });
+  }, []);
+
   const handleContentChange = (id: string, value: string) => {
     const next = blocks.map((b) =>
       b.id === id ? { ...b, content: value } : b,
     );
+
+    // Markdown shortcut detection
+    const shortcut = applyMarkdownShortcut(value);
+    if (shortcut) {
+      const converted = next.map((b) =>
+        b.id === id
+          ? { ...b, blockType: shortcut.type, content: shortcut.content }
+          : b,
+      );
+      setSlashMenu(null);
+      update(converted);
+      setTimeout(() => {
+        const el = document.querySelector(
+          `[data-block-id="${id}"]`,
+        ) as HTMLElement | null;
+        if (el) {
+          el.textContent = "";
+          el.focus();
+        }
+      }, 0);
+      return;
+    }
+
     // Slash command detection
     if (value.startsWith("/")) {
       const query = value.slice(1);
@@ -485,12 +667,85 @@ export function BlockEditor({
     handleTypeChange(slashMenu.blockId, type);
   };
 
+  // Text selection → formatting toolbar
+  const handleSelectionChange = useCallback(() => {
+    if (readOnly) return;
+    const sel = window.getSelection();
+    if (!sel || sel.isCollapsed || !sel.toString().trim()) {
+      setFormattingToolbar(null);
+      return;
+    }
+    // Only show if selection is inside a block
+    const range = sel.getRangeAt(0);
+    const container = range.commonAncestorContainer;
+    const blockEl = (
+      container instanceof Element ? container : container.parentElement
+    )?.closest("[data-block-id]");
+    if (!blockEl) {
+      setFormattingToolbar(null);
+      return;
+    }
+    const blockId = blockEl.getAttribute("data-block-id") ?? "";
+    const rect = range.getBoundingClientRect();
+    setFormattingToolbar({
+      position: {
+        top: rect.top + window.scrollY,
+        left: rect.left + rect.width / 2 - 100,
+      },
+      blockId,
+    });
+  }, [readOnly]);
+
+  useEffect(() => {
+    document.addEventListener("selectionchange", handleSelectionChange);
+    return () =>
+      document.removeEventListener("selectionchange", handleSelectionChange);
+  }, [handleSelectionChange]);
+
+  const applyFormat = (
+    blockId: string,
+    format: "bold" | "italic" | "strikethrough" | "code" | "link",
+  ) => {
+    const sel = window.getSelection();
+    if (!sel || sel.isCollapsed) return;
+    const selectedText = sel.toString();
+    if (!selectedText) return;
+
+    let wrapped = "";
+    if (format === "bold") wrapped = `**${selectedText}**`;
+    else if (format === "italic") wrapped = `*${selectedText}*`;
+    else if (format === "strikethrough") wrapped = `~~${selectedText}~~`;
+    else if (format === "code") wrapped = `\`${selectedText}\``;
+    else if (format === "link") {
+      const url = prompt("Enter URL:", "https://");
+      if (!url) return;
+      wrapped = `[${selectedText}](${url})`;
+    }
+
+    const block = blocks.find((b) => b.id === blockId);
+    if (!block) return;
+    const newContent = block.content.replace(selectedText, wrapped);
+    const next = blocks.map((b) =>
+      b.id === blockId ? { ...b, content: newContent } : b,
+    );
+    update(next);
+    setFormattingToolbar(null);
+
+    // Sync the DOM element
+    setTimeout(() => {
+      const el = document.querySelector(
+        `[data-block-id="${blockId}"]`,
+      ) as HTMLElement | null;
+      if (el && document.activeElement !== el) el.textContent = newContent;
+    }, 0);
+  };
+
   const handleKeyDown = (
     e: React.KeyboardEvent<HTMLDivElement>,
     id: string,
     index: number,
   ) => {
-    if (slashMenu) return; // let slash menu handle keys
+    if (slashMenu) return;
 
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
@@ -503,7 +758,6 @@ export function BlockEditor({
           .map((b) => ({ ...b, order: b.order + BigInt(1) })),
       ];
       update(next);
-      // Focus new block after render
       setTimeout(() => {
         const el = document.querySelector(
           `[data-block-id="${newBlock.id}"]`,
@@ -520,7 +774,6 @@ export function BlockEditor({
       e.preventDefault();
       const next = blocks.filter((b) => b.id !== id);
       update(next);
-      // Focus previous
       setTimeout(() => {
         if (index > 0) {
           const prevId = blocks[index - 1]?.id;
@@ -528,7 +781,6 @@ export function BlockEditor({
             `[data-block-id="${prevId}"]`,
           ) as HTMLElement | null;
           el?.focus();
-          // move cursor to end
           const range = document.createRange();
           const sel = window.getSelection();
           if (el && sel) {
@@ -543,32 +795,44 @@ export function BlockEditor({
   };
 
   return (
-    <div className="relative w-full">
-      <div className="space-y-0.5">
-        {blocks.map((block, index) => (
-          <div key={block.id} data-block-id={block.id}>
-            <BlockRow
-              block={block}
-              index={index}
-              isActive={activeId === block.id}
-              readOnly={readOnly}
-              onFocus={() => setActiveId(block.id)}
-              onContentChange={handleContentChange}
-              onKeyDown={handleKeyDown}
-              onTypeChange={handleTypeChange}
-            />
-          </div>
-        ))}
+    <div className="flex gap-6 w-full">
+      <div className="flex-1 min-w-0 relative">
+        <div className="space-y-0.5">
+          {blocks.map((block, index) => (
+            <div key={block.id} data-block-id={block.id}>
+              <BlockRow
+                block={block}
+                index={index}
+                isActive={activeId === block.id}
+                readOnly={readOnly}
+                onFocus={() => setActiveId(block.id)}
+                onContentChange={handleContentChange}
+                onKeyDown={handleKeyDown}
+                onTypeChange={handleTypeChange}
+                onApplyFormat={applyFormat}
+              />
+            </div>
+          ))}
+        </div>
+
+        {slashMenu && !readOnly && (
+          <SlashCommandMenu
+            query={slashMenu.query}
+            position={slashMenu.position}
+            onSelect={insertSlashBlock}
+            onClose={() => setSlashMenu(null)}
+          />
+        )}
+
+        {formattingToolbar && !readOnly && (
+          <FormattingToolbar
+            position={formattingToolbar.position}
+            onFormat={(fmt) => applyFormat(formattingToolbar.blockId, fmt)}
+          />
+        )}
       </div>
 
-      {slashMenu && !readOnly && (
-        <SlashCommandMenu
-          query={slashMenu.query}
-          position={slashMenu.position}
-          onSelect={insertSlashBlock}
-          onClose={() => setSlashMenu(null)}
-        />
-      )}
+      <TableOfContents entries={tocEntries} onNavigate={navigateToBlock} />
     </div>
   );
 }

@@ -10,15 +10,25 @@ import {
 import { Skeleton } from "@/components/ui/skeleton";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
+import { useInternetIdentity } from "@caffeineai/core-infrastructure";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useNavigate, useParams } from "@tanstack/react-router";
-import { Globe, Hash, Lock, Plus, Search, Users, X } from "lucide-react";
+import {
+  Globe,
+  Hash,
+  Lock,
+  MessageCircle,
+  Plus,
+  Search,
+  Users,
+  X,
+} from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { Variant_away_offline_online } from "../../backend";
 import { useBackend } from "../../hooks/useBackend";
 import { getTenantId } from "../../hooks/useWorkspace";
-import type { Channel, ChannelInput } from "../../types";
+import type { Channel, ChannelInput, WorkspaceMember } from "../../types";
 
 // ---- Presence helpers ----
 type StatusKind = "online" | "away" | "offline";
@@ -209,7 +219,7 @@ function ChannelCard({
           </span>
           {unreadCount != null && unreadCount > 0 && (
             <span
-              className="inline-flex items-center justify-center min-w-[1.25rem] h-4.5 px-1.5 rounded-full bg-destructive text-destructive-foreground text-[10px] font-bold"
+              className="inline-flex items-center justify-center min-w-[1.25rem] h-5 px-1.5 rounded-full bg-destructive text-destructive-foreground text-[10px] font-bold"
               aria-label={`${unreadCount} unread`}
               data-ocid={`channel-unread-${channel.id}`}
             >
@@ -231,6 +241,60 @@ function ChannelCard({
         </Button>
       )}
     </div>
+  );
+}
+
+// ---- DM Row ----
+function DMRow({
+  member,
+  statusMap,
+  unreadCount,
+  onOpen,
+  isOpening,
+}: {
+  member: WorkspaceMember;
+  statusMap: Map<string, StatusKind>;
+  unreadCount: number;
+  onOpen: (userId: string) => void;
+  isOpening: boolean;
+}) {
+  const userId = member.userId.toString();
+  const status = statusMap.get(userId) ?? "offline";
+  const initials = member.displayName
+    ? member.displayName.slice(0, 2).toUpperCase()
+    : userId.slice(0, 2).toUpperCase();
+
+  return (
+    <button
+      type="button"
+      onClick={() => onOpen(userId)}
+      disabled={isOpening}
+      data-ocid={`dm-row-${userId}`}
+      className="flex w-full items-center gap-3 rounded-xl border border-border/50 bg-card px-3.5 py-3 transition-smooth hover:shadow-sm hover:border-teal-300/40 dark:hover:border-teal-700/40 group text-left min-w-0 card-interactive"
+    >
+      <div className="relative shrink-0">
+        <div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary/10 text-xs font-bold text-primary">
+          {initials}
+        </div>
+        <span className="absolute -bottom-0.5 -right-0.5">
+          <PresenceDot status={status} />
+        </span>
+      </div>
+      <div className="flex-1 min-w-0">
+        <p className="text-sm font-semibold text-foreground truncate group-hover:text-teal-600 dark:group-hover:text-teal-400 transition-colors">
+          {member.displayName || `${userId.slice(0, 10)}…`}
+        </p>
+        <p className="text-xs text-muted-foreground capitalize">{status}</p>
+      </div>
+      {unreadCount > 0 && (
+        <span
+          className="inline-flex items-center justify-center min-w-[1.25rem] h-5 px-1.5 rounded-full bg-destructive text-destructive-foreground text-[10px] font-bold shrink-0"
+          data-ocid={`dm-unread-${userId}`}
+        >
+          {unreadCount > 99 ? "99+" : unreadCount}
+        </span>
+      )}
+    </button>
   );
 }
 
@@ -376,10 +440,14 @@ function CreateChannelForm({
 
 // ---- Main ChatPage ----
 const IDLE_TIMEOUT_MS = 5 * 60 * 1000;
+const PRESENCE_PING_MS = 30_000;
+const STATUS_POLL_MS = 10_000;
+const UNREAD_POLL_MS = 10_000;
 
 export default function ChatPage() {
   const { workspaceId } = useParams({ from: "/app/$workspaceId/chat" });
   const { actor, isFetching } = useBackend();
+  const { identity } = useInternetIdentity();
   const tenantId = getTenantId();
   const queryClient = useQueryClient();
   const navigate = useNavigate();
@@ -387,6 +455,7 @@ export default function ChatPage() {
   const [localStatus, setLocalStatus] = useState<StatusKind>("online");
   const [localCustom, setLocalCustom] = useState("");
   const idleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const presencePingRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   // ---- Set status mutation ----
   const statusMutation = useMutation({
@@ -416,13 +485,24 @@ export default function ChatPage() {
     },
   });
 
-  // ---- Set online on mount ----
+  // ---- Set online on mount + presence ping every 30s ----
   useEffect(() => {
     if (!actor || isFetching) return;
     const mutate = statusMutation.mutate;
     mutate({ status: "online", custom: "" });
+
+    // Presence ping - updatePresence keeps us marked as online in the backend
+    const pingInterval = setInterval(() => {
+      if (!actor) return;
+      actor.updatePresence(tenantId, workspaceId).catch(() => {});
+    }, PRESENCE_PING_MS);
+    presencePingRef.current = pingInterval;
+
+    return () => {
+      clearInterval(pingInterval);
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [actor, isFetching, statusMutation.mutate]);
+  }, [actor, isFetching, tenantId, workspaceId, statusMutation.mutate]);
 
   // ---- Idle detection (5 min -> away) ----
   const resetIdleTimer = useCallback(() => {
@@ -460,6 +540,34 @@ export default function ChatPage() {
     enabled: !!actor && !isFetching,
   });
 
+  // ---- Workspace members (for DMs) ----
+  const { data: members } = useQuery<WorkspaceMember[]>({
+    queryKey: ["members", tenantId, workspaceId],
+    queryFn: async () => {
+      if (!actor) return [];
+      return actor.listWorkspaceMembers(tenantId, workspaceId);
+    },
+    enabled: !!actor && !isFetching,
+  });
+
+  // ---- Workspace statuses (online presence) ----
+  const { data: statusList } = useQuery({
+    queryKey: ["workspaceStatuses", tenantId, workspaceId],
+    queryFn: async () => {
+      if (!actor) return [];
+      return actor.listWorkspaceStatuses(tenantId, workspaceId);
+    },
+    enabled: !!actor && !isFetching,
+    refetchInterval: STATUS_POLL_MS,
+  });
+
+  const statusMap = new Map<string, StatusKind>();
+  if (statusList) {
+    for (const s of statusList) {
+      statusMap.set(s.id.toString(), s.status as StatusKind);
+    }
+  }
+
   // ---- Unread counts query ----
   const { data: unreadRaw } = useQuery<Array<[string, bigint]>>({
     queryKey: ["unreadCounts", tenantId, workspaceId],
@@ -468,7 +576,7 @@ export default function ChatPage() {
       return actor.getUnreadCounts(tenantId, workspaceId);
     },
     enabled: !!actor && !isFetching,
-    refetchInterval: 30_000,
+    refetchInterval: UNREAD_POLL_MS,
   });
 
   const unreadMap = new Map<string, number>();
@@ -487,6 +595,27 @@ export default function ChatPage() {
     }
   }
 
+  // Build a map from member userId -> DM channel id so DMRow can look up unread counts.
+  // DM channels have deterministic names: "dm:<principalA>:<principalB>" (sorted).
+  const myPrincipalText = identity?.getPrincipal().toText() ?? "";
+  const dmChannelByUserId = new Map<string, string>();
+  if (channels && myPrincipalText) {
+    for (const ch of channels) {
+      if (ch.name.startsWith("dm:")) {
+        // Channel name format: "dm:principalA:principalB"
+        const parts = ch.name.split(":");
+        // parts[0] = "dm", parts[1] = principalA, parts[2] = principalB
+        const pA = parts[1];
+        const pB = parts[2];
+        if (pA && pB) {
+          // The other participant is whichever is not our principal
+          const other = pA === myPrincipalText ? pB : pA;
+          dmChannelByUserId.set(other, ch.id);
+        }
+      }
+    }
+  }
+
   // ---- Join mutation ----
   const joinMutation = useMutation({
     mutationFn: async (channelId: string) => {
@@ -495,12 +624,37 @@ export default function ChatPage() {
       if (result.__kind__ === "err") throw new Error(result.err);
       return result.ok;
     },
-    onSuccess: (_, channelId) => {
+    onSuccess: () => {
       queryClient.invalidateQueries({
         queryKey: ["channels", tenantId, workspaceId],
       });
       toast.success("Joined channel");
-      void channelId;
+    },
+    onError: (err: Error) => toast.error(err.message),
+  });
+
+  // ---- Open DM mutation ----
+  const openDMMutation = useMutation({
+    mutationFn: async (targetUserId: string) => {
+      if (!actor) throw new Error("Not connected");
+      // Import Principal lazily — userId is already a string principal
+      const { Principal } = await import("@icp-sdk/core/principal");
+      const result = await actor.createOrGetDMChannel(
+        tenantId,
+        workspaceId,
+        Principal.fromText(targetUserId),
+      );
+      if (result.__kind__ === "err") throw new Error(result.err);
+      return result.ok;
+    },
+    onSuccess: (channel) => {
+      queryClient.invalidateQueries({
+        queryKey: ["channels", tenantId, workspaceId],
+      });
+      void navigate({
+        to: "/app/$workspaceId/chat/$channelId",
+        params: { workspaceId, channelId: channel.id },
+      });
     },
     onError: (err: Error) => toast.error(err.message),
   });
@@ -533,7 +687,10 @@ export default function ChatPage() {
                 Chat
               </h1>
               {totalUnread > 0 && (
-                <span className="inline-flex items-center justify-center min-w-[1.25rem] h-5 px-1.5 rounded-full bg-destructive text-destructive-foreground text-[10px] font-bold">
+                <span
+                  className="inline-flex items-center justify-center min-w-[1.25rem] h-5 px-1.5 rounded-full bg-destructive text-destructive-foreground text-[10px] font-bold"
+                  data-ocid="chat-total-unread"
+                >
                   {totalUnread > 99 ? "99+" : totalUnread}
                 </span>
               )}
@@ -669,6 +826,39 @@ export default function ChatPage() {
             <Plus className="h-3.5 w-3.5" /> Create first channel
           </Button>
         </div>
+      )}
+
+      {/* Direct Messages section */}
+      {members && members.length > 1 && (
+        <section data-ocid="dm-section">
+          <div className="flex items-center gap-2 mb-2.5">
+            <MessageCircle className="h-3 w-3 text-primary" />
+            <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+              Direct Messages
+            </span>
+            <span className="ml-auto text-xs text-muted-foreground">
+              {members.length - 1}
+            </span>
+          </div>
+          <div className="space-y-1.5">
+            {members.map((member) => {
+              const uid = member.userId.toString();
+              const dmChannelId = dmChannelByUserId.get(uid);
+              return (
+                <DMRow
+                  key={uid}
+                  member={member}
+                  statusMap={statusMap}
+                  unreadCount={
+                    dmChannelId ? (unreadMap.get(dmChannelId) ?? 0) : 0
+                  }
+                  onOpen={(userId) => openDMMutation.mutate(userId)}
+                  isOpening={openDMMutation.isPending}
+                />
+              );
+            })}
+          </div>
+        </section>
       )}
     </div>
   );

@@ -58,6 +58,8 @@ export type {
   PageInput,
   NoteTemplate,
   NoteTemplateInput,
+  NoteEditorPresence,
+  NoteLastEdit,
   // Chat enhancement types
   Reaction,
   UserStatus,

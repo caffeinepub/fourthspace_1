@@ -1,90 +1,84 @@
-import EscTypes "types/escrow";
-import WalTypes "types/wallet";
-import Common "types/common";
-
+// Migration: adds lastEditedBy and lastEditedAt fields to Note type.
+// Old Note did not have these fields; new Note has them as optional (?Principal, ?Int).
 module {
 
-  // ── Old types (inline — from previously deployed version) ─────────────────
-  // These are structurally identical to the new types minus the added fields.
-  // We reuse new-version sub-types for nested records where structure is unchanged.
+  // ── Old types (inline — do not import from .old/) ─────────────────────────
+  type EntityId  = Text;
+  type TenantId  = Text;
+  type WorkspaceId = Text;
+  type UserId    = Principal;
+  type Timestamp = Int;
 
-  // Old EscrowContract — structurally identical to the current deployed version
-  // (fundedAmount and fundingBlockHeight were added in a prior migration and are now deployed)
-  type OldEscrowContract = {
-    id : Common.EntityId;
-    tenantId : Common.TenantId;
-    workspaceId : Common.WorkspaceId;
-    title : Text;
-    description : Text;
-    amount : Nat;
-    currency : Text;
-    payerId : Common.UserId;
-    payeeId : Common.UserId;
-    status : EscTypes.EscrowStatus;
-    conditions : [Text];
-    dueDate : ?Common.Timestamp;
-    crossLinks : [Common.CrossLink];
-    statusHistory : [EscTypes.StatusHistoryEntry];
-    fundedAmount : ?Nat;
-    fundingBlockHeight : ?Nat;
-    createdAt : Common.Timestamp;
-    updatedAt : Common.Timestamp;
+  type CrossLink = {
+    entityType  : Text;
+    entityId    : EntityId;
+    tenantId    : TenantId;
+    linkLabel   : Text;
   };
 
-  // Old WalletTransaction — structurally identical to the current deployed version
-  // (memoValue was added in a prior migration and is now deployed)
-  type OldWalletTransaction = {
-    id : Common.EntityId;
-    tenantId : Common.TenantId;
-    workspaceId : Common.WorkspaceId;
-    accountId : Common.EntityId;
-    txType : WalTypes.TransactionType;
-    asset : WalTypes.AssetType;
-    amount : Nat;
-    toAddress : ?Text;
-    fromAddress : ?Text;
-    status : WalTypes.TransactionStatus;
-    memo : ?Text;
-    memoValue : ?Nat64;
-    requiredApprovals : Nat;
-    approvals : [WalTypes.TransactionApproval];
-    ledgerBlockHeight : ?Nat;
-    ledgerTxHash : ?Text;
-    createdAt : Common.Timestamp;
+  type OldNote = {
+    id          : EntityId;
+    tenantId    : TenantId;
+    workspaceId : WorkspaceId;
+    title       : Text;
+    content     : Text;
+    tags        : [Text];
+    authorId    : UserId;
+    crossLinks  : [CrossLink];
+    createdAt   : Timestamp;
+    updatedAt   : Timestamp;
   };
 
-  // ── Input / Output types ──────────────────────────────────────────────────
-
-  public type OldActor = {
-    escrowContracts : [(Common.EntityId, OldEscrowContract)];
-    walletTxs       : [(Common.EntityId, OldWalletTransaction)];
+  type NewNote = {
+    id             : EntityId;
+    tenantId       : TenantId;
+    workspaceId    : WorkspaceId;
+    title          : Text;
+    content        : Text;
+    tags           : [Text];
+    authorId       : UserId;
+    crossLinks     : [CrossLink];
+    createdAt      : Timestamp;
+    updatedAt      : Timestamp;
+    lastEditedBy   : ?UserId;
+    lastEditedAt   : ?Timestamp;
+    coverGradient  : ?Text;
+    iconEmoji      : ?Text;
   };
 
-  public type NewActor = {
-    escrowContracts : [(Common.EntityId, EscTypes.EscrowContract)];
-    walletTxs       : [(Common.EntityId, WalTypes.WalletTransaction)];
+  // ── Migration state types ─────────────────────────────────────────────────
+  type OldActor = {
+    var notes : [(EntityId, OldNote)];
+  };
+
+  type NewActor = {
+    var notes : [(EntityId, NewNote)];
   };
 
   // ── Migration function ────────────────────────────────────────────────────
-
   public func run(old : OldActor) : NewActor {
-    // OldEscrowContract and EscTypes.EscrowContract are structurally identical —
-    // all fields already present in deployed state. Pass through directly.
-    let newEscrow : [(Common.EntityId, EscTypes.EscrowContract)] = old.escrowContracts.map<
-      (Common.EntityId, OldEscrowContract),
-      (Common.EntityId, EscTypes.EscrowContract)
-    >(func((id, c)) { (id, c) });
-
-    // OldWalletTransaction and WalTypes.WalletTransaction are structurally identical —
-    // all fields already present in deployed state. Pass through directly.
-    let newWalletTxs : [(Common.EntityId, WalTypes.WalletTransaction)] = old.walletTxs.map<
-      (Common.EntityId, OldWalletTransaction),
-      (Common.EntityId, WalTypes.WalletTransaction)
-    >(func((id, tx)) { (id, tx) });
-
-    {
-      escrowContracts = newEscrow;
-      walletTxs       = newWalletTxs;
-    };
+    let newNotes : [(EntityId, NewNote)] = old.notes.map<(EntityId, OldNote), (EntityId, NewNote)>(
+      func(entry) {
+        let id = entry.0;
+        let n  = entry.1;
+        (id, {
+          id          = n.id;
+          tenantId    = n.tenantId;
+          workspaceId = n.workspaceId;
+          title       = n.title;
+          content     = n.content;
+          tags        = n.tags;
+          authorId    = n.authorId;
+          crossLinks  = n.crossLinks;
+          createdAt   = n.createdAt;
+          updatedAt   = n.updatedAt;
+          lastEditedBy  = null;
+          lastEditedAt  = null;
+          coverGradient = null;
+          iconEmoji     = null;
+        })
+      }
+    );
+    { var notes = newNotes }
   };
 };

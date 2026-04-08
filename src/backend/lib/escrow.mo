@@ -81,7 +81,8 @@ module {
   ) : [Types.EscrowContract] {
     let filtered = contracts.filter(
       func((_, c)) {
-        if (not (c.tenantId == tenantId and c.workspaceId == workspaceId and (c.payerId == caller or c.payeeId == caller))) {
+        // All workspace members can view escrows — not restricted to parties only
+        if (not (c.tenantId == tenantId and c.workspaceId == workspaceId)) {
           return false;
         };
         switch (filter) {
@@ -208,6 +209,26 @@ module {
       func(c) { c.status == #Funded },
       #Disputed,
       ?"Dispute raised",
+    );
+  };
+
+  // Payer or arbiter refunds: (#Funded | #Disputed) -> #Cancelled
+  // Returns updated contracts. The actual on-chain refund transfer must be done by main.mo
+  // BEFORE calling this (state-before-transfer: main.mo first transfers, then calls this).
+  public func refundEscrow(
+    contracts : [(Common.EntityId, Types.EscrowContract)],
+    tenantId : Common.TenantId,
+    workspaceId : Common.WorkspaceId,
+    id : Common.EntityId,
+    caller : Common.UserId,
+    note : ?Text,
+  ) : ?(Types.EscrowContract, [(Common.EntityId, Types.EscrowContract)]) {
+    applyTransition(
+      contracts, tenantId, workspaceId, id, caller,
+      func(c) { c.payerId == caller },
+      func(c) { c.status == #Funded or c.status == #Disputed },
+      #Cancelled,
+      note,
     );
   };
 

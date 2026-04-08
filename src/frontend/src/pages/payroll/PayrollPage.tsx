@@ -6,6 +6,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import {
   AlertCircle,
+  AlertTriangle,
   ArrowRight,
   BadgeDollarSign,
   Calendar,
@@ -18,18 +19,23 @@ import {
   RefreshCw,
   TrendingUp,
   Users,
+  Wallet,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useBackend } from "../../hooks/useBackend";
 import { getTenantId, useWorkspace } from "../../hooks/useWorkspace";
 import { PayrollStatus } from "../../types";
-import type { Employee, PayrollRecord } from "../../types";
+import type { Employee, PayrollRecord, WalletAccount } from "../../types";
 
 function formatCurrency(amount: number | bigint, currency = "USD") {
   return new Intl.NumberFormat("en-US", {
     style: "currency",
     currency: currency || "USD",
   }).format(Number(amount) / 100);
+}
+
+function formatIcp(balance: bigint): string {
+  return (Number(balance) / 1_000_000_00).toFixed(4);
 }
 
 function PayrollStatusBadge({ status }: { status: PayrollStatus }) {
@@ -128,6 +134,17 @@ export default function PayrollPage() {
     },
   ];
 
+  // Fetch workspace treasury balance
+  const { data: treasury, isLoading: treasuryLoading } =
+    useQuery<WalletAccount | null>({
+      queryKey: ["workspaceTreasury", tenantId, workspaceId],
+      queryFn: async () => {
+        if (!actor) return null;
+        return actor.getWorkspaceTreasury(tenantId, workspaceId);
+      },
+      enabled: !!actor && !isFetching && !!workspaceId,
+    });
+
   const { data: employees = [], isLoading: empLoading } = useQuery<Employee[]>({
     queryKey: ["employees", tenantId, workspaceId],
     queryFn: async () =>
@@ -144,6 +161,9 @@ export default function PayrollPage() {
     enabled: !!actor && !isFetching && !!workspaceId,
   });
 
+  const icpBalance = treasury?.icpBalance ?? BigInt(0);
+  const hasNoFunds = !treasuryLoading && icpBalance === BigInt(0);
+
   const runPayroll = useMutation({
     mutationFn: async () => {
       if (!actor) throw new Error("Not connected");
@@ -155,6 +175,16 @@ export default function PayrollPage() {
           actor.processPayroll(tenantId, workspaceId, e.id, period),
         ),
       );
+
+      // Collect errors — if any is "insufficient funds", surface it prominently
+      for (const r of results) {
+        if (r.status === "fulfilled" && r.value.__kind__ === "err") {
+          if (r.value.err.toLowerCase().includes("insufficient")) {
+            throw new Error(r.value.err);
+          }
+        }
+      }
+
       return results.filter((r) => r.status === "fulfilled").length;
     },
     onSuccess: (count) => {
@@ -185,7 +215,7 @@ export default function PayrollPage() {
       label: "Active Employees",
       value: statsLoading ? null : String(activeEmployees.length),
       icon: Users,
-      trend: "+2 this month",
+      trend: null,
     },
     {
       label: "Payroll This Month",
@@ -210,6 +240,9 @@ export default function PayrollPage() {
     },
   ];
 
+  const isRunDisabled =
+    runPayroll.isPending || activeEmployees.length === 0 || hasNoFunds;
+
   return (
     <div className="animate-fade-in-up p-6 space-y-6 max-w-7xl mx-auto">
       {/* Header */}
@@ -227,7 +260,24 @@ export default function PayrollPage() {
             </p>
           </div>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
+          {/* Treasury balance chip */}
+          {!treasuryLoading && treasury && (
+            <div className="flex items-center gap-2 rounded-lg border border-border bg-card px-3 py-1.5">
+              <Wallet className="h-3.5 w-3.5 text-muted-foreground" />
+              <span className="text-xs text-muted-foreground">Treasury:</span>
+              <span
+                className={`text-xs font-semibold tabular-nums ${
+                  icpBalance === BigInt(0)
+                    ? "text-destructive"
+                    : "text-foreground"
+                }`}
+                data-ocid="payroll-treasury-balance"
+              >
+                {formatIcp(icpBalance)} ICP
+              </span>
+            </div>
+          )}
           <Button asChild variant="outline" size="sm" className="active-press">
             <Link to={`/app/${workspaceId}/payroll/employees`}>
               <Plus className="mr-1.5 h-3.5 w-3.5" />
@@ -236,10 +286,17 @@ export default function PayrollPage() {
           </Button>
           <Button
             size="sm"
-            className="bg-emerald-600 hover:bg-emerald-700 text-white active-press"
+            className="bg-emerald-600 hover:bg-emerald-700 text-white active-press disabled:opacity-60"
             onClick={() => runPayroll.mutate()}
-            disabled={runPayroll.isPending || activeEmployees.length === 0}
+            disabled={isRunDisabled}
             data-ocid="payroll-run-all-btn"
+            title={
+              hasNoFunds
+                ? "Fund your workspace wallet before processing payroll"
+                : activeEmployees.length === 0
+                  ? "No active employees"
+                  : undefined
+            }
           >
             {runPayroll.isPending ? (
               "Running…"
@@ -252,6 +309,34 @@ export default function PayrollPage() {
           </Button>
         </div>
       </div>
+
+      {/* No-funds warning banner */}
+      {hasNoFunds && (
+        <div
+          className="flex items-start gap-3 rounded-xl border border-amber-400/40 bg-amber-500/8 px-4 py-3"
+          data-ocid="payroll-no-funds-banner"
+          role="alert"
+        >
+          <AlertTriangle className="h-4 w-4 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-medium text-foreground">
+              Your workspace wallet has no funds. Fund it to process payroll.
+            </p>
+          </div>
+          <Button
+            asChild
+            size="sm"
+            variant="outline"
+            className="shrink-0 gap-1.5 border-amber-400/60 text-amber-700 dark:text-amber-400 hover:bg-amber-500/10"
+            data-ocid="payroll-fund-wallet-btn"
+          >
+            <Link to={`/app/${workspaceId}/wallet`}>
+              <Wallet className="h-3.5 w-3.5" />
+              Fund Wallet
+            </Link>
+          </Button>
+        </div>
+      )}
 
       {/* Stats */}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
@@ -298,7 +383,7 @@ export default function PayrollPage() {
               {card}
             </Link>
           ) : (
-            card
+            <div key={label}>{card}</div>
           );
         })}
       </div>

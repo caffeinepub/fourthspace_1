@@ -6,7 +6,6 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useNavigate, useParams } from "@tanstack/react-router";
-import { formatDistanceToNow } from "date-fns";
 import {
   ArrowLeft,
   Bold,
@@ -78,6 +77,24 @@ function avatarColor(id: { toString(): string }): string {
   for (let i = 0; i < s.length; i++)
     hash = (hash * 31 + s.charCodeAt(i)) & 0xffff;
   return AVATAR_COLORS[hash % AVATAR_COLORS.length];
+}
+
+/** Relative timestamp: "just now", "5m ago", today's time, or date for older */
+function formatRelativeTime(createdAt: bigint): string {
+  const ms = Number(createdAt) / 1_000_000;
+  const diffMs = Date.now() - ms;
+  if (diffMs < 60_000) return "just now";
+  if (diffMs < 3_600_000) return `${Math.floor(diffMs / 60_000)}m ago`;
+  const d = new Date(ms);
+  const today = new Date();
+  if (
+    d.getDate() === today.getDate() &&
+    d.getMonth() === today.getMonth() &&
+    d.getFullYear() === today.getFullYear()
+  ) {
+    return d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  }
+  return d.toLocaleDateString([], { month: "short", day: "numeric" });
 }
 
 // ─── File Attachment Preview ────────────────────────────────────────────────
@@ -205,6 +222,7 @@ interface MessageBubbleProps {
   myPrincipal: string;
   isMention: boolean;
   workspaceId: string;
+  isGrouped?: boolean;
 }
 
 export function MessageBubble({
@@ -217,43 +235,55 @@ export function MessageBubble({
   myPrincipal,
   isMention,
   workspaceId,
+  isGrouped = false,
 }: MessageBubbleProps) {
-  const timestampMs = Number(msg.createdAt) / 1_000_000;
   const formattedHtml = renderFormattedText(msg.content);
 
   return (
     <div
-      className={`group flex items-start gap-3 px-4 py-2 rounded-xl transition-colors ${
+      className={`group flex items-start gap-3 px-4 rounded-xl transition-colors ${
         isMention
-          ? "border-l-2 border-amber-500 bg-amber-500/5 hover:bg-amber-500/8"
-          : "hover:bg-muted/30"
+          ? "border-l-2 border-amber-500 bg-amber-500/5 hover:bg-amber-500/8 py-2"
+          : isGrouped
+            ? "py-0.5 hover:bg-muted/30"
+            : "py-2 hover:bg-muted/30"
       }`}
       data-ocid={`message-${msg.id}`}
     >
-      <div
-        className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-xs font-bold ${avatarColor(msg.senderId)}`}
-      >
-        {senderInitials(msg.senderId)}
-      </div>
+      {isGrouped ? (
+        <div className="w-8 shrink-0 flex items-center justify-center">
+          <span className="text-[10px] text-muted-foreground/50 opacity-0 group-hover:opacity-100 transition-opacity">
+            {formatRelativeTime(msg.createdAt).split(" ").slice(-1)[0]}
+          </span>
+        </div>
+      ) : (
+        <div
+          className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-xs font-bold ${avatarColor(msg.senderId)}`}
+        >
+          {senderInitials(msg.senderId)}
+        </div>
+      )}
 
       <div className="flex-1 min-w-0 space-y-0.5">
-        <div className="flex items-center gap-2">
-          <span className="text-xs font-semibold text-foreground">
-            {msg.senderId.toString().slice(0, 10)}…
-          </span>
-          <span className="text-xs text-muted-foreground">
-            {formatDistanceToNow(timestampMs, { addSuffix: true })}
-          </span>
-          {isPinned && (
-            <Badge
-              variant="outline"
-              className="text-[10px] py-0 gap-0.5 border-amber-500/40 text-amber-600 dark:text-amber-400"
-            >
-              <Pin className="h-2.5 w-2.5" />
-              Pinned
-            </Badge>
-          )}
-        </div>
+        {!isGrouped && (
+          <div className="flex items-center gap-2">
+            <span className="text-xs font-semibold text-foreground">
+              {msg.senderId.toString().slice(0, 10)}…
+            </span>
+            <span className="text-xs text-muted-foreground">
+              {formatRelativeTime(msg.createdAt)}
+            </span>
+            {isPinned && (
+              <Badge
+                variant="outline"
+                className="text-[10px] py-0 gap-0.5 border-amber-500/40 text-amber-600 dark:text-amber-400"
+              >
+                <Pin className="h-2.5 w-2.5" />
+                Pinned
+              </Badge>
+            )}
+          </div>
+        )}
 
         {replyTarget && (
           <div className="flex items-start gap-2 rounded-lg border-l-2 border-teal-500 bg-teal-500/5 px-3 py-1.5 text-xs text-muted-foreground">
@@ -342,7 +372,7 @@ export function MessageBubble({
           size="icon"
           className="h-6 w-6"
           onClick={() => onReply(msg)}
-          aria-label="Reply"
+          aria-label="Reply in thread"
           data-ocid={`reply-btn-${msg.id}`}
         >
           <CornerUpLeft className="h-3.5 w-3.5 text-muted-foreground" />
@@ -527,6 +557,7 @@ export default function ChannelPage() {
   const [hasDraft] = useState(() => getDraft(channelId).length > 0);
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
   const bottomRef = useRef<HTMLDivElement | null>(null);
+  const scrollAreaRef = useRef<HTMLDivElement | null>(null);
 
   // ── Queries ──
 
@@ -544,6 +575,7 @@ export default function ChannelPage() {
     queryKey: ["messages", tenantId, workspaceId, channelId],
     queryFn: async () => {
       if (!actor) return [];
+      // getMessages returns messages ascending by timestamp (oldest first)
       return actor.getMessages(
         tenantId,
         workspaceId,
@@ -553,22 +585,34 @@ export default function ChannelPage() {
       );
     },
     enabled: !!actor && !isFetching && !!workspaceId,
-    refetchInterval: 3000,
+    refetchInterval: 2000,
   });
 
-  // ── Side effects ──
-
+  // ── Mark read on mount and on channel change ──
   useEffect(() => {
     if (!actor || !channelId || isFetching || !workspaceId) return;
-    actor.markChannelRead(tenantId, workspaceId, channelId).catch(() => {});
-  }, [actor, channelId, isFetching, tenantId, workspaceId]);
+    actor
+      .markChannelRead(tenantId, workspaceId, channelId)
+      .then(() => {
+        queryClient.invalidateQueries({
+          queryKey: ["unreadCounts", tenantId, workspaceId],
+        });
+      })
+      .catch(() => {});
+  }, [actor, channelId, isFetching, tenantId, workspaceId, queryClient]);
 
+  // ── Auto-scroll to bottom on load and on new messages ──
   const prevMsgCountRef = useRef(0);
-  const msgCount = messages?.length ?? 0;
-  if (msgCount !== prevMsgCountRef.current) {
-    prevMsgCountRef.current = msgCount;
-    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
-  }
+  useEffect(() => {
+    const msgCount = messages?.length ?? 0;
+    if (msgCount !== prevMsgCountRef.current) {
+      prevMsgCountRef.current = msgCount;
+      // Small timeout to let render complete before scrolling
+      requestAnimationFrame(() => {
+        bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+      });
+    }
+  }, [messages]);
 
   function handleTextChange(v: string) {
     setMessageText(v);
@@ -628,6 +672,9 @@ export default function ChannelPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({
         queryKey: ["messages", tenantId, workspaceId, channelId],
+      });
+      queryClient.invalidateQueries({
+        queryKey: ["unreadCounts", tenantId, workspaceId],
       });
       clearDraft(channelId);
       setMessageText("");
@@ -710,6 +757,16 @@ export default function ChannelPage() {
   );
   const pinnedIds = new Set(channel?.pinnedMessageIds ?? []);
 
+  // Group consecutive messages from the same sender
+  function isGrouped(idx: number): boolean {
+    if (!messages || idx === 0) return false;
+    const prev = messages[idx - 1];
+    const curr = messages[idx];
+    if (prev.senderId.toString() !== curr.senderId.toString()) return false;
+    const timeDiff = Number(curr.createdAt - prev.createdAt) / 1_000_000_000; // seconds
+    return timeDiff < 300; // group if within 5 minutes
+  }
+
   const myUnreadEntry = channel?.unreadCounts?.find(
     (u) => u.userId.toString() === myPrincipal,
   );
@@ -784,7 +841,11 @@ export default function ChannelPage() {
         </div>
 
         {/* Messages */}
-        <ScrollArea className="flex-1 py-2" data-ocid="messages-list">
+        <ScrollArea
+          className="flex-1 py-2"
+          data-ocid="messages-list"
+          ref={scrollAreaRef}
+        >
           {isLoading ? (
             <div className="space-y-3 px-4 py-4">
               {[1, 2, 3, 4].map((n) => (
@@ -835,10 +896,11 @@ export default function ChannelPage() {
                       msg.content.includes(`@${myPrincipal}`)
                     }
                     workspaceId={workspaceId}
+                    isGrouped={isGrouped(idx)}
                   />
                 </div>
               ))}
-              <div ref={bottomRef} />
+              <div ref={bottomRef} className="h-4" />
             </div>
           ) : (
             <div
@@ -916,6 +978,9 @@ export default function ChannelPage() {
               </Button>
             </div>
           </div>
+          <p className="text-[10px] text-muted-foreground">
+            Enter to send · Shift+Enter for new line · Cmd+B bold · Cmd+I italic
+          </p>
         </div>
       </div>
     </div>

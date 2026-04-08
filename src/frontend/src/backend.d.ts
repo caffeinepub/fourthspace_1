@@ -275,6 +275,11 @@ export interface TaskTemplateInput {
     defaultPriority: TaskPriority;
     defaultAssigneeId?: UserId;
 }
+export interface NoteEditorPresence {
+    displayName: string;
+    userId: UserId;
+    lastSeen: bigint;
+}
 export interface ContractorInput {
     taxId: string;
     name: string;
@@ -652,6 +657,11 @@ export interface EscrowContract {
     payerId: UserId;
     fundedAmount?: bigint;
 }
+export interface NoteLastEdit {
+    displayName: string;
+    userId: UserId;
+    editedAt: bigint;
+}
 export interface StatusHistoryEntry {
     status: EscrowStatus;
     changedBy: Principal;
@@ -743,12 +753,16 @@ export interface Note {
     id: EntityId;
     title: string;
     content: string;
+    lastEditedAt?: Timestamp;
+    lastEditedBy?: UserId;
     authorId: UserId;
     createdAt: Timestamp;
     tags: Array<string>;
     tenantId: TenantId;
     updatedAt: Timestamp;
+    iconEmoji?: string;
     workspaceId: WorkspaceId;
+    coverGradient?: string;
     crossLinks: Array<CrossLink>;
 }
 export interface BenefitInput {
@@ -1154,6 +1168,8 @@ export interface NoteInput {
     title: string;
     content: string;
     tags: Array<string>;
+    iconEmoji?: string;
+    coverGradient?: string;
     crossLinks: Array<CrossLink>;
 }
 export interface GuestInvitation {
@@ -1531,6 +1547,9 @@ export interface backendInterface {
         __kind__: "err";
         err: string;
     }>;
+    /**
+     * / Add a contractor payment — requires sufficient treasury balance.
+     */
     addContractorPayment(tenantId: TenantId, workspaceId: WorkspaceId, input: ContractorPaymentInput): Promise<{
         __kind__: "ok";
         ok: ContractorPayment;
@@ -1573,6 +1592,9 @@ export interface backendInterface {
         __kind__: "err";
         err: string;
     }>;
+    /**
+     * / Add an off-cycle payment — requires sufficient treasury balance if processImmediately.
+     */
     addOffCyclePayment(tenantId: TenantId, workspaceId: WorkspaceId, input: OffCyclePaymentInput): Promise<{
         __kind__: "ok";
         ok: OffCyclePayment;
@@ -1650,6 +1672,9 @@ export interface backendInterface {
         __kind__: "err";
         err: string;
     }>;
+    /**
+     * / Bulk approve payroll records — sums all amounts and checks treasury balance once BEFORE approving.
+     */
     bulkApprovePayroll(tenantId: TenantId, workspaceId: WorkspaceId, recordIds: Array<EntityId>): Promise<{
         __kind__: "ok";
         ok: boolean;
@@ -1707,6 +1732,10 @@ export interface backendInterface {
         __kind__: "err";
         err: string;
     }>;
+    /**
+     * / Create an escrow — requires the caller (payer) to have sufficient treasury balance.
+     * / Queries the live ICP/ckBTC ledger balance BEFORE creating the record.
+     */
     createEscrow(tenantId: TenantId, workspaceId: WorkspaceId, input: EscrowInput): Promise<{
         __kind__: "ok";
         ok: EscrowContract;
@@ -1766,6 +1795,13 @@ export interface backendInterface {
     createNoteTemplate(tenantId: TenantId, workspaceId: WorkspaceId, input: NoteTemplateInput): Promise<{
         __kind__: "ok";
         ok: NoteTemplate;
+    } | {
+        __kind__: "err";
+        err: string;
+    }>;
+    createOrGetDMChannel(tenantId: TenantId, workspaceId: WorkspaceId, targetUserId: UserId): Promise<{
+        __kind__: "ok";
+        ok: Channel;
     } | {
         __kind__: "err";
         err: string;
@@ -2154,6 +2190,7 @@ export interface backendInterface {
     getIntegrationActivityLog(tenantId: TenantId, workspaceId: WorkspaceId, provider: IntegrationProvider | null, fromDate: Timestamp | null, toDate: Timestamp | null, limit: bigint): Promise<Array<IntegrationEvent>>;
     getIntegrationEvents(tenantId: TenantId, workspaceId: WorkspaceId, integrationId: EntityId, limit: bigint): Promise<Array<IntegrationEvent>>;
     getIntegrations(tenantId: TenantId, workspaceId: WorkspaceId): Promise<Array<Integration>>;
+    getLastNoteEdit(tenantId: TenantId, workspaceId: WorkspaceId, noteId: EntityId): Promise<NoteLastEdit | null>;
     getMessages(tenantId: TenantId, workspaceId: WorkspaceId, channelId: EntityId, limit: bigint, before: Timestamp | null): Promise<Array<Message>>;
     getMyProfile(tenantId: TenantId): Promise<UserProfile | null>;
     /**
@@ -2168,6 +2205,7 @@ export interface backendInterface {
         __kind__: "err";
         err: string;
     }>;
+    getNoteActiveEditors(tenantId: TenantId, workspaceId: WorkspaceId, noteId: EntityId): Promise<Array<NoteEditorPresence>>;
     getOrCreateWorkspaceShareToken(workspaceId: WorkspaceId, tenantId: TenantId): Promise<string>;
     getPage(tenantId: TenantId, workspaceId: WorkspaceId, pageId: EntityId): Promise<{
         __kind__: "ok";
@@ -2349,6 +2387,7 @@ export interface backendInterface {
     listWhiteboardTemplates(): Promise<Array<WhiteboardTemplate>>;
     listWhiteboards(tenantId: TenantId, workspaceId: WorkspaceId): Promise<Array<Whiteboard>>;
     listWorkspaceMembers(tenantId: TenantId, workspaceId: EntityId): Promise<Array<WorkspaceMember>>;
+    listWorkspaceStatuses(tenantId: TenantId, workspaceId: WorkspaceId): Promise<Array<UserStatus>>;
     listWorkspaces(tenantId: TenantId): Promise<Array<Workspace>>;
     markChannelRead(tenantId: TenantId, workspaceId: WorkspaceId, channelId: EntityId): Promise<{
         __kind__: "ok";
@@ -2371,6 +2410,9 @@ export interface backendInterface {
         __kind__: "err";
         err: string;
     }>;
+    /**
+     * / Process payroll for one employee — requires sufficient treasury balance.
+     */
     processPayroll(tenantId: TenantId, workspaceId: WorkspaceId, employeeId: EntityId, period: string): Promise<{
         __kind__: "ok";
         ok: PayrollRecord;
@@ -2388,6 +2430,18 @@ export interface backendInterface {
     recordCheckIn(tenantId: TenantId, workspaceId: WorkspaceId, input: CheckInInput): Promise<{
         __kind__: "ok";
         ok: GoalCheckIn;
+    } | {
+        __kind__: "err";
+        err: string;
+    }>;
+    /**
+     * / Refund a funded or disputed escrow back to the payer via the real ICP ledger.
+     * / State-before-transfer: escrow is cancelled in state BEFORE the async ledger call.
+     * / If the ledger transfer fails, escrow state is already cancelled — caller must retry or resolve manually.
+     */
+    refundEscrow(tenantId: TenantId, workspaceId: WorkspaceId, id: EntityId): Promise<{
+        __kind__: "ok";
+        ok: EscrowContract;
     } | {
         __kind__: "err";
         err: string;
@@ -2674,9 +2728,17 @@ export interface backendInterface {
         __kind__: "err";
         err: string;
     }>;
+    updateNotePresence(tenantId: TenantId, workspaceId: WorkspaceId, noteId: EntityId, displayName: string): Promise<void>;
     updatePage(tenantId: TenantId, workspaceId: WorkspaceId, pageId: EntityId, title: string, icon: string, coverUrl: string | null, blocks: Array<Block>): Promise<{
         __kind__: "ok";
         ok: PageNode;
+    } | {
+        __kind__: "err";
+        err: string;
+    }>;
+    updatePresence(tenantId: TenantId, workspaceId: WorkspaceId): Promise<{
+        __kind__: "ok";
+        ok: UserStatus;
     } | {
         __kind__: "err";
         err: string;
@@ -2703,6 +2765,13 @@ export interface backendInterface {
         err: string;
     }>;
     updateTask(tenantId: TenantId, workspaceId: WorkspaceId, id: EntityId, input: TaskInput): Promise<{
+        __kind__: "ok";
+        ok: Task;
+    } | {
+        __kind__: "err";
+        err: string;
+    }>;
+    updateTaskStatus(tenantId: TenantId, workspaceId: WorkspaceId, id: EntityId, status: TaskStatus): Promise<{
         __kind__: "ok";
         ok: Task;
     } | {

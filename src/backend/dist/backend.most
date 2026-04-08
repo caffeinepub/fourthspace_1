@@ -242,6 +242,13 @@ type CrossLink__241900781 =
     linkLabel : Text;
     tenantId : TenantId__234751125
   };
+type CrossLink__910959528 =
+  {
+    entityId : EntityId__14470413;
+    entityType : Text;
+    linkLabel : Text;
+    tenantId : TenantId__559729687
+  };
 type DeductionFrequency__888118868 = {#annual; #perRun};
 type DeductionType__975244036 = {#postTax; #preTax};
 type Deduction__686196060 =
@@ -290,6 +297,7 @@ type Employee__19034336 =
     userId : UserId__158757552;
     workspaceId : WorkspaceId__377827389
   };
+type EntityId__14470413 = Text;
 type EntityId__892221652 = Text;
 type EscrowContract__1011191203 =
   {
@@ -588,6 +596,24 @@ type Milestone__807753983 =
     updatedAt : Timestamp__301639476;
     workspaceId : WorkspaceId__377827389
   };
+type NoteLastEditEntry__605511832 =
+  {
+    displayName : Text;
+    editedAt : Int;
+    noteId : EntityId__892221652;
+    tenantId : TenantId__234751125;
+    userId : UserId__158757552;
+    workspaceId : WorkspaceId__377827389
+  };
+type NotePresenceEntry__432572757 =
+  {
+    displayName : Text;
+    lastSeen : Int;
+    noteId : EntityId__892221652;
+    tenantId : TenantId__234751125;
+    userId : UserId__158757552;
+    workspaceId : WorkspaceId__377827389
+  };
 type NoteTemplate__298735437 =
   {
     authorId : UserId__158757552;
@@ -604,9 +630,13 @@ type Note__1063160515 =
   {
     authorId : UserId__158757552;
     content : Text;
+    coverGradient : ?Text;
     createdAt : Timestamp__301639476;
     crossLinks : [CrossLink__241900781];
+    iconEmoji : ?Text;
     id : EntityId__892221652;
+    lastEditedAt : ?Timestamp__301639476;
+    lastEditedBy : ?UserId__158757552;
     tags : [Text];
     tenantId : TenantId__234751125;
     title : Text;
@@ -628,46 +658,18 @@ type OffCyclePayment__713930344 =
   };
 type OffCycleReason__1039797764 = {#adjustment; #bonus; #reimbursement};
 type OffCycleStatus__290347654 = {#pending; #processed};
-type OldEscrowContract__242776966 =
+type OldNote__821963071 =
   {
-    amount : Nat;
-    conditions : [Text];
-    createdAt : Timestamp__301639476;
-    crossLinks : [CrossLink__241900781];
-    currency : Text;
-    description : Text;
-    dueDate : ?Timestamp__301639476;
-    fundedAmount : ?Nat;
-    fundingBlockHeight : ?Nat;
-    id : EntityId__892221652;
-    payeeId : UserId__158757552;
-    payerId : UserId__158757552;
-    status : EscrowStatus__38437157;
-    statusHistory : [StatusHistoryEntry__1058365233];
-    tenantId : TenantId__234751125;
+    authorId : UserId__2049225;
+    content : Text;
+    createdAt : Timestamp__817121181;
+    crossLinks : [CrossLink__910959528];
+    id : EntityId__14470413;
+    tags : [Text];
+    tenantId : TenantId__559729687;
     title : Text;
-    updatedAt : Timestamp__301639476;
-    workspaceId : WorkspaceId__377827389
-  };
-type OldWalletTransaction__334249798 =
-  {
-    accountId : EntityId__892221652;
-    amount : Nat;
-    approvals : [TransactionApproval__394172020];
-    asset : AssetType__697693138;
-    createdAt : Timestamp__301639476;
-    fromAddress : ?Text;
-    id : EntityId__892221652;
-    ledgerBlockHeight : ?Nat;
-    ledgerTxHash : ?Text;
-    memo : ?Text;
-    memoValue : ?Nat64;
-    requiredApprovals : Nat;
-    status : TransactionStatus__52851611;
-    tenantId : TenantId__234751125;
-    toAddress : ?Text;
-    txType : TransactionType__907911643;
-    workspaceId : WorkspaceId__377827389
+    updatedAt : Timestamp__817121181;
+    workspaceId : WorkspaceId__93149753
   };
 type PageNode__756858894 =
   {
@@ -899,6 +901,7 @@ type Task__929654902 =
     workspaceId : WorkspaceId__377827389
   };
 type TenantId__234751125 = Text;
+type TenantId__559729687 = Text;
 type ThreadNotification__306762693 =
   {
     channelId : Text;
@@ -925,6 +928,7 @@ type TimeEntry__332413573 =
     workspaceId : WorkspaceId__377827389
   };
 type Timestamp__301639476 = Int;
+type Timestamp__817121181 = Int;
 type TransactionApproval__394172020 =
   {
     approved : Bool;
@@ -940,6 +944,7 @@ type TransactionStatus__52851611 =
 type TransactionType__907911643 = {#Receive; #Send; #Stake; #Swap; #Unstake};
 type UnreadEntry__355195530 = {count : Nat; userId : Principal};
 type UserId__158757552 = Principal;
+type UserId__2049225 = Principal;
 type UserProfile__244945094 =
   {
     createdAt : Timestamp__301639476;
@@ -1028,6 +1033,7 @@ type Whiteboard__8914256 =
     workspaceId : WorkspaceId__377827389
   };
 type WorkspaceId__377827389 = Text;
+type WorkspaceId__93149753 = Text;
 type WorkspaceMember__545567312 =
   {
     displayName : Text;
@@ -1076,7 +1082,8 @@ actor ({
     [(EntityId__892221652, ContractorPayment__830236605)];
   stable var contractors : [(EntityId__892221652, Contractor__971014736)];
   stable var employees : [(EntityId__892221652, Employee__19034336)];
-  in escrowContracts : [(EntityId__892221652, OldEscrowContract__242776966)];
+  stable var escrowContracts :
+    [(EntityId__892221652, EscrowContract__1011191203)];
   stable var escrowDisputes :
     [(EntityId__892221652, EscrowDispute__775543295)];
   stable var escrowMilestones :
@@ -1139,8 +1146,10 @@ actor ({
   stable var keyResults : [(EntityId__892221652, KeyResult__600683166)];
   stable var messages : [(EntityId__892221652, Message__454780518)];
   stable var milestones : [(EntityId__892221652, Milestone__807753983)];
+  stable var noteLastEditStore : [(Text, NoteLastEditEntry__605511832)];
+  stable var notePresenceStore : [(Text, NotePresenceEntry__432572757)];
   stable var noteTemplates : [(EntityId__892221652, NoteTemplate__298735437)];
-  stable var notes : [(EntityId__892221652, Note__1063160515)];
+  in var notes : [(EntityId__14470413, OldNote__821963071)];
   stable var offCyclePayments :
     [(EntityId__892221652, OffCyclePayment__713930344)];
   stable var pages : [(EntityId__892221652, PageNode__756858894)];
@@ -1177,7 +1186,8 @@ actor ({
   stable var walletApprovals :
     [(EntityId__892221652, TransactionApproval__394172020)];
   stable var walletApprovalsCounter : Nat;
-  in walletTxs : [(EntityId__892221652, OldWalletTransaction__334249798)];
+  stable var walletTxs :
+    [(EntityId__892221652, WalletTransaction__850303578)];
   stable var whiteboards : [(EntityId__892221652, Whiteboard__8914256)];
   stable var workspaceShareTokens : [(Text, Text)];
   stable workspacesRef :
@@ -1264,6 +1274,8 @@ actor ({
   stable var keyResults : [(EntityId__892221652, KeyResult__600683166)];
   stable var messages : [(EntityId__892221652, Message__454780518)];
   stable var milestones : [(EntityId__892221652, Milestone__807753983)];
+  stable var noteLastEditStore : [(Text, NoteLastEditEntry__605511832)];
+  stable var notePresenceStore : [(Text, NotePresenceEntry__432572757)];
   stable var noteTemplates : [(EntityId__892221652, NoteTemplate__298735437)];
   stable var notes : [(EntityId__892221652, Note__1063160515)];
   stable var offCyclePayments :

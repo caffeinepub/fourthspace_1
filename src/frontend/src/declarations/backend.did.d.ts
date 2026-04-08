@@ -815,19 +815,35 @@ export interface Note {
   'id' : EntityId,
   'title' : string,
   'content' : string,
+  'lastEditedAt' : [] | [Timestamp],
+  'lastEditedBy' : [] | [UserId],
   'authorId' : UserId,
   'createdAt' : Timestamp,
   'tags' : Array<string>,
   'tenantId' : TenantId,
   'updatedAt' : Timestamp,
+  'iconEmoji' : [] | [string],
   'workspaceId' : WorkspaceId,
+  'coverGradient' : [] | [string],
   'crossLinks' : Array<CrossLink>,
+}
+export interface NoteEditorPresence {
+  'displayName' : string,
+  'userId' : UserId,
+  'lastSeen' : bigint,
 }
 export interface NoteInput {
   'title' : string,
   'content' : string,
   'tags' : Array<string>,
+  'iconEmoji' : [] | [string],
+  'coverGradient' : [] | [string],
   'crossLinks' : Array<CrossLink>,
+}
+export interface NoteLastEdit {
+  'displayName' : string,
+  'userId' : UserId,
+  'editedAt' : bigint,
 }
 export interface NoteTemplate {
   'id' : EntityId,
@@ -1422,6 +1438,9 @@ export interface _SERVICE {
     { 'ok' : Contractor } |
       { 'err' : string }
   >,
+  /**
+   * / Add a contractor payment — requires sufficient treasury balance.
+   */
   'addContractorPayment' : ActorMethod<
     [TenantId, WorkspaceId, ContractorPaymentInput],
     { 'ok' : ContractorPayment } |
@@ -1452,6 +1471,9 @@ export interface _SERVICE {
     { 'ok' : KeyResult } |
       { 'err' : string }
   >,
+  /**
+   * / Add an off-cycle payment — requires sufficient treasury balance if processImmediately.
+   */
   'addOffCyclePayment' : ActorMethod<
     [TenantId, WorkspaceId, OffCyclePaymentInput],
     { 'ok' : OffCyclePayment } |
@@ -1507,6 +1529,9 @@ export interface _SERVICE {
     { 'ok' : EscrowDispute } |
       { 'err' : string }
   >,
+  /**
+   * / Bulk approve payroll records — sums all amounts and checks treasury balance once BEFORE approving.
+   */
   'bulkApprovePayroll' : ActorMethod<
     [TenantId, WorkspaceId, Array<EntityId>],
     { 'ok' : boolean } |
@@ -1558,6 +1583,10 @@ export interface _SERVICE {
     { 'ok' : Channel } |
       { 'err' : string }
   >,
+  /**
+   * / Create an escrow — requires the caller (payer) to have sufficient treasury balance.
+   * / Queries the live ICP/ckBTC ledger balance BEFORE creating the record.
+   */
   'createEscrow' : ActorMethod<
     [TenantId, WorkspaceId, EscrowInput],
     { 'ok' : EscrowContract } |
@@ -1601,6 +1630,11 @@ export interface _SERVICE {
   'createNoteTemplate' : ActorMethod<
     [TenantId, WorkspaceId, NoteTemplateInput],
     { 'ok' : NoteTemplate } |
+      { 'err' : string }
+  >,
+  'createOrGetDMChannel' : ActorMethod<
+    [TenantId, WorkspaceId, UserId],
+    { 'ok' : Channel } |
       { 'err' : string }
   >,
   'createPage' : ActorMethod<
@@ -1923,6 +1957,10 @@ export interface _SERVICE {
     Array<IntegrationEvent>
   >,
   'getIntegrations' : ActorMethod<[TenantId, WorkspaceId], Array<Integration>>,
+  'getLastNoteEdit' : ActorMethod<
+    [TenantId, WorkspaceId, EntityId],
+    [] | [NoteLastEdit]
+  >,
   'getMessages' : ActorMethod<
     [TenantId, WorkspaceId, EntityId, bigint, [] | [Timestamp]],
     Array<Message>
@@ -1940,6 +1978,10 @@ export interface _SERVICE {
     [TenantId, WorkspaceId, EntityId],
     { 'ok' : Note } |
       { 'err' : string }
+  >,
+  'getNoteActiveEditors' : ActorMethod<
+    [TenantId, WorkspaceId, EntityId],
+    Array<NoteEditorPresence>
   >,
   'getOrCreateWorkspaceShareToken' : ActorMethod<
     [WorkspaceId, TenantId],
@@ -2252,6 +2294,10 @@ export interface _SERVICE {
     [TenantId, EntityId],
     Array<WorkspaceMember>
   >,
+  'listWorkspaceStatuses' : ActorMethod<
+    [TenantId, WorkspaceId],
+    Array<UserStatus>
+  >,
   'listWorkspaces' : ActorMethod<[TenantId], Array<Workspace>>,
   'markChannelRead' : ActorMethod<
     [TenantId, WorkspaceId, EntityId],
@@ -2268,6 +2314,9 @@ export interface _SERVICE {
     { 'ok' : IntegrationEvent } |
       { 'err' : string }
   >,
+  /**
+   * / Process payroll for one employee — requires sufficient treasury balance.
+   */
   'processPayroll' : ActorMethod<
     [TenantId, WorkspaceId, EntityId, string],
     { 'ok' : PayrollRecord } |
@@ -2281,6 +2330,16 @@ export interface _SERVICE {
   'recordCheckIn' : ActorMethod<
     [TenantId, WorkspaceId, CheckInInput],
     { 'ok' : GoalCheckIn } |
+      { 'err' : string }
+  >,
+  /**
+   * / Refund a funded or disputed escrow back to the payer via the real ICP ledger.
+   * / State-before-transfer: escrow is cancelled in state BEFORE the async ledger call.
+   * / If the ledger transfer fails, escrow state is already cancelled — caller must retry or resolve manually.
+   */
+  'refundEscrow' : ActorMethod<
+    [TenantId, WorkspaceId, EntityId],
+    { 'ok' : EscrowContract } |
       { 'err' : string }
   >,
   'regenerateWorkspaceShareToken' : ActorMethod<
@@ -2519,6 +2578,10 @@ export interface _SERVICE {
     { 'ok' : Note } |
       { 'err' : string }
   >,
+  'updateNotePresence' : ActorMethod<
+    [TenantId, WorkspaceId, EntityId, string],
+    undefined
+  >,
   'updatePage' : ActorMethod<
     [
       TenantId,
@@ -2530,6 +2593,11 @@ export interface _SERVICE {
       Array<Block>,
     ],
     { 'ok' : PageNode } |
+      { 'err' : string }
+  >,
+  'updatePresence' : ActorMethod<
+    [TenantId, WorkspaceId],
+    { 'ok' : UserStatus } |
       { 'err' : string }
   >,
   'updateProject' : ActorMethod<
@@ -2557,6 +2625,11 @@ export interface _SERVICE {
   >,
   'updateTask' : ActorMethod<
     [TenantId, WorkspaceId, EntityId, TaskInput],
+    { 'ok' : Task } |
+      { 'err' : string }
+  >,
+  'updateTaskStatus' : ActorMethod<
+    [TenantId, WorkspaceId, EntityId, TaskStatus],
     { 'ok' : Task } |
       { 'err' : string }
   >,

@@ -5,7 +5,6 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useParams } from "@tanstack/react-router";
-import { formatDistanceToNow } from "date-fns";
 import {
   ArrowLeft,
   Bold,
@@ -18,7 +17,7 @@ import {
   Send,
   Smile,
 } from "lucide-react";
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { useBackend } from "../../hooks/useBackend";
 import { getTenantId } from "../../hooks/useWorkspace";
@@ -46,6 +45,24 @@ function senderInitials(id: { toString(): string }): string {
   return id.toString().slice(0, 2).toUpperCase();
 }
 
+/** Relative timestamp */
+function formatRelativeTime(createdAt: bigint): string {
+  const ms = Number(createdAt) / 1_000_000;
+  const diffMs = Date.now() - ms;
+  if (diffMs < 60_000) return "just now";
+  if (diffMs < 3_600_000) return `${Math.floor(diffMs / 60_000)}m ago`;
+  const d = new Date(ms);
+  const today = new Date();
+  if (
+    d.getDate() === today.getDate() &&
+    d.getMonth() === today.getMonth() &&
+    d.getFullYear() === today.getFullYear()
+  ) {
+    return d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  }
+  return d.toLocaleDateString([], { month: "short", day: "numeric" });
+}
+
 // ─── Emoji quick-pick ────────────────────────────────────────────────────────
 
 const QUICK_EMOJIS = ["👍", "❤️", "😂", "🎉", "🔥", "👀", "✅", "🙏"];
@@ -60,7 +77,6 @@ interface ThreadMessageProps {
 
 function ThreadMessage({ msg, isParent, onReact }: ThreadMessageProps) {
   const [showPicker, setShowPicker] = useState(false);
-  const timestampMs = Number(msg.createdAt) / 1_000_000;
 
   const reactions: Reaction[] =
     (msg as Message & { reactions?: Reaction[] }).reactions ?? [];
@@ -89,7 +105,7 @@ function ThreadMessage({ msg, isParent, onReact }: ThreadMessageProps) {
             </Badge>
           )}
           <span className="text-xs text-muted-foreground">
-            {formatDistanceToNow(timestampMs, { addSuffix: true })}
+            {formatRelativeTime(msg.createdAt)}
           </span>
         </div>
 
@@ -240,12 +256,14 @@ export default function ThreadPage() {
   const tenantId = getTenantId();
   const [replyText, setReplyText] = useState("");
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const bottomRef = useRef<HTMLDivElement>(null);
 
   // ── Fetch parent message ──────────────────────────────────────────────────
   const { data: parentMessage } = useQuery<Message | null>({
     queryKey: ["message-parent", tenantId, workspaceId, channelId, messageId],
     queryFn: async () => {
       if (!actor) return null;
+      // Load from channel messages — find parent by id
       const msgs = await actor.getMessages(
         tenantId,
         workspaceId,
@@ -267,8 +285,20 @@ export default function ThreadPage() {
       return actor.getThreadMessages(tenantId, workspaceId, messageId);
     },
     enabled: !!actor && !isFetching && !!workspaceId,
-    refetchInterval: 3000,
+    refetchInterval: 2000,
   });
+
+  // ── Auto-scroll to bottom when new replies arrive ──────────────────────────
+  const prevCountRef = useRef(0);
+  useEffect(() => {
+    const count = threadMessages?.length ?? 0;
+    if (count !== prevCountRef.current) {
+      prevCountRef.current = count;
+      requestAnimationFrame(() => {
+        bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+      });
+    }
+  }, [threadMessages]);
 
   // ── Send reply ────────────────────────────────────────────────────────────
   const sendMutation = useMutation({
@@ -289,6 +319,9 @@ export default function ThreadPage() {
       });
       queryClient.invalidateQueries({
         queryKey: ["messages", tenantId, workspaceId, channelId],
+      });
+      queryClient.invalidateQueries({
+        queryKey: ["unreadCounts", tenantId, workspaceId],
       });
       setReplyText("");
     },
@@ -324,9 +357,11 @@ export default function ThreadPage() {
 
   // ── Keyboard handlers ─────────────────────────────────────────────────────
   function handleKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
-    if ((e.ctrlKey || e.metaKey) && e.key === "Enter") {
+    // Enter to send, Shift+Enter for newline
+    if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
       if (replyText.trim()) sendMutation.mutate();
+      return;
     }
     if ((e.ctrlKey || e.metaKey) && e.key === "b") {
       e.preventDefault();
@@ -365,7 +400,7 @@ export default function ThreadPage() {
   return (
     <div className="flex flex-col h-full overflow-hidden bg-background">
       {/* ── Header ─────────────────────────────────────────────────────── */}
-      <div className="flex h-13 items-center gap-3 border-b border-border/60 bg-card/90 backdrop-blur-subtle px-4 shrink-0">
+      <div className="flex h-14 items-center gap-3 border-b border-border/60 bg-card/90 backdrop-blur-subtle px-4 shrink-0">
         <Button
           variant="ghost"
           size="icon"
@@ -472,11 +507,7 @@ export default function ThreadPage() {
             </div>
           )}
 
-          <div
-            ref={(el) => {
-              el?.scrollIntoView({ behavior: "smooth" });
-            }}
-          />
+          <div ref={bottomRef} className="h-2" />
         </div>
       </ScrollArea>
 
@@ -492,7 +523,7 @@ export default function ThreadPage() {
         <div className="flex gap-2 items-end">
           <Textarea
             ref={textareaRef}
-            placeholder="Reply in thread… (Ctrl+Enter to send)"
+            placeholder="Reply in thread… (Enter to send, Shift+Enter for new line)"
             value={replyText}
             onChange={(e) => setReplyText(e.target.value)}
             onKeyDown={handleKeyDown}
@@ -514,7 +545,7 @@ export default function ThreadPage() {
           </Button>
         </div>
         <p className="text-[10px] text-muted-foreground">
-          Ctrl+B bold · Ctrl+I italic · Ctrl+Enter send
+          Enter to send · Shift+Enter for new line · Ctrl+B bold · Ctrl+I italic
         </p>
       </div>
     </div>

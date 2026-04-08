@@ -124,6 +124,20 @@ module {
     }
   };
 
+  public func updateTaskStatus(
+    store : [(Common.EntityId, PTypes.Task)],
+    tenantId : Common.TenantId,
+    workspaceId : Common.WorkspaceId,
+    id : Common.EntityId,
+    status : PTypes.TaskStatus,
+  ) : { result : { #ok : PTypes.Task; #err : Text }; store : [(Common.EntityId, PTypes.Task)] } {
+    let (maybeTask, updated) = Projects.updateTaskStatus(store, tenantId, workspaceId, id, status);
+    switch (maybeTask) {
+      case (?t) ({ result = #ok(t); store = updated });
+      case null ({ result = #err("Task not found or access denied"); store = store });
+    }
+  };
+
   public func deleteTask(
     store : [(Common.EntityId, PTypes.Task)],
     tenantId : Common.TenantId,

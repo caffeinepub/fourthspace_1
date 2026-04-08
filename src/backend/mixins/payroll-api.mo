@@ -1,6 +1,7 @@
 import Common "../types/common";
 import PayTypes "../types/payroll";
 import PayLib "../lib/payroll";
+import Int "mo:core/Int";
 
 module {
 
@@ -79,6 +80,7 @@ module {
     caller : Common.UserId,
     employeeId : Common.EntityId,
     period : Text,
+    treasuryBalance : Nat,
   ) : {
     #ok : (
       PayTypes.PayrollRecord,
@@ -89,6 +91,24 @@ module {
     );
     #err : Text;
   } {
+    // Balance gate: check BEFORE any state changes (state-before-transfer principle)
+    let empOpt = PayLib.getEmployee(employees, tenantId, workspaceId, employeeId);
+    switch (empOpt) {
+      case null { return #err("Employee not found or inactive") };
+      case (?emp) {
+        if (not emp.isActive) { return #err("Employee not found or inactive") };
+        // Estimate gross pay to validate treasury has enough funds
+        let cycles : Float = switch (emp.payFrequency) {
+          case (#Weekly) 52.0; case (#BiWeekly) 26.0; case (#SemiMonthly) 24.0;
+          case (#Monthly) 12.0; case (#Quarterly) 4.0;
+        };
+        let estimatedNet = emp.salary.toFloat() / cycles;
+        let estimatedNetNat = if (estimatedNet > 0.0) { Int.abs(estimatedNet.toInt()) } else { 0 };
+        if (treasuryBalance < estimatedNetNat) {
+          return #err("Insufficient treasury balance. Please fund your workspace wallet before processing payroll.");
+        };
+      };
+    };
     var counter = idCounter + 1;
     let recordId = PayLib.genRecordId(counter);
     switch (PayLib.processPayroll(employees, payrollRecords, deductions, tenantId, workspaceId, caller, employeeId, period, recordId)) {
@@ -125,6 +145,7 @@ module {
     workspaceId : Common.WorkspaceId,
     caller : Common.UserId,
     recordIds : [Common.EntityId],
+    treasuryBalance : Nat,
   ) : {
     #ok : (
       [(Common.EntityId, PayTypes.PayrollRecord)],
@@ -133,6 +154,20 @@ module {
     );
     #err : Text;
   } {
+    // Sum all pending payment amounts BEFORE any state changes (state-before-transfer principle)
+    var totalAmount : Nat = 0;
+    for (rid in recordIds.vals()) {
+      let maybeRec = payrollRecords.find(func((k, r)) {
+        k == rid and r.tenantId == tenantId and r.workspaceId == workspaceId and r.status == #PendingApproval
+      });
+      switch (maybeRec) {
+        case (?(_, rec)) { totalAmount += rec.amount };
+        case null {};
+      };
+    };
+    if (treasuryBalance < totalAmount) {
+      return #err("Insufficient treasury balance. Please fund your workspace wallet before processing payroll.");
+    };
     let updatedRecords = PayLib.bulkApprovePayroll(payrollRecords, tenantId, workspaceId, recordIds, caller);
     let newCounter = idCounter + 1;
     let auditId = PayLib.genId("audit", newCounter);

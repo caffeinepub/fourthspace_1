@@ -92,6 +92,20 @@ module {
     };
   };
 
+  public func refundEscrow(
+    contracts : [(Common.EntityId, EscTypes.EscrowContract)],
+    tenantId : Common.TenantId,
+    workspaceId : Common.WorkspaceId,
+    id : Common.EntityId,
+    caller : Common.UserId,
+    note : ?Text,
+  ) : { #ok : (EscTypes.EscrowContract, [(Common.EntityId, EscTypes.EscrowContract)]); #err : Text } {
+    switch (EscLib.refundEscrow(contracts, tenantId, workspaceId, id, caller, note)) {
+      case (?(c, updated)) { #ok((c, updated)) };
+      case null { #err("Cannot refund: contract not found, wrong status (#Funded or #Disputed required), or caller is not payer") };
+    };
+  };
+
   // ── Milestones ────────────────────────────────────────────────────────────────
 
   public func addEscrowMilestone(
@@ -121,14 +135,35 @@ module {
   };
 
   public func approveMilestone(
+    contracts : [(Common.EntityId, EscTypes.EscrowContract)],
     milestones : [(Common.EntityId, EscTypes.EscrowMilestone)],
     tenantId : Common.TenantId,
     workspaceId : Common.WorkspaceId,
     milestoneId : Common.EntityId,
+    caller : Common.UserId,
   ) : { #ok : (EscTypes.EscrowMilestone, [(Common.EntityId, EscTypes.EscrowMilestone)]); #err : Text } {
-    switch (EscLib.approveMilestone(milestones, tenantId, workspaceId, milestoneId)) {
-      case (?(m, updated)) { #ok((m, updated)) };
-      case null { #err("Milestone not found or already approved") };
+    // Find the milestone to look up its parent escrow
+    let maybeMilestone = EscLib.getMilestone(milestones, tenantId, workspaceId, milestoneId);
+    switch (maybeMilestone) {
+      case null { #err("Milestone not found") };
+      case (?m) {
+        // Find parent escrow to check payerId
+        let maybeContract = contracts.find(func((k, c)) {
+          k == m.escrowId and c.tenantId == tenantId and c.workspaceId == workspaceId
+        });
+        switch (maybeContract) {
+          case null { #err("Parent escrow contract not found") };
+          case (?(_, contract)) {
+            if (contract.payerId != caller) {
+              return #err("Only the payer can approve milestone release.");
+            };
+            switch (EscLib.approveMilestone(milestones, tenantId, workspaceId, milestoneId)) {
+              case (?(m2, updated)) { #ok((m2, updated)) };
+              case null { #err("Milestone not found or already approved") };
+            };
+          };
+        };
+      };
     };
   };
 

@@ -109,8 +109,20 @@ module {
     }
   };
 
+  public func createOrGetDMChannel(
+    channels : ChannelStore,
+    tenantId : Common.TenantId,
+    workspaceId : Common.WorkspaceId,
+    caller : Common.UserId,
+    targetUserId : Common.UserId,
+  ) : ({ #ok : CTypes.Channel; #err : Text }, ChannelStore) {
+    let (ch, store) = Chat.createOrGetDMChannel(channels, tenantId, workspaceId, caller, targetUserId);
+    (#ok ch, store)
+  };
+
   // ── Message API ───────────────────────────────────────────────────────────────
 
+  /// Send a message. Returns the message, updated message store, updated channel store (for unread counts), and updated notif store.
   public func sendMessage(
     channels : ChannelStore,
     messages : MessageStore,
@@ -119,9 +131,9 @@ module {
     workspaceId : Common.WorkspaceId,
     caller : Common.UserId,
     input : CTypes.MessageInput,
-  ) : ({ #ok : CTypes.Message; #err : Text }, MessageStore, NotifStore) {
+  ) : ({ #ok : CTypes.Message; #err : Text }, MessageStore, ChannelStore, NotifStore) {
     switch (Chat.sendMessage(channels, messages, tenantId, workspaceId, caller, input)) {
-      case (?msg, msgStore) {
+      case (?msg, msgStore, chStore) {
         // Notify thread participants when replying
         let notifStore : NotifStore = switch (input.replyToId) {
           case (?parentId) {
@@ -136,9 +148,9 @@ module {
           };
           case null notifs;
         };
-        (#ok msg, msgStore, notifStore)
+        (#ok msg, msgStore, chStore, notifStore)
       };
-      case (null, msgStore) (#err "Cannot send message: channel not found or access denied", msgStore, notifs);
+      case (null, msgStore, chStore) (#err "Cannot send message: channel not found or access denied", msgStore, chStore, notifs);
     }
   };
 
@@ -290,6 +302,16 @@ module {
     (#ok us, store)
   };
 
+  public func updatePresence(
+    statusStore : StatusStore,
+    tenantId : Common.TenantId,
+    workspaceId : Common.WorkspaceId,
+    caller : Principal,
+  ) : ({ #ok : CTypes.UserStatus; #err : Text }, StatusStore) {
+    let (us, store) = Chat.updatePresence(statusStore, tenantId, workspaceId, caller);
+    (#ok us, store)
+  };
+
   public func getUserStatus(
     statusStore : StatusStore,
     tenantId : Common.TenantId,
@@ -297,6 +319,14 @@ module {
     userId : Principal,
   ) : ?CTypes.UserStatus {
     Chat.getUserStatus(statusStore, tenantId, workspaceId, userId)
+  };
+
+  public func listWorkspaceStatuses(
+    statusStore : StatusStore,
+    tenantId : Common.TenantId,
+    workspaceId : Common.WorkspaceId,
+  ) : [CTypes.UserStatus] {
+    Chat.listWorkspaceStatuses(statusStore, tenantId, workspaceId)
   };
 
   // ── Unread API ────────────────────────────────────────────────────────────────

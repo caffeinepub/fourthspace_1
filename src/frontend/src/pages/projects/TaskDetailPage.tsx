@@ -28,11 +28,11 @@ import {
   ListChecks,
   Loader2,
   MessageSquare,
-  Save,
   Trash2,
+  User,
   Zap,
 } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { TimeTracker } from "../../components/TimeTracker";
 import { ChecklistSection } from "../../components/projects/ChecklistSection";
@@ -49,17 +49,53 @@ import {
   type TaskInput,
   TaskPriority,
   TaskStatus,
+  type TimeEntry,
+  type WorkspaceMember,
 } from "../../types";
-import type { TimeEntry } from "../../types";
 
-const PRIORITY_OPTIONS = [
-  { value: TaskPriority.Low, label: "Low", color: "text-muted-foreground" },
-  { value: TaskPriority.Medium, label: "Normal", color: "text-blue-500" },
-  { value: TaskPriority.High, label: "High", color: "text-orange-500" },
-  { value: TaskPriority.Critical, label: "Urgent", color: "text-destructive" },
+// ─── Constants ────────────────────────────────────────────────────────────────
+
+const PRIORITY_OPTIONS: {
+  value: TaskPriority;
+  label: string;
+  color: string;
+  badge: string;
+}[] = [
+  {
+    value: TaskPriority.Low,
+    label: "Low",
+    color: "text-muted-foreground",
+    badge: "bg-muted text-muted-foreground border-border",
+  },
+  {
+    value: TaskPriority.Medium,
+    label: "Normal",
+    color: "text-blue-500",
+    badge:
+      "bg-blue-500/10 text-blue-600 border-blue-200 dark:text-blue-400 dark:border-blue-800",
+  },
+  {
+    value: TaskPriority.High,
+    label: "High",
+    color: "text-orange-500",
+    badge:
+      "bg-orange-500/10 text-orange-600 border-orange-200 dark:text-orange-400 dark:border-orange-800",
+  },
+  {
+    value: TaskPriority.Critical,
+    label: "Urgent",
+    color: "text-destructive",
+    badge:
+      "bg-destructive/10 text-destructive border-destructive/30 font-semibold",
+  },
 ];
 
-const STATUS_OPTIONS = [
+const STATUS_OPTIONS: {
+  value: TaskStatus;
+  label: string;
+  color: string;
+  bg: string;
+}[] = [
   {
     value: TaskStatus.Todo,
     label: "To Do",
@@ -86,15 +122,7 @@ const STATUS_OPTIONS = [
   },
 ];
 
-const PRIORITY_BADGE: Record<TaskPriority, string> = {
-  [TaskPriority.Low]: "bg-muted text-muted-foreground border-border",
-  [TaskPriority.Medium]:
-    "bg-blue-500/10 text-blue-600 border-blue-200 dark:text-blue-400",
-  [TaskPriority.High]:
-    "bg-orange-500/10 text-orange-600 border-orange-200 dark:text-orange-400",
-  [TaskPriority.Critical]:
-    "bg-destructive/10 text-destructive border-destructive/30 font-semibold",
-};
+// ─── Helpers ──────────────────────────────────────────────────────────────────
 
 function formatDateValue(ts?: bigint): string {
   if (!ts) return "";
@@ -113,6 +141,18 @@ function formatTs(ts: bigint): string {
     year: "numeric",
   });
 }
+
+function getInitials(member: WorkspaceMember | undefined): string {
+  if (!member?.displayName) return "?";
+  return member.displayName
+    .split(" ")
+    .map((p) => p[0])
+    .join("")
+    .toUpperCase()
+    .slice(0, 2);
+}
+
+// ─── Collapsible section ──────────────────────────────────────────────────────
 
 function CollapsibleSection({
   title,
@@ -146,6 +186,8 @@ function CollapsibleSection({
   );
 }
 
+// ─── Main Component ───────────────────────────────────────────────────────────
+
 const MOCK_TIME_ENTRIES: TimeEntry[] = [];
 
 export default function TaskDetailPage() {
@@ -157,6 +199,8 @@ export default function TaskDetailPage() {
   const { tenantId } = useWorkspace();
   const queryClient = useQueryClient();
   const isNew = taskId === "new";
+
+  const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const { data: task, isLoading } = useQuery<Task | null>({
     queryKey: ["task", tenantId, workspaceId, taskId],
@@ -177,6 +221,15 @@ export default function TaskDetailPage() {
     enabled: !!actor && !isFetching && !isNew,
   });
 
+  const { data: members = [] } = useQuery<WorkspaceMember[]>({
+    queryKey: ["members", tenantId, workspaceId],
+    queryFn: async () => {
+      if (!actor) return [];
+      return actor.listWorkspaceMembers(tenantId, workspaceId);
+    },
+    enabled: !!actor && !isFetching && !isNew,
+  });
+
   const taskSprint = sprints.find((s) => s.taskIds.includes(taskId));
 
   const [title, setTitle] = useState("");
@@ -184,6 +237,7 @@ export default function TaskDetailPage() {
   const [status, setStatus] = useState<TaskStatus>(TaskStatus.Todo);
   const [priority, setPriority] = useState<TaskPriority>(TaskPriority.Medium);
   const [dueDate, setDueDate] = useState("");
+  const [assigneeId, setAssigneeId] = useState<string>("none");
   const [crossLinks, setCrossLinks] = useState<CrossLink[]>([]);
   const [isDirty, setIsDirty] = useState(false);
   const [timeEntries, setTimeEntries] = useState<TimeEntry[]>(
@@ -197,10 +251,13 @@ export default function TaskDetailPage() {
       setStatus(task.status);
       setPriority(task.priority);
       setDueDate(formatDateValue(task.dueDate));
+      setAssigneeId(task.assigneeId ? task.assigneeId.toString() : "none");
       setCrossLinks(task.crossLinks);
       setIsDirty(false);
     }
   }, [task]);
+
+  // ─── Mutations ──────────────────────────────────────────────────────────────
 
   const saveMutation = useMutation({
     mutationFn: async (input: TaskInput) => {
@@ -226,9 +283,9 @@ export default function TaskDetailPage() {
       queryClient.invalidateQueries({
         queryKey: ["task", tenantId, workspaceId, taskId],
       });
-      toast.success(isNew ? "Task created" : "Task saved");
       setIsDirty(false);
       if (isNew) {
+        toast.success("Task created");
         navigate({
           to: "/app/$workspaceId/projects/$projectId/tasks/$taskId",
           params: { workspaceId, projectId, taskId: saved.id },
@@ -258,24 +315,51 @@ export default function TaskDetailPage() {
       toast.error(err.message || "Failed to delete task"),
   });
 
-  function handleStatusChange(v: TaskStatus) {
-    setStatus(v);
-    setIsDirty(true);
-    if (!isNew && task) {
-      saveMutation.mutate({
-        title,
-        description,
+  // ─── Save helpers ──────────────────────────────────────────────────────────
+
+  const buildInput = useCallback(
+    (overrides?: Partial<TaskInput>): TaskInput => {
+      const resolvedAssignee =
+        assigneeId && assigneeId !== "none"
+          ? (members.find((m) => m.userId.toString() === assigneeId)?.userId ??
+            undefined)
+          : undefined;
+      return {
+        title: title.trim() || "Untitled",
+        description: description.trim(),
         projectId,
         priority,
         dueDate: parseDateToTimestamp(dueDate),
         crossLinks,
-      });
+        assigneeId: resolvedAssignee,
+        ...overrides,
+      };
+    },
+    [
+      title,
+      description,
+      projectId,
+      priority,
+      dueDate,
+      crossLinks,
+      assigneeId,
+      members,
+    ],
+  );
+
+  function triggerSave(overrides?: Partial<TaskInput>) {
+    if (!isNew) {
+      saveMutation.mutate(buildInput(overrides));
     }
   }
 
-  function handlePriorityChange(v: TaskPriority) {
-    setPriority(v);
-    setIsDirty(true);
+  // Debounced auto-save for text fields
+  function scheduleSave(overrides?: Partial<TaskInput>) {
+    if (isNew) return;
+    if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+    saveTimerRef.current = setTimeout(() => {
+      saveMutation.mutate(buildInput(overrides));
+    }, 500);
   }
 
   function handleSave() {
@@ -283,14 +367,57 @@ export default function TaskDetailPage() {
       toast.error("Task title is required");
       return;
     }
-    saveMutation.mutate({
-      title: title.trim(),
-      description: description.trim(),
-      projectId,
-      priority,
-      dueDate: parseDateToTimestamp(dueDate),
-      crossLinks,
-    });
+    if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+    saveMutation.mutate(buildInput());
+  }
+
+  // ─── Field change handlers ─────────────────────────────────────────────────
+
+  function handleStatusChange(v: TaskStatus) {
+    setStatus(v);
+    setIsDirty(true);
+    if (!isNew) {
+      // Status isn't persisted by backend updateTask (TaskInput has no status field),
+      // but we still call updateTask to persist other field changes and trigger query sync.
+      // The local status state is the source of truth for this session.
+      triggerSave();
+      toast.success(
+        `Status set to ${STATUS_OPTIONS.find((o) => o.value === v)?.label ?? v}`,
+      );
+    }
+  }
+
+  function handlePriorityChange(v: TaskPriority) {
+    setPriority(v);
+    setIsDirty(true);
+    if (!isNew) {
+      // Immediate save for dropdown changes
+      if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+      saveMutation.mutate(buildInput({ priority: v }));
+    }
+  }
+
+  function handleAssigneeChange(v: string) {
+    setAssigneeId(v);
+    setIsDirty(true);
+    if (!isNew) {
+      if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+      const resolvedAssignee =
+        v !== "none"
+          ? (members.find((m) => m.userId.toString() === v)?.userId ??
+            undefined)
+          : undefined;
+      saveMutation.mutate(buildInput({ assigneeId: resolvedAssignee }));
+    }
+  }
+
+  function handleDueDateChange(v: string) {
+    setDueDate(v);
+    setIsDirty(true);
+    if (!isNew) {
+      if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+      saveMutation.mutate(buildInput({ dueDate: parseDateToTimestamp(v) }));
+    }
   }
 
   function handleTimerStart(
@@ -321,6 +448,12 @@ export default function TaskDetailPage() {
     );
   }
 
+  // ─── Derived state ─────────────────────────────────────────────────────────
+
+  const dueDateMs = dueDate ? new Date(dueDate).getTime() : null;
+  const isOverdue =
+    dueDateMs && dueDateMs < Date.now() && status !== TaskStatus.Done;
+
   if (isLoading && !isNew) {
     return (
       <div className="p-4 sm:p-6 md:p-8 max-w-5xl mx-auto space-y-4 pb-20 md:pb-6">
@@ -336,8 +469,12 @@ export default function TaskDetailPage() {
 
   const statusCfg =
     STATUS_OPTIONS.find((o) => o.value === status) ?? STATUS_OPTIONS[0];
-  const priorityLabel =
-    PRIORITY_OPTIONS.find((o) => o.value === priority)?.label ?? priority;
+  const priorityCfg =
+    PRIORITY_OPTIONS.find((o) => o.value === priority) ?? PRIORITY_OPTIONS[1];
+  const assignee =
+    assigneeId !== "none"
+      ? members.find((m) => m.userId.toString() === assigneeId)
+      : undefined;
 
   return (
     <div className="flex flex-col h-full min-h-0 overflow-y-auto pb-20 md:pb-0">
@@ -373,14 +510,20 @@ export default function TaskDetailPage() {
                   {statusCfg.label}
                 </span>
                 <span
-                  className={`rounded-full px-2 py-0.5 text-xs font-medium border ${PRIORITY_BADGE[priority]}`}
+                  className={`rounded-full px-2 py-0.5 text-xs font-medium border ${priorityCfg.badge}`}
                 >
-                  {priorityLabel}
+                  {priorityCfg.label}
                 </span>
               </div>
             )}
           </div>
           <div className="flex items-center gap-1.5 shrink-0">
+            {saveMutation.isPending && (
+              <span className="hidden sm:flex items-center gap-1 text-xs text-muted-foreground">
+                <Loader2 className="h-3 w-3 animate-spin" />
+                Saving…
+              </span>
+            )}
             {!isNew && (
               <Button
                 variant="outline"
@@ -398,33 +541,30 @@ export default function TaskDetailPage() {
                 )}
               </Button>
             )}
-            <Button
-              size="sm"
-              onClick={handleSave}
-              disabled={saveMutation.isPending || (!isNew && !isDirty)}
-              className="gap-1.5 h-9 text-xs active-press min-h-[44px]"
-              data-ocid="task-save-btn"
-            >
-              {saveMutation.isPending ? (
-                <Loader2 className="h-3 w-3 animate-spin" />
-              ) : (
-                <Save className="h-3 w-3" />
-              )}
-              {isNew ? (
-                <span className="hidden sm:inline">Create Task</span>
-              ) : (
-                "Save"
-              )}
-            </Button>
+            {isNew && (
+              <Button
+                size="sm"
+                onClick={handleSave}
+                disabled={saveMutation.isPending}
+                className="gap-1.5 h-9 text-xs active-press min-h-[44px]"
+                data-ocid="task-create-btn"
+              >
+                {saveMutation.isPending ? (
+                  <Loader2 className="h-3 w-3 animate-spin" />
+                ) : null}
+                Create Task
+              </Button>
+            )}
           </div>
         </div>
       </div>
 
-      {/* Content — stacked on mobile, side-by-side on lg+ */}
+      {/* Content */}
       <div className="px-4 sm:px-6 md:px-8 py-5 max-w-5xl mx-auto w-full">
         <div className="flex flex-col lg:flex-row gap-5">
           {/* LEFT COLUMN */}
           <div className="flex-1 min-w-0 space-y-5">
+            {/* Title */}
             <div className="space-y-1.5">
               <Input
                 id="task-title"
@@ -433,15 +573,21 @@ export default function TaskDetailPage() {
                 onChange={(e) => {
                   setTitle(e.target.value);
                   setIsDirty(true);
+                  scheduleSave({ title: e.target.value.trim() || "Untitled" });
                 }}
                 onBlur={() => {
-                  if (!isNew && isDirty && title.trim()) handleSave();
+                  if (!isNew && isDirty && title.trim()) {
+                    if (saveTimerRef.current)
+                      clearTimeout(saveTimerRef.current);
+                    triggerSave();
+                  }
                 }}
                 className="text-base sm:text-lg font-display font-bold border-0 border-b border-border rounded-none px-0 h-auto py-2 focus-visible:ring-0 bg-transparent"
                 data-ocid="task-title-input"
               />
             </div>
 
+            {/* Description */}
             <div className="space-y-1.5">
               <Label className="text-xs text-muted-foreground">
                 Description
@@ -453,9 +599,14 @@ export default function TaskDetailPage() {
                 onChange={(e) => {
                   setDescription(e.target.value);
                   setIsDirty(true);
+                  scheduleSave({ description: e.target.value.trim() });
                 }}
                 onBlur={() => {
-                  if (!isNew && isDirty) handleSave();
+                  if (!isNew && isDirty) {
+                    if (saveTimerRef.current)
+                      clearTimeout(saveTimerRef.current);
+                    triggerSave();
+                  }
                 }}
                 rows={4}
                 className="resize-none text-sm"
@@ -463,8 +614,9 @@ export default function TaskDetailPage() {
               />
             </div>
 
-            {/* Status/Priority/DueDate — stacked 1-col on tiny mobile, 3-col otherwise */}
+            {/* Status / Priority / Due Date */}
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              {/* Status */}
               <div className="space-y-1.5">
                 <Label className="text-xs text-muted-foreground">Status</Label>
                 <Select
@@ -486,6 +638,8 @@ export default function TaskDetailPage() {
                   </SelectContent>
                 </Select>
               </div>
+
+              {/* Priority */}
               <div className="space-y-1.5">
                 <Label className="text-xs text-muted-foreground">
                   Priority
@@ -498,7 +652,11 @@ export default function TaskDetailPage() {
                     className="h-10 sm:h-8 text-xs"
                     data-ocid="task-priority-select"
                   >
-                    <SelectValue />
+                    <SelectValue>
+                      <span className={`text-xs ${priorityCfg.color}`}>
+                        {priorityCfg.label}
+                      </span>
+                    </SelectValue>
                   </SelectTrigger>
                   <SelectContent>
                     {PRIORITY_OPTIONS.map((o) => (
@@ -509,23 +667,80 @@ export default function TaskDetailPage() {
                   </SelectContent>
                 </Select>
               </div>
+
+              {/* Due Date */}
               <div className="space-y-1.5">
-                <Label className="text-xs text-muted-foreground flex items-center gap-1">
-                  <Calendar className="h-3 w-3" /> Due Date
+                <Label
+                  className={`text-xs flex items-center gap-1 ${isOverdue ? "text-destructive" : "text-muted-foreground"}`}
+                >
+                  <Calendar className="h-3 w-3" />
+                  {isOverdue ? "Overdue" : "Due Date"}
                 </Label>
                 <Input
                   type="date"
                   value={dueDate}
-                  onChange={(e) => {
-                    setDueDate(e.target.value);
-                    setIsDirty(true);
-                  }}
-                  className="h-10 sm:h-8 text-xs"
+                  onChange={(e) => handleDueDateChange(e.target.value)}
+                  className={`h-10 sm:h-8 text-xs ${isOverdue ? "text-destructive border-destructive/50" : ""}`}
                   data-ocid="task-due-input"
                 />
               </div>
             </div>
 
+            {/* Assignee */}
+            <div className="space-y-1.5">
+              <Label className="text-xs text-muted-foreground flex items-center gap-1">
+                <User className="h-3 w-3" /> Assignee
+              </Label>
+              <Select value={assigneeId} onValueChange={handleAssigneeChange}>
+                <SelectTrigger
+                  className="h-10 sm:h-8 text-xs"
+                  data-ocid="task-assignee-select"
+                >
+                  <SelectValue placeholder="Unassigned">
+                    {assignee ? (
+                      <span className="flex items-center gap-1.5">
+                        <span className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-primary/20 text-[9px] font-bold text-primary">
+                          {(() => {
+                            const name = assignee.displayName;
+                            return name
+                              .split(" ")
+                              .map((p) => p[0])
+                              .join("")
+                              .toUpperCase()
+                              .slice(0, 2);
+                          })()}
+                        </span>
+                        {assignee.displayName}
+                      </span>
+                    ) : (
+                      "Unassigned"
+                    )}
+                  </SelectValue>
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">
+                    <span className="text-xs text-muted-foreground">
+                      Unassigned
+                    </span>
+                  </SelectItem>
+                  {members.map((m) => (
+                    <SelectItem
+                      key={m.userId.toString()}
+                      value={m.userId.toString()}
+                    >
+                      <span className="flex items-center gap-1.5 text-xs">
+                        <span className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-primary/20 text-[9px] font-bold text-primary shrink-0">
+                          {getInitials(m)}
+                        </span>
+                        {m.displayName}
+                      </span>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Meta */}
             {task && (
               <div className="flex flex-wrap items-center gap-4 text-xs text-muted-foreground pt-1 border-t border-border/60">
                 <span className="flex items-center gap-1">
@@ -539,6 +754,7 @@ export default function TaskDetailPage() {
               </div>
             )}
 
+            {/* Subtasks */}
             {!isNew && (
               <div className="rounded-2xl border border-border bg-card p-4">
                 <CollapsibleSection
@@ -550,6 +766,7 @@ export default function TaskDetailPage() {
               </div>
             )}
 
+            {/* Checklist */}
             {!isNew && (
               <div className="rounded-2xl border border-border bg-card p-4">
                 <CollapsibleSection
@@ -562,6 +779,7 @@ export default function TaskDetailPage() {
               </div>
             )}
 
+            {/* Discussion */}
             {!isNew && (
               <div className="rounded-2xl border border-border bg-card p-4">
                 <CollapsibleSection
@@ -574,9 +792,10 @@ export default function TaskDetailPage() {
             )}
           </div>
 
-          {/* RIGHT SIDEBAR — full-width on mobile, fixed width on lg+ */}
+          {/* RIGHT SIDEBAR */}
           {!isNew && (
             <div className="w-full lg:w-72 shrink-0 space-y-4">
+              {/* Sprint */}
               <div className="rounded-2xl border border-border bg-card p-4 space-y-2">
                 <div className="flex items-center gap-1.5 text-sm font-semibold text-foreground">
                   <Zap className="h-4 w-4 text-primary" /> Sprint
@@ -597,6 +816,7 @@ export default function TaskDetailPage() {
                 )}
               </div>
 
+              {/* Watchers */}
               <div className="rounded-2xl border border-border bg-card p-4 space-y-2">
                 <div className="flex items-center gap-1.5 text-sm font-semibold text-foreground">
                   <Eye className="h-4 w-4 text-muted-foreground" /> Watchers
@@ -604,6 +824,7 @@ export default function TaskDetailPage() {
                 <TaskWatchers taskId={taskId} />
               </div>
 
+              {/* Relationships */}
               <div className="rounded-2xl border border-border bg-card p-4 space-y-2">
                 <div className="flex items-center gap-1.5 text-sm font-semibold text-foreground">
                   <GitMerge className="h-4 w-4 text-muted-foreground" />{" "}
@@ -612,6 +833,7 @@ export default function TaskDetailPage() {
                 <TaskRelationships taskId={taskId} projectId={projectId} />
               </div>
 
+              {/* Time Tracker */}
               <TimeTracker
                 taskId={taskId}
                 projectId={projectId}
@@ -620,6 +842,7 @@ export default function TaskDetailPage() {
                 onStop={handleTimerStop}
               />
 
+              {/* Cross-links */}
               {crossLinks.length > 0 && (
                 <div className="rounded-2xl border border-border bg-card p-4 space-y-2">
                   <div className="flex items-center gap-1.5 text-sm font-semibold text-foreground">
@@ -647,7 +870,7 @@ export default function TaskDetailPage() {
           )}
         </div>
 
-        {/* New task save button at bottom for mobile */}
+        {/* New task bottom bar */}
         {isNew && (
           <div className="flex items-center justify-end gap-3 pt-4 border-t border-border/60 mt-4">
             <Button variant="ghost" asChild data-ocid="task-cancel-btn">
@@ -661,13 +884,11 @@ export default function TaskDetailPage() {
             <Button
               onClick={handleSave}
               disabled={saveMutation.isPending}
-              data-ocid="task-create-btn"
+              data-ocid="task-create-submit-btn"
             >
               {saveMutation.isPending ? (
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              ) : (
-                <Save className="mr-2 h-4 w-4" />
-              )}
+              ) : null}
               Create Task
             </Button>
           </div>

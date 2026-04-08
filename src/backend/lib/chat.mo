@@ -56,6 +56,26 @@ module {
     channel.memberIds.any(func(id : Common.UserId) : Bool { Principal.equal(id, userId) })
   };
 
+  // Increment unread count for all channel members except the sender.
+  func incrementUnreadForMembers(ch : Types.Channel, sender : Common.UserId) : Types.Channel {
+    let counts : [Types.UnreadEntry] = switch (ch.unreadCounts) { case (?uc) uc; case null [] };
+    // Build a set of member IDs for whom an entry already exists
+    var updatedCounts = counts.map(func(e : Types.UnreadEntry) : Types.UnreadEntry {
+      if (Principal.equal(e.userId, sender)) e
+      else ({ e with count = e.count + 1 })
+    });
+    // Add entries for members who have no unread entry yet (except sender)
+    for (memberId in ch.memberIds.values()) {
+      if (not Principal.equal(memberId, sender)) {
+        let hasEntry = updatedCounts.any(func(e : Types.UnreadEntry) : Bool { Principal.equal(e.userId, memberId) });
+        if (not hasEntry) {
+          updatedCounts := updatedCounts.concat([{ userId = memberId; count = 1 }]);
+        };
+      };
+    };
+    { ch with unreadCounts = ?updatedCounts }
+  };
+
   // ── Channel Management ────────────────────────────────────────────────────────
 
   public func createChannel(
@@ -218,8 +238,60 @@ module {
     }
   };
 
+  // ── DM (Direct Message) Channel ────────────────────────────────────────────────
+
+  /// Create or find an existing DM channel between two users.
+  /// DM channels are private (isPublic=false) with exactly 2 members.
+  /// The name is derived deterministically from the two principals (sorted).
+  public func createOrGetDMChannel(
+    channelStore : [(Common.EntityId, Types.Channel)],
+    tenantId : Common.TenantId,
+    workspaceId : Common.WorkspaceId,
+    caller : Common.UserId,
+    targetUserId : Common.UserId,
+  ) : (Types.Channel, [(Common.EntityId, Types.Channel)]) {
+    let callerText = caller.toText();
+    let targetText = targetUserId.toText();
+    // Deterministic DM name so both participants find the same channel
+    let dmName = if (callerText < targetText) {
+      "dm:" # callerText # ":" # targetText
+    } else {
+      "dm:" # targetText # ":" # callerText
+    };
+    let m = toChannelMap(channelStore);
+    // Search for an existing DM channel with this exact name in this workspace
+    switch (m.values().find(func(ch : Types.Channel) : Bool {
+      ch.tenantId == tenantId and ch.workspaceId == workspaceId and ch.name == dmName
+    })) {
+      case (?existing) (existing, channelStore);
+      case null {
+        let now = Time.now();
+        let id = genId(dmName);
+        let channel : Types.Channel = {
+          id;
+          tenantId;
+          workspaceId;
+          name = dmName;
+          description = "";
+          createdBy = caller;
+          memberIds = [caller, targetUserId];
+          isPublic = false;
+          createdAt = now;
+          pinnedMessageIds = ?[];
+          topic = ?"";
+          unreadCounts = ?[];
+          mentionFlags = ?[];
+        };
+        m.add(id, channel);
+        (channel, channelToStore(m))
+      };
+    }
+  };
+
   // ── Message Management ────────────────────────────────────────────────────────
 
+  /// Send a message, persist it, and increment unread counts for all other channel members.
+  /// Returns the new message, the updated message store, and the updated channel store.
   public func sendMessage(
     channelStore : [(Common.EntityId, Types.Channel)],
     messageStore : [(Common.EntityId, Types.Message)],
@@ -227,14 +299,17 @@ module {
     workspaceId : Common.WorkspaceId,
     caller : Common.UserId,
     input : Types.MessageInput,
-  ) : (?Types.Message, [(Common.EntityId, Types.Message)]) {
+  ) : (?Types.Message, [(Common.EntityId, Types.Message)], [(Common.EntityId, Types.Channel)]) {
     let chMap = toChannelMap(channelStore);
     switch (chMap.get(input.channelId)) {
       case (?ch) {
-        if (ch.tenantId != tenantId or ch.workspaceId != workspaceId) return (null, messageStore);
-        if (not ch.isPublic and not isMember(ch, caller)) return (null, messageStore);
+        if (ch.tenantId != tenantId or ch.workspaceId != workspaceId) return (null, messageStore, channelStore);
+        if (not ch.isPublic and not isMember(ch, caller)) return (null, messageStore, channelStore);
+        // Increment unread counts for all members except the sender
+        let updatedCh = incrementUnreadForMembers(ch, caller);
+        chMap.add(input.channelId, updatedCh);
       };
-      case null return (null, messageStore);
+      case null return (null, messageStore, channelStore);
     };
     let now = Time.now();
     let id = genId(caller.toText() # "msg");
@@ -273,7 +348,7 @@ module {
       };
       case null {};
     };
-    (?msg, messageToStore(mMap))
+    (?msg, messageToStore(mMap), channelToStore(chMap))
   };
 
   public func getMessages(
@@ -298,13 +373,14 @@ module {
           )
         },
       ).toArray();
+    // Sort ascending by timestamp (oldest first — chronological order for chat)
     let sorted = filtered.sort(func(a : Types.Message, b : Types.Message) : { #less; #equal; #greater } {
-      if (a.createdAt > b.createdAt) #less
-      else if (a.createdAt < b.createdAt) #greater
+      if (a.createdAt < b.createdAt) #less
+      else if (a.createdAt > b.createdAt) #greater
       else #equal
     });
     if (sorted.size() <= limit) sorted
-    else sorted.sliceToArray(0, limit)
+    else sorted.sliceToArray(sorted.size() - limit, sorted.size())
   };
 
   public func deleteMessage(
@@ -516,7 +592,7 @@ module {
     }
   };
 
-  // ── User Status ───────────────────────────────────────────────────────────────
+  // ── User Status & Presence ────────────────────────────────────────────────────
 
   public func setUserStatus(
     statusStore : [(Text, Types.UserStatus)],
@@ -541,6 +617,30 @@ module {
     (userStatus, statusToStore(m))
   };
 
+  /// Update presence (heartbeat). Sets status to #online and refreshes lastSeen.
+  public func updatePresence(
+    statusStore : [(Text, Types.UserStatus)],
+    tenantId : Common.TenantId,
+    workspaceId : Common.WorkspaceId,
+    caller : Principal,
+  ) : (Types.UserStatus, [(Text, Types.UserStatus)]) {
+    let m = toStatusMap(statusStore);
+    let key = statusKey(tenantId, workspaceId, caller);
+    let now = Time.now();
+    let existing : ?Types.UserStatus = m.get(key);
+    let customStatus = switch (existing) { case (?us) us.customStatus; case null "" };
+    let userStatus : Types.UserStatus = {
+      id = caller;
+      tenantId;
+      workspaceId;
+      status = #online;
+      customStatus;
+      lastSeen = now;
+    };
+    m.add(key, userStatus);
+    (userStatus, statusToStore(m))
+  };
+
   public func getUserStatus(
     statusStore : [(Text, Types.UserStatus)],
     tenantId : Common.TenantId,
@@ -549,6 +649,17 @@ module {
   ) : ?Types.UserStatus {
     let m = toStatusMap(statusStore);
     m.get(statusKey(tenantId, workspaceId, userId))
+  };
+
+  public func listWorkspaceStatuses(
+    statusStore : [(Text, Types.UserStatus)],
+    tenantId : Common.TenantId,
+    workspaceId : Common.WorkspaceId,
+  ) : [Types.UserStatus] {
+    let m = toStatusMap(statusStore);
+    m.values().filter(func(us : Types.UserStatus) : Bool {
+      us.tenantId == tenantId and us.workspaceId == workspaceId
+    }).toArray()
   };
 
   // ── Unread Counts ─────────────────────────────────────────────────────────────

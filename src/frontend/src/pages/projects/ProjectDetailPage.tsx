@@ -1,4 +1,3 @@
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -11,6 +10,7 @@ import {
   CheckCircle2,
   Circle,
   Clock,
+  Diamond,
   FileText,
   Flag,
   FolderKanban,
@@ -22,7 +22,8 @@ import {
   Trash2,
   Users,
 } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { toast } from "sonner";
 import type { Whiteboard } from "../../backend";
 import GanttView from "../../components/views/GanttView";
 import TableView from "../../components/views/TableView";
@@ -36,7 +37,18 @@ import {
   type Task,
   TaskPriority,
   TaskStatus,
+  type WorkspaceMember,
 } from "../../types";
+
+// Extended actor interface to include updateTaskStatus (added after bindgen was last run)
+interface ActorWithTaskStatus {
+  updateTaskStatus(
+    tenantId: string,
+    workspaceId: string,
+    id: string,
+    status: TaskStatus,
+  ): Promise<{ __kind__: "ok"; ok: Task } | { __kind__: "err"; err: string }>;
+}
 
 type ViewMode = "kanban" | "gantt" | "timeline" | "table" | "workload";
 
@@ -70,6 +82,7 @@ const COLUMNS: {
   icon: React.ReactNode;
   color: string;
   bg: string;
+  border: string;
 }[] = [
   {
     status: TaskStatus.Todo,
@@ -77,6 +90,7 @@ const COLUMNS: {
     icon: <Circle className="h-3.5 w-3.5" />,
     color: "text-muted-foreground",
     bg: "bg-muted/40",
+    border: "border-muted",
   },
   {
     status: TaskStatus.InProgress,
@@ -84,6 +98,7 @@ const COLUMNS: {
     icon: <Clock className="h-3.5 w-3.5" />,
     color: "text-orange-500",
     bg: "bg-orange-500/5",
+    border: "border-orange-200/60 dark:border-orange-800/40",
   },
   {
     status: TaskStatus.Done,
@@ -91,6 +106,7 @@ const COLUMNS: {
     icon: <CheckCircle2 className="h-3.5 w-3.5" />,
     color: "text-emerald-500",
     bg: "bg-emerald-500/5",
+    border: "border-emerald-200/60 dark:border-emerald-800/40",
   },
   {
     status: TaskStatus.Blocked,
@@ -98,15 +114,16 @@ const COLUMNS: {
     icon: <AlertCircle className="h-3.5 w-3.5" />,
     color: "text-destructive",
     bg: "bg-destructive/5",
+    border: "border-destructive/20",
   },
 ];
 
 const PRIORITY_BADGE: Record<TaskPriority, string> = {
   [TaskPriority.Low]: "bg-muted text-muted-foreground border-border",
   [TaskPriority.Medium]:
-    "bg-orange-500/10 text-orange-600 border-orange-200 dark:border-orange-800 dark:text-orange-400",
+    "bg-blue-500/10 text-blue-600 border-blue-200 dark:border-blue-800 dark:text-blue-400",
   [TaskPriority.High]:
-    "bg-red-500/10 text-red-600 border-red-200 dark:border-red-800 dark:text-red-400",
+    "bg-orange-500/10 text-orange-600 border-orange-200 dark:border-orange-800 dark:text-orange-400",
   [TaskPriority.Critical]:
     "bg-red-600/20 text-red-700 border-red-300 dark:border-red-700 dark:text-red-300 font-semibold",
 };
@@ -134,51 +151,139 @@ const PROJECT_STATUS_BADGE: Record<
   },
 };
 
+function getInitials(member: WorkspaceMember | undefined): string {
+  if (!member?.displayName) return "?";
+  return member.displayName
+    .split(" ")
+    .map((p) => p[0])
+    .join("")
+    .toUpperCase()
+    .slice(0, 2);
+}
+
 function TaskCard({
   task,
   projectId,
   workspaceId,
-}: { task: Task; projectId: string; workspaceId: string }) {
+  members,
+  subtaskCounts,
+  onDragStart,
+}: {
+  task: Task;
+  projectId: string;
+  workspaceId: string;
+  members: WorkspaceMember[];
+  subtaskCounts: Record<string, { done: number; total: number }>;
+  onDragStart: (task: Task) => void;
+}) {
   const dueDateMs = task.dueDate ? Number(task.dueDate) / 1_000_000 : null;
   const isOverdue =
     dueDateMs && dueDateMs < Date.now() && task.status !== TaskStatus.Done;
+  const assignee = task.assigneeId
+    ? members.find((m) => m.userId.toString() === task.assigneeId?.toString())
+    : undefined;
+  const subCounts = subtaskCounts[task.id];
+  const isMilestone = task.crossLinks?.some(
+    (cl) => cl.entityType === "milestone",
+  );
 
   return (
-    <Link
-      to="/app/$workspaceId/projects/$projectId/tasks/$taskId"
-      params={{ workspaceId, projectId, taskId: task.id }}
+    <div
+      draggable
+      onDragStart={(e) => {
+        e.dataTransfer.effectAllowed = "move";
+        onDragStart(task);
+      }}
+      data-task-id={task.id}
       data-ocid={`task-card-${task.id}`}
-      className="block rounded-xl border border-border/50 bg-card p-3 transition-smooth hover:shadow-sm hover:border-orange-200/60 dark:hover:border-orange-800/60 hover:-translate-y-0.5"
+      className="group relative rounded-xl border border-border/50 bg-card p-3 cursor-grab active:cursor-grabbing transition-all duration-150 hover:shadow-sm hover:border-primary/30 hover:-translate-y-0.5 select-none"
     >
-      <div className="flex items-start justify-between gap-2 mb-1.5">
-        <p className="text-xs font-medium text-foreground leading-snug line-clamp-2 min-w-0">
-          {task.title}
-        </p>
-        <span
-          className={`shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-medium border ${PRIORITY_BADGE[task.priority]}`}
-        >
-          {task.priority}
-        </span>
-      </div>
-      {task.description && (
-        <p className="text-[11px] text-muted-foreground line-clamp-1 mb-1.5">
-          {task.description}
-        </p>
-      )}
-      {dueDateMs && (
-        <div className="flex items-center gap-1 text-[11px] text-muted-foreground">
-          <Clock
-            className={`h-2.5 w-2.5 ${isOverdue ? "text-destructive" : ""}`}
-          />
-          <span className={isOverdue ? "text-destructive" : ""}>
-            {new Date(dueDateMs).toLocaleDateString("en-US", {
-              month: "short",
-              day: "numeric",
-            })}
+      <Link
+        to="/app/$workspaceId/projects/$projectId/tasks/$taskId"
+        params={{ workspaceId, projectId, taskId: task.id }}
+        className="absolute inset-0 rounded-xl z-0"
+        aria-hidden
+        tabIndex={-1}
+        onClick={(e) => e.stopPropagation()}
+      />
+      <div className="relative z-10 pointer-events-none">
+        <div className="flex items-start justify-between gap-2 mb-1.5">
+          <div className="flex items-start gap-1.5 min-w-0">
+            {isMilestone && (
+              <Diamond className="h-3 w-3 text-primary shrink-0 mt-0.5" />
+            )}
+            <p className="text-xs font-medium text-foreground leading-snug line-clamp-2 min-w-0">
+              {task.title}
+            </p>
+          </div>
+          <span
+            className={`shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-medium border ${PRIORITY_BADGE[task.priority]}`}
+          >
+            {task.priority}
           </span>
         </div>
-      )}
-    </Link>
+
+        {task.description && (
+          <p className="text-[11px] text-muted-foreground line-clamp-1 mb-1.5">
+            {task.description}
+          </p>
+        )}
+
+        {/* Subtask progress bar */}
+        {subCounts && subCounts.total > 0 && (
+          <div className="mb-1.5">
+            <div className="flex items-center justify-between mb-0.5">
+              <span className="text-[10px] text-muted-foreground">
+                {subCounts.done}/{subCounts.total} subtasks
+              </span>
+            </div>
+            <div className="h-1 w-full bg-muted rounded-full overflow-hidden">
+              <div
+                className="h-full bg-primary rounded-full transition-all"
+                style={{
+                  width: `${Math.round((subCounts.done / subCounts.total) * 100)}%`,
+                }}
+              />
+            </div>
+          </div>
+        )}
+
+        <div className="flex items-center gap-1.5">
+          {dueDateMs && (
+            <div className="flex items-center gap-1 text-[11px] text-muted-foreground flex-1 min-w-0">
+              <Clock
+                className={`h-2.5 w-2.5 shrink-0 ${isOverdue ? "text-destructive" : ""}`}
+              />
+              <span className={isOverdue ? "text-destructive font-medium" : ""}>
+                {new Date(dueDateMs).toLocaleDateString("en-US", {
+                  month: "short",
+                  day: "numeric",
+                })}
+              </span>
+            </div>
+          )}
+          {assignee ? (
+            <div
+              className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-primary/20 text-[9px] font-bold text-primary ml-auto"
+              title={assignee.displayName}
+            >
+              {getInitials(assignee)}
+            </div>
+          ) : (
+            <div className="ml-auto" />
+          )}
+        </div>
+      </div>
+
+      <Link
+        to="/app/$workspaceId/projects/$projectId/tasks/$taskId"
+        params={{ workspaceId, projectId, taskId: task.id }}
+        className="absolute inset-0 rounded-xl z-0"
+        tabIndex={0}
+        data-ocid={`task-card-link-${task.id}`}
+        onClick={(e) => e.stopPropagation()}
+      />
+    </div>
   );
 }
 
@@ -188,18 +293,34 @@ function KanbanColumn({
   icon,
   color,
   bg,
+  border,
   tasks,
   projectId,
   workspaceId,
+  members,
+  subtaskCounts,
+  isDragOver,
+  onDragOver,
+  onDragLeave,
+  onDrop,
+  onDragStart,
 }: {
   status: TaskStatus;
   label: string;
   icon: React.ReactNode;
   color: string;
   bg: string;
+  border: string;
   tasks: Task[];
   projectId: string;
   workspaceId: string;
+  members: WorkspaceMember[];
+  subtaskCounts: Record<string, { done: number; total: number }>;
+  isDragOver: boolean;
+  onDragOver: (e: React.DragEvent, status: TaskStatus) => void;
+  onDragLeave: () => void;
+  onDrop: (status: TaskStatus) => void;
+  onDragStart: (task: Task) => void;
 }) {
   return (
     <div className="flex flex-col w-[260px] sm:w-[280px] shrink-0">
@@ -229,11 +350,27 @@ function KanbanColumn({
         </Button>
       </div>
       <div
-        className={`flex flex-col gap-2 rounded-2xl ${bg} p-2 flex-1 min-h-[200px]`}
+        className={`flex flex-col gap-2 rounded-2xl border ${border} ${bg} p-2 flex-1 min-h-[200px] transition-all duration-150 ${
+          isDragOver
+            ? "ring-2 ring-primary/40 bg-primary/5 border-primary/40 scale-[1.01]"
+            : ""
+        }`}
+        onDragOver={(e) => onDragOver(e, status)}
+        onDragLeave={onDragLeave}
+        onDrop={() => onDrop(status)}
+        data-column-status={status}
+        data-ocid={`kanban-col-${status}`}
       >
-        {tasks.length === 0 && (
+        {tasks.length === 0 && !isDragOver && (
           <div className="flex flex-col items-center justify-center py-10 opacity-40">
-            <p className="text-xs text-muted-foreground">No tasks</p>
+            <p className="text-xs text-muted-foreground">
+              {isDragOver ? "Drop here" : "No tasks"}
+            </p>
+          </div>
+        )}
+        {isDragOver && tasks.length === 0 && (
+          <div className="flex flex-col items-center justify-center py-6 rounded-xl border-2 border-dashed border-primary/40 bg-primary/5">
+            <p className="text-xs text-primary font-medium">Drop here</p>
           </div>
         )}
         {tasks.map((task) => (
@@ -242,6 +379,9 @@ function KanbanColumn({
             task={task}
             projectId={projectId}
             workspaceId={workspaceId}
+            members={members}
+            subtaskCounts={subtaskCounts}
+            onDragStart={onDragStart}
           />
         ))}
         <Button
@@ -356,6 +496,15 @@ export default function ProjectDetailPage() {
     return "kanban";
   });
 
+  // Kanban drag state
+  const [draggingTask, setDraggingTask] = useState<Task | null>(null);
+  const [dragOverColumn, setDragOverColumn] = useState<TaskStatus | null>(null);
+  // Optimistic task statuses (taskId -> status)
+  const [localStatuses, setLocalStatuses] = useState<
+    Record<string, TaskStatus>
+  >({});
+  const dragLeaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   useEffect(() => {
     try {
       localStorage.setItem(getViewKey(projectId), view);
@@ -385,6 +534,26 @@ export default function ProjectDetailPage() {
     enabled: !!actor && !isFetching && !!projectId,
   });
 
+  const { data: members = [] } = useQuery<WorkspaceMember[]>({
+    queryKey: ["members", tenantId, workspaceId],
+    queryFn: async () => {
+      if (!actor) return [];
+      return actor.listWorkspaceMembers(tenantId, workspaceId);
+    },
+    enabled: !!actor && !isFetching,
+  });
+
+  // Merge server tasks with local optimistic statuses
+  const tasksWithStatus = tasks.map((t) => ({
+    ...t,
+    status: localStatuses[t.id] ?? t.status,
+  }));
+
+  // Subtask counts per task — Task type has no subtask fields, so hide progress bars gracefully
+  const subtaskCounts = useMemo<
+    Record<string, { done: number; total: number }>
+  >(() => ({}), []);
+
   const { data: whiteboards = [], isLoading: wbLoading } = useQuery<
     Whiteboard[]
   >({
@@ -395,6 +564,85 @@ export default function ProjectDetailPage() {
     },
     enabled: !!actor && !isFetching && !!projectId,
   });
+
+  const updateTaskStatusMutation = useMutation({
+    mutationFn: async ({
+      taskId,
+      newStatus,
+    }: { taskId: string; newStatus: TaskStatus }) => {
+      if (!actor) throw new Error("Not connected");
+      const result = await (
+        actor as unknown as ActorWithTaskStatus
+      ).updateTaskStatus(tenantId, workspaceId, taskId, newStatus);
+      if (result.__kind__ === "err") throw new Error(result.err);
+      return { taskId, newStatus };
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({
+        queryKey: ["tasks", tenantId, workspaceId, projectId],
+      });
+    },
+    onError: (err: Error, { taskId }) => {
+      // Revert optimistic update
+      setLocalStatuses((prev) => {
+        const next = { ...prev };
+        delete next[taskId];
+        return next;
+      });
+      toast.error(err.message || "Failed to update task status");
+    },
+  });
+
+  const handleDragStart = useCallback((task: Task) => {
+    setDraggingTask(task);
+  }, []);
+
+  const handleDragOver = useCallback(
+    (e: React.DragEvent, status: TaskStatus) => {
+      e.preventDefault();
+      e.dataTransfer.dropEffect = "move";
+      if (dragLeaveTimer.current) {
+        clearTimeout(dragLeaveTimer.current);
+        dragLeaveTimer.current = null;
+      }
+      setDragOverColumn(status);
+    },
+    [],
+  );
+
+  const handleDragLeave = useCallback(() => {
+    dragLeaveTimer.current = setTimeout(() => {
+      setDragOverColumn(null);
+    }, 80);
+  }, []);
+
+  const handleDrop = useCallback(
+    (targetStatus: TaskStatus) => {
+      setDragOverColumn(null);
+      if (!draggingTask) return;
+
+      const currentStatus =
+        localStatuses[draggingTask.id] ?? draggingTask.status;
+      if (currentStatus === targetStatus) {
+        setDraggingTask(null);
+        return;
+      }
+
+      // Optimistic update immediately
+      setLocalStatuses((prev) => ({
+        ...prev,
+        [draggingTask.id]: targetStatus,
+      }));
+
+      // Persist status change to backend via the dedicated updateTaskStatus endpoint
+      updateTaskStatusMutation.mutate({
+        taskId: draggingTask.id,
+        newStatus: targetStatus,
+      });
+      setDraggingTask(null);
+    },
+    [draggingTask, localStatuses, updateTaskStatusMutation],
+  );
 
   const createWbMutation = useMutation({
     mutationFn: async (): Promise<Whiteboard> => {
@@ -465,9 +713,19 @@ export default function ProjectDetailPage() {
   }
 
   const statusBadge = PROJECT_STATUS_BADGE[project.status];
+  const totalTasks = tasksWithStatus.length;
+  const doneTasks = tasksWithStatus.filter(
+    (t) => t.status === TaskStatus.Done,
+  ).length;
 
   return (
-    <div className="flex flex-col h-full min-h-0 overflow-y-auto pb-20 md:pb-0">
+    <div
+      className="flex flex-col h-full min-h-0 overflow-y-auto pb-20 md:pb-0"
+      onDragEnd={() => {
+        setDraggingTask(null);
+        setDragOverColumn(null);
+      }}
+    >
       {/* Project Header + View Switcher */}
       <div className="px-4 sm:px-6 md:px-8 pt-4 sm:pt-5 pb-0 border-b border-border/60 bg-card/80 sticky top-0 z-10 backdrop-blur-subtle">
         <div className="flex items-start gap-2.5 pb-3">
@@ -505,17 +763,34 @@ export default function ProjectDetailPage() {
               </p>
             )}
           </div>
-          <div className="flex items-center gap-1 shrink-0 text-xs text-muted-foreground bg-muted/50 px-2 py-1.5 rounded-lg">
-            <Users className="h-3 w-3" />
-            <span className="hidden sm:inline">
-              {project.memberIds.length} member
-              {project.memberIds.length !== 1 ? "s" : ""}
-            </span>
-            <span className="sm:hidden">{project.memberIds.length}</span>
+          <div className="flex items-center gap-3 shrink-0">
+            {totalTasks > 0 && (
+              <div className="hidden sm:flex flex-col items-end gap-0.5">
+                <span className="text-xs text-muted-foreground">
+                  {doneTasks}/{totalTasks} done
+                </span>
+                <div className="w-20 h-1.5 rounded-full bg-muted overflow-hidden">
+                  <div
+                    className="h-full bg-primary rounded-full transition-all"
+                    style={{
+                      width: `${totalTasks > 0 ? Math.round((doneTasks / totalTasks) * 100) : 0}%`,
+                    }}
+                  />
+                </div>
+              </div>
+            )}
+            <div className="flex items-center gap-1 text-xs text-muted-foreground bg-muted/50 px-2 py-1.5 rounded-lg">
+              <Users className="h-3 w-3" />
+              <span className="hidden sm:inline">
+                {project.memberIds.length} member
+                {project.memberIds.length !== 1 ? "s" : ""}
+              </span>
+              <span className="sm:hidden">{project.memberIds.length}</span>
+            </div>
           </div>
         </div>
 
-        {/* View tabs — horizontally scrollable */}
+        {/* View tabs */}
         <div
           className="flex items-center gap-0 -mb-px overflow-x-auto scrollbar-none"
           data-ocid="view-switcher"
@@ -584,20 +859,32 @@ export default function ProjectDetailPage() {
                 icon={col.icon}
                 color={col.color}
                 bg={col.bg}
-                tasks={tasks.filter((t) => t.status === col.status)}
+                border={col.border}
+                tasks={tasksWithStatus.filter((t) => t.status === col.status)}
                 projectId={projectId}
                 workspaceId={workspaceId}
+                members={members}
+                subtaskCounts={subtaskCounts}
+                isDragOver={dragOverColumn === col.status}
+                onDragOver={handleDragOver}
+                onDragLeave={handleDragLeave}
+                onDrop={handleDrop}
+                onDragStart={handleDragStart}
               />
             ))}
           </div>
         )}
-        {view === "gantt" && <GanttView tasks={tasks} projectId={projectId} />}
-        {view === "timeline" && (
-          <TimelineView tasks={tasks} projectId={projectId} />
+        {view === "gantt" && (
+          <GanttView tasks={tasksWithStatus} projectId={projectId} />
         )}
-        {view === "table" && <TableView tasks={tasks} projectId={projectId} />}
+        {view === "timeline" && (
+          <TimelineView tasks={tasksWithStatus} projectId={projectId} />
+        )}
+        {view === "table" && (
+          <TableView tasks={tasksWithStatus} projectId={projectId} />
+        )}
         {view === "workload" && (
-          <WorkloadView tasks={tasks} projectId={projectId} />
+          <WorkloadView tasks={tasksWithStatus} projectId={projectId} />
         )}
       </div>
 
