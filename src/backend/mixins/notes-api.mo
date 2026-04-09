@@ -86,8 +86,18 @@ module {
     workspaceId : Common.WorkspaceId,
     caller : Common.UserId,
     displayName : Text,
+    isEditing : Bool,
   ) : [(Text, NTypes.NotePresenceEntry)] {
-    Notes.updateNotePresence(presenceStore, noteId, tenantId, workspaceId, caller, displayName)
+    Notes.updateNotePresence(presenceStore, noteId, tenantId, workspaceId, caller, displayName, isEditing)
+  };
+
+  public func getNotePresence(
+    presenceStore : [(Text, NTypes.NotePresenceEntry)],
+    noteId : Common.EntityId,
+    tenantId : Common.TenantId,
+    workspaceId : Common.WorkspaceId,
+  ) : [NTypes.NoteEditorPresence] {
+    Notes.getNotePresence(presenceStore, noteId, tenantId, workspaceId)
   };
 
   public func getNoteActiveEditors(

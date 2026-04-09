@@ -4,8 +4,8 @@ import {
   CalendarDays,
   FileText,
   FolderKanban,
+  LayoutDashboard,
   MessageSquare,
-  Wallet,
 } from "lucide-react";
 
 interface TabDef {
@@ -15,11 +15,11 @@ interface TabDef {
 }
 
 const TABS: TabDef[] = [
+  { label: "Dashboard", module: "dashboard", icon: LayoutDashboard },
   { label: "Notes", module: "notes", icon: FileText },
   { label: "Projects", module: "projects", icon: FolderKanban },
   { label: "Chat", module: "chat", icon: MessageSquare },
   { label: "Calendar", module: "calendar", icon: CalendarDays },
-  { label: "Wallet", module: "wallet", icon: Wallet },
 ];
 
 export function BottomTabBar() {
@@ -44,7 +44,6 @@ export function BottomTabBar() {
       data-ocid="bottom-tab-bar"
       aria-label="Primary navigation"
     >
-      {/* Tab row */}
       <div className="flex items-stretch pb-safe">
         {TABS.map(({ label, module, icon: Icon }) => {
           const active = isActive(module);
@@ -63,7 +62,6 @@ export function BottomTabBar() {
                   : "text-muted-foreground hover:text-foreground",
               )}
             >
-              {/* Icon with active pill background */}
               <span
                 className={cn(
                   "flex items-center justify-center rounded-lg w-9 h-7 transition-colors duration-150",
@@ -75,10 +73,9 @@ export function BottomTabBar() {
                   strokeWidth={active ? 2.2 : 1.8}
                 />
               </span>
-              {/* Label — hidden below 480px, shown from 480px */}
               <span
                 className={cn(
-                  "text-[10px] font-medium tracking-wide leading-none hidden min-[480px]:block",
+                  "text-[10px] font-medium tracking-wide leading-none block",
                   active ? "text-primary" : "text-muted-foreground",
                 )}
               >

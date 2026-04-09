@@ -13,11 +13,38 @@ mixin (
     input : WTypes.WorkspaceInput,
     ownerDisplayName : Text,
     ownerEmail : Text,
-  ) : async { #ok : WTypes.Workspace; #err : Text } {
-    if (caller.isAnonymous()) {
-      return #err("Unauthorized: must be authenticated");
+  ) : async {
+    #ok : WTypes.Workspace;
+    #err : {
+      #unauthorized : Text;
+      #invalidName : Text;
+      #workspaceExists : Text;
+      #canisterUnavailable : Text;
+      #unknown : Text;
     };
-    let (ws, updated) = WorkspaceLib.createWorkspace(workspaces.val, tenantId, caller, input, ownerDisplayName, ownerEmail);
+  } {
+    // Auth gate — anonymous callers get a typed error, never a raw rejection
+    if (caller.isAnonymous()) {
+      return #err(#unauthorized("Must be authenticated to create a workspace"));
+    };
+    // Input validation — empty or whitespace-only names are rejected with a clear message
+    let trimmedName = input.name.trim(#char ' ');
+    if (trimmedName.size() == 0) {
+      return #err(#invalidName("Workspace name cannot be empty"));
+    };
+    if (trimmedName.size() < 2) {
+      return #err(#invalidName("Workspace name must be at least 2 characters"));
+    };
+    // Duplicate check within the same tenant — surface a typed error instead of silently creating
+    let nameConflict = workspaces.val.find(func((_, ws)) {
+      ws.tenantId == tenantId and ws.name == trimmedName
+    });
+    if (nameConflict != null) {
+      return #err(#workspaceExists("A workspace named '" # trimmedName # "' already exists"));
+    };
+    // Create the workspace — use validated trimmed name
+    let validatedInput : WTypes.WorkspaceInput = { input with name = trimmedName };
+    let (ws, updated) = WorkspaceLib.createWorkspace(workspaces.val, tenantId, caller, validatedInput, ownerDisplayName, ownerEmail);
     workspaces.val := updated;
     #ok(ws)
   };

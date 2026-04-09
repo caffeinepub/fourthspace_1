@@ -16,10 +16,10 @@ import {
   List,
   MessageSquare,
   Send,
-  Smile,
 } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
+import { EmojiPicker } from "../../components/chat/EmojiPicker";
 import { useBackend } from "../../hooks/useBackend";
 import { getTenantId } from "../../hooks/useWorkspace";
 import type { Message, Reaction } from "../../types";
@@ -63,10 +63,6 @@ function formatRelativeTime(createdAt: bigint): string {
   return d.toLocaleDateString([], { month: "short", day: "numeric" });
 }
 
-// ─── Emoji quick-pick ────────────────────────────────────────────────────────
-
-const QUICK_EMOJIS = ["👍", "❤️", "😂", "🎉", "🔥", "👀", "✅", "🙏"];
-
 // ─── ThreadMessage ────────────────────────────────────────────────────────────
 
 interface ThreadMessageProps {
@@ -82,13 +78,14 @@ function ThreadMessage({
   onReact,
   myPrincipal,
 }: ThreadMessageProps) {
-  const [showPicker, setShowPicker] = useState(false);
   const reactions: Reaction[] =
     (msg as Message & { reactions?: Reaction[] }).reactions ?? [];
 
   return (
     <div
-      className={`group relative flex items-start gap-3 px-4 py-3 rounded-xl transition-colors ${isParent ? "bg-muted/30 border border-border" : "hover:bg-muted/20"}`}
+      className={`group relative flex items-start gap-3 px-4 py-3 rounded-xl transition-colors ${
+        isParent ? "bg-muted/30 border border-border" : "hover:bg-muted/20"
+      }`}
       data-ocid={`thread-msg-${msg.id}`}
     >
       <div
@@ -100,7 +97,7 @@ function ThreadMessage({
       <div className="flex-1 min-w-0 space-y-1.5">
         <div className="flex items-center gap-2 flex-wrap">
           <span className="text-xs font-semibold text-foreground">
-            {msg.senderId.toString().slice(0, 10)}…
+            {`${msg.senderId.toString().slice(0, 10)}…`}
           </span>
           {isParent && (
             <Badge variant="outline" className="text-[10px] py-0 px-1.5">
@@ -159,36 +156,20 @@ function ThreadMessage({
       </div>
 
       <div className="absolute right-3 top-2.5 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-        <div className="relative">
-          <Button
-            variant="ghost"
-            size="icon"
-            className="h-6 w-6"
-            aria-label="React"
-            data-ocid={`react-btn-${msg.id}`}
-            onClick={() => setShowPicker((p) => !p)}
-          >
-            <Smile className="h-3.5 w-3.5 text-muted-foreground" />
-          </Button>
-          {showPicker && (
-            <div className="absolute right-0 top-7 z-50 flex gap-1 rounded-xl border border-border bg-card p-2 shadow-lg">
-              {QUICK_EMOJIS.map((em) => (
-                <button
-                  key={em}
-                  type="button"
-                  className="rounded-lg p-1 text-base hover:bg-muted/60 transition-colors"
-                  onClick={() => {
-                    onReact(msg.id, em);
-                    setShowPicker(false);
-                  }}
-                  data-ocid={`emoji-pick-${em}`}
-                >
-                  {em}
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
+        <EmojiPicker
+          onEmojiSelect={(emoji) => onReact(msg.id, emoji)}
+          trigger={
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-6 w-6"
+              aria-label="React"
+              data-ocid={`react-btn-${msg.id}`}
+            >
+              <span className="text-sm">😊</span>
+            </Button>
+          }
+        />
       </div>
     </div>
   );
@@ -269,15 +250,13 @@ export default function ThreadPage() {
   const queryClient = useQueryClient();
   const tenantId = getTenantId();
   const { identity } = useInternetIdentity();
-
-  // Derive myPrincipal from Internet Identity
   const myPrincipal = identity?.getPrincipal().toText() ?? "";
 
   const [replyText, setReplyText] = useState("");
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
 
-  // ── Fetch parent message ──────────────────────────────────────────────────
+  // ── Fetch parent message ──
   const { data: parentMessage } = useQuery<Message | null>({
     queryKey: ["message-parent", tenantId, workspaceId, channelId, messageId],
     queryFn: async () => {
@@ -295,7 +274,7 @@ export default function ThreadPage() {
     staleTime: 10_000,
   });
 
-  // ── Fetch thread replies (poll every 3s) ──────────────────────────────────
+  // ── Fetch thread replies (poll every 3s) ──
   const { data: threadMessages, isLoading } = useQuery<Message[]>({
     queryKey: ["thread-messages", tenantId, workspaceId, messageId],
     queryFn: async () => {
@@ -306,19 +285,19 @@ export default function ThreadPage() {
     refetchInterval: 3000,
   });
 
-  // ── Auto-scroll on new replies ──────────────────────────────────────────────
+  // ── Auto-scroll on new replies ──
   const prevCountRef = useRef(0);
   useEffect(() => {
     const count = threadMessages?.length ?? 0;
     if (count !== prevCountRef.current) {
       prevCountRef.current = count;
-      requestAnimationFrame(() => {
-        bottomRef.current?.scrollIntoView({ behavior: "smooth" });
-      });
+      requestAnimationFrame(() =>
+        bottomRef.current?.scrollIntoView({ behavior: "smooth" }),
+      );
     }
   }, [threadMessages]);
 
-  // ── Send reply ────────────────────────────────────────────────────────────
+  // ── Send reply ──
   const sendMutation = useMutation({
     mutationFn: async () => {
       if (!actor) throw new Error("Not connected");
@@ -346,11 +325,10 @@ export default function ThreadPage() {
     onError: (err: Error) => toast.error(err.message),
   });
 
-  // ── Add/toggle reaction ──────────────────────────────────────────────────
+  // ── Reaction ──
   const reactMutation = useMutation({
     mutationFn: async ({ msgId, emoji }: { msgId: string; emoji: string }) => {
       if (!actor) throw new Error("Not connected");
-      // Find the message to check if user already reacted
       const allMsgs = [
         ...(threadMessages ?? []),
         ...(parentMessage ? [parentMessage] : []),
@@ -388,7 +366,7 @@ export default function ThreadPage() {
     onError: (err: Error) => toast.error(err.message),
   });
 
-  // ── Keyboard handlers ─────────────────────────────────────────────────────
+  // ── Keyboard / format ──
   const applyFormat = useCallback(
     (prefix: string, suffix = "") => {
       const el = textareaRef.current;
@@ -426,8 +404,8 @@ export default function ThreadPage() {
 
   return (
     <div className="flex flex-col h-full overflow-hidden bg-background">
-      {/* ── Header ─────────────────────────────────────────────────────── */}
-      <div className="flex h-14 items-center gap-3 border-b border-border/60 bg-card/90 backdrop-blur-subtle px-4 shrink-0">
+      {/* ── Header ── */}
+      <div className="flex h-14 items-center gap-3 border-b border-border/60 bg-card/90 backdrop-blur-sm px-4 shrink-0">
         <Button
           variant="ghost"
           size="icon"
@@ -456,7 +434,7 @@ export default function ThreadPage() {
         </div>
       </div>
 
-      {/* ── Thread body ─────────────────────────────────────────────────── */}
+      {/* ── Thread body ── */}
       <ScrollArea className="flex-1 overflow-y-auto" data-ocid="thread-scroll">
         <div className="mx-auto w-full max-w-2xl px-4 py-6 space-y-4">
           {parentMessage ? (
@@ -540,7 +518,7 @@ export default function ThreadPage() {
         </div>
       </ScrollArea>
 
-      {/* ── Reply composer ──────────────────────────────────────────────── */}
+      {/* ── Reply composer ── */}
       <div
         className="border-t border-border bg-card px-4 pt-3 pb-4 shrink-0 space-y-2"
         data-ocid="thread-reply-composer"

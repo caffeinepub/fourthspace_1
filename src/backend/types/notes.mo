@@ -106,6 +106,7 @@ module {
   public type NoteEditorPresence = {
     userId : C.UserId;
     displayName : Text;
+    isEditing : Bool;
     lastSeen : Int;
   };
 
@@ -122,6 +123,7 @@ module {
     workspaceId : C.WorkspaceId;
     userId : C.UserId;
     displayName : Text;
+    isEditing : Bool;
     lastSeen : Int;
   };
 

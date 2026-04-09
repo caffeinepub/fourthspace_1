@@ -1,3 +1,4 @@
+// Goal Detail Page — clean rebuild v2
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";

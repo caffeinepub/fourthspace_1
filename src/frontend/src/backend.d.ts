@@ -280,6 +280,7 @@ export interface TaskTemplateInput {
     defaultAssigneeId?: UserId;
 }
 export interface NoteEditorPresence {
+    isEditing: boolean;
     displayName: string;
     userId: UserId;
     lastSeen: bigint;
@@ -352,6 +353,7 @@ export interface Task {
     title: string;
     assigneeId?: UserId;
     createdAt: Timestamp;
+    tags: Array<string>;
     dueDate?: Timestamp;
     description: string;
     tenantId: TenantId;
@@ -634,32 +636,29 @@ export interface ConditionalLogic {
     operator: string;
     fieldId: string;
 }
+export interface UserSettingsEntry {
+    displayName: string;
+    userId: string;
+    notifyEscrow: boolean;
+    email: string;
+    notifyTaskAssigned: boolean;
+    accentColor: string;
+    language: string;
+    updatedAt: bigint;
+    notifyMentions: boolean;
+    dateFormat: string;
+    notifyPayroll: boolean;
+    timeFormat: string;
+    defaultModule: string;
+    notifyGoals: boolean;
+    sidebarLayout: string;
+}
 export interface MilestoneInput {
     title: string;
     dueDate: Timestamp;
     description: string;
     projectId: EntityId;
     linkedTaskIds: Array<EntityId>;
-}
-export interface EscrowContract {
-    id: EntityId;
-    status: EscrowStatus;
-    title: string;
-    createdAt: Timestamp;
-    dueDate?: Timestamp;
-    description: string;
-    statusHistory: Array<StatusHistoryEntry>;
-    tenantId: TenantId;
-    updatedAt: Timestamp;
-    currency: string;
-    workspaceId: WorkspaceId;
-    conditions: Array<string>;
-    fundingBlockHeight?: bigint;
-    crossLinks: Array<CrossLink>;
-    amount: bigint;
-    payeeId: UserId;
-    payerId: UserId;
-    fundedAmount?: bigint;
 }
 export interface NoteLastEdit {
     displayName: string;
@@ -675,6 +674,7 @@ export interface StatusHistoryEntry {
 export interface TaskInput {
     title: string;
     assigneeId?: UserId;
+    tags: Array<string>;
     dueDate?: Timestamp;
     description: string;
     projectId: EntityId;
@@ -708,10 +708,25 @@ export interface Subtask {
     workspaceId: WorkspaceId;
     priority: TaskPriority;
 }
-export interface AutoCreateTaskConfig {
-    assigneeId?: Principal;
-    taskTitle: string;
-    projectId: string;
+export interface EscrowContract {
+    id: EntityId;
+    status: EscrowStatus;
+    title: string;
+    createdAt: Timestamp;
+    dueDate?: Timestamp;
+    description: string;
+    statusHistory: Array<StatusHistoryEntry>;
+    tenantId: TenantId;
+    updatedAt: Timestamp;
+    currency: string;
+    workspaceId: WorkspaceId;
+    conditions: Array<string>;
+    fundingBlockHeight?: bigint;
+    crossLinks: Array<CrossLink>;
+    amount: bigint;
+    payeeId: UserId;
+    payerId: UserId;
+    fundedAmount?: bigint;
 }
 export interface EscrowMilestone {
     id: EntityId;
@@ -733,6 +748,11 @@ export interface TimeReport {
     byProject: Array<[EntityId, number]>;
     billableHours: number;
     nonBillableHours: number;
+}
+export interface AutoCreateTaskConfig {
+    assigneeId?: Principal;
+    taskTitle: string;
+    projectId: string;
 }
 export interface TimeEntryInput {
     startTime: Timestamp;
@@ -1059,6 +1079,10 @@ export interface Employee {
     startDate: Timestamp;
     firstName: string;
 }
+export interface UnreadEntry {
+    userId: Principal;
+    count: bigint;
+}
 export interface WorkspaceMember {
     displayName: string;
     userId: UserId;
@@ -1066,10 +1090,6 @@ export interface WorkspaceMember {
     role: WorkspaceRole;
     email: string;
     workspaceId: WorkspaceId;
-}
-export interface UnreadEntry {
-    userId: Principal;
-    count: bigint;
 }
 export interface PublicGoal {
     id: EntityId;
@@ -1900,7 +1920,22 @@ export interface backendInterface {
         ok: Workspace;
     } | {
         __kind__: "err";
-        err: string;
+        err: {
+            __kind__: "workspaceExists";
+            workspaceExists: string;
+        } | {
+            __kind__: "invalidName";
+            invalidName: string;
+        } | {
+            __kind__: "canisterUnavailable";
+            canisterUnavailable: string;
+        } | {
+            __kind__: "unauthorized";
+            unauthorized: string;
+        } | {
+            __kind__: "unknown";
+            unknown: string;
+        };
     }>;
     createWorkspaceTreasury(tenantId: TenantId, workspaceId: WorkspaceId): Promise<{
         __kind__: "ok";
@@ -2217,6 +2252,7 @@ export interface backendInterface {
         err: string;
     }>;
     getNoteActiveEditors(tenantId: TenantId, workspaceId: WorkspaceId, noteId: EntityId): Promise<Array<NoteEditorPresence>>;
+    getNotePresence(tenantId: TenantId, workspaceId: WorkspaceId, noteId: EntityId): Promise<Array<NoteEditorPresence>>;
     getOrCreateWorkspaceShareToken(workspaceId: WorkspaceId, tenantId: TenantId): Promise<string>;
     getPage(tenantId: TenantId, workspaceId: WorkspaceId, pageId: EntityId): Promise<{
         __kind__: "ok";
@@ -2277,8 +2313,21 @@ export interface backendInterface {
     getThreadMessages(tenantId: TenantId, workspaceId: WorkspaceId, parentMessageId: EntityId): Promise<Array<Message>>;
     getTimeReport(workspaceId: WorkspaceId, tenantId: TenantId, filter: TimeReportFilter): Promise<TimeReport>;
     getUnreadCounts(tenantId: TenantId, workspaceId: WorkspaceId): Promise<Array<[string, bigint]>>;
+    /**
+     * / Returns the caller's saved settings. Returns null if no settings exist yet.
+     */
+    getUserSettings(): Promise<UserSettingsEntry | null>;
     getUserStatus(tenantId: TenantId, workspaceId: WorkspaceId, userId: Principal): Promise<UserStatus | null>;
     getUserTimeEntries(tenantId: TenantId, workspaceId: WorkspaceId, userId: UserId): Promise<Array<TimeEntry>>;
+    /**
+     * / Returns workspace members (userId + displayName + email) for DM channel creation.
+     * / Reads directly from workspacesRef to avoid depending on a separate store.
+     */
+    getUsersInWorkspace(tenantId: TenantId, workspaceId: WorkspaceId): Promise<Array<{
+        displayName: string;
+        userId: UserId;
+        email: string;
+    }>>;
     getWalletAccount(tenantId: TenantId, workspaceId: WorkspaceId, id: EntityId): Promise<{
         __kind__: "ok";
         ok: WalletAccount;
@@ -2326,6 +2375,11 @@ export interface backendInterface {
      */
     getWorkspaceTreasury(tenantId: TenantId, workspaceId: WorkspaceId): Promise<WalletAccount | null>;
     isWatching(tenantId: TenantId, workspaceId: WorkspaceId, taskId: EntityId, userId: UserId): Promise<boolean>;
+    /**
+     * / Returns true if the caller is the owner (super admin) of the given workspace.
+     * / Used by the frontend to show or hide AI settings configuration.
+     */
+    isWorkspaceOwner(tenantId: TenantId, workspaceId: WorkspaceId): Promise<boolean>;
     joinChannel(tenantId: TenantId, workspaceId: WorkspaceId, id: EntityId): Promise<{
         __kind__: "ok";
         ok: Channel;
@@ -2556,6 +2610,9 @@ export interface backendInterface {
         __kind__: "err";
         err: string;
     }>;
+    /**
+     * / Save AI configuration — restricted to the workspace owner (super admin) only.
+     */
     saveAIConfig(tenantId: TenantId, workspaceId: WorkspaceId, input: AIConfigInput): Promise<{
         __kind__: "ok";
         ok: AIConfig;
@@ -2566,6 +2623,16 @@ export interface backendInterface {
     saveIntegration(tenantId: TenantId, workspaceId: WorkspaceId, input: IntegrationInput): Promise<{
         __kind__: "ok";
         ok: Integration;
+    } | {
+        __kind__: "err";
+        err: string;
+    }>;
+    /**
+     * / Saves the caller's settings. Upserts on every call.
+     */
+    saveUserSettings(displayName: string, email: string, accentColor: string, defaultModule: string, sidebarLayout: string, dateFormat: string, timeFormat: string, language: string, notifyTaskAssigned: boolean, notifyMentions: boolean, notifyEscrow: boolean, notifyPayroll: boolean, notifyGoals: boolean): Promise<{
+        __kind__: "ok";
+        ok: UserSettingsEntry;
     } | {
         __kind__: "err";
         err: string;
@@ -2630,6 +2697,13 @@ export interface backendInterface {
     toggleGoalPublic(goalId: EntityId, workspaceId: WorkspaceId, tenantId: TenantId): Promise<{
         __kind__: "ok";
         ok: Goal;
+    } | {
+        __kind__: "err";
+        err: string;
+    }>;
+    toggleSubtask(tenantId: TenantId, workspaceId: WorkspaceId, subtaskId: EntityId): Promise<{
+        __kind__: "ok";
+        ok: Subtask;
     } | {
         __kind__: "err";
         err: string;
@@ -2760,7 +2834,7 @@ export interface backendInterface {
         __kind__: "err";
         err: string;
     }>;
-    updateNotePresence(tenantId: TenantId, workspaceId: WorkspaceId, noteId: EntityId, displayName: string): Promise<void>;
+    updateNotePresence(tenantId: TenantId, workspaceId: WorkspaceId, noteId: EntityId, displayName: string, isEditing: boolean): Promise<void>;
     updatePage(tenantId: TenantId, workspaceId: WorkspaceId, pageId: EntityId, title: string, icon: string, coverUrl: string | null, blocks: Array<Block>): Promise<{
         __kind__: "ok";
         ok: PageNode;

@@ -1,388 +1,280 @@
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Link, useNavigate } from "@tanstack/react-router";
+import { useNavigate, useParams } from "@tanstack/react-router";
 import {
   AlertTriangle,
   ArrowLeft,
   BadgeDollarSign,
-  CheckCircle2,
-  Play,
-  Users,
+  Loader2,
   Wallet,
 } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 import { useBackend } from "../../hooks/useBackend";
-import { getTenantId, useWorkspace } from "../../hooks/useWorkspace";
+import { useWorkspace } from "../../hooks/useWorkspace";
 import type { Employee, WalletAccount } from "../../types";
 
-function formatIcp(balance: bigint): string {
-  return (Number(balance) / 1_000_000_00).toFixed(4);
-}
-
-function formatCurrency(amount: bigint | number, currency = "USD") {
-  return new Intl.NumberFormat("en-US", {
-    style: "currency",
-    currency: currency || "USD",
-  }).format(Number(amount) / 100);
+function formatICP(e8s: bigint): string {
+  return `${(Number(e8s) / 1e8).toFixed(4)} ICP`;
 }
 
 export default function PayrollNewPage() {
+  const { workspaceId } = useParams({ strict: false }) as {
+    workspaceId: string;
+  };
+  const { tenantId } = useWorkspace();
   const { actor, isFetching } = useBackend();
-  const tenantId = getTenantId();
-  const { activeWorkspaceId } = useWorkspace();
-  const workspaceId = activeWorkspaceId ?? "";
   const navigate = useNavigate();
   const queryClient = useQueryClient();
 
-  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [selectedEmployee, setSelectedEmployee] = useState("");
   const [period, setPeriod] = useState(new Date().toISOString().slice(0, 7));
-  const [runError, setRunError] = useState<string | null>(null);
 
-  // Fetch treasury
-  const { data: treasury, isLoading: treasuryLoading } =
+  const { data: treasury, isLoading: loadingTreasury } =
     useQuery<WalletAccount | null>({
-      queryKey: ["workspaceTreasury", tenantId, workspaceId],
+      queryKey: ["treasury", tenantId, workspaceId],
       queryFn: async () => {
         if (!actor) return null;
         return actor.getWorkspaceTreasury(tenantId, workspaceId);
       },
-      enabled: !!actor && !!workspaceId && !isFetching,
+      enabled: !!actor && !isFetching && !!workspaceId,
     });
 
-  // Fetch active employees
-  const { data: employees = [], isLoading: empLoading } = useQuery<Employee[]>({
+  const { data: employees = [], isLoading: loadingEmployees } = useQuery<
+    Employee[]
+  >({
     queryKey: ["employees", tenantId, workspaceId],
-    queryFn: async () =>
-      actor ? actor.listEmployees(tenantId, workspaceId) : [],
+    queryFn: async () => {
+      if (!actor) return [];
+      return actor.listEmployees(tenantId, workspaceId);
+    },
     enabled: !!actor && !isFetching && !!workspaceId,
   });
 
-  const icpBalance = treasury?.icpBalance ?? BigInt(0);
-  const hasNoFunds = !treasuryLoading && icpBalance === BigInt(0);
-  const activeEmployees = employees.filter((e) => e.isActive);
-  const selectedEmployees = activeEmployees.filter((e) => selected.has(e.id));
-  const totalEstimate = selectedEmployees.reduce(
-    (s, e) => s + Number(e.salary),
-    0,
-  );
+  const hasTreasuryBalance = treasury != null && treasury.icpBalance > 0n;
 
-  const toggleAll = () => {
-    if (selected.size === activeEmployees.length) {
-      setSelected(new Set());
-    } else {
-      setSelected(new Set(activeEmployees.map((e) => e.id)));
-    }
-  };
-
-  const toggleOne = (id: string) => {
-    setSelected((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
-  };
-
-  const runMutation = useMutation({
+  const processMutation = useMutation({
     mutationFn: async () => {
       if (!actor) throw new Error("Not connected");
-      if (selected.size === 0) throw new Error("Select at least one employee");
-
-      const results = await Promise.allSettled(
-        [...selected].map((id) =>
-          actor.processPayroll(tenantId, workspaceId, id, period),
-        ),
+      const r = await actor.processPayroll(
+        tenantId,
+        workspaceId,
+        selectedEmployee,
+        period,
       );
-
-      // Check for insufficient funds error in results
-      for (const r of results) {
-        if (r.status === "fulfilled" && r.value.__kind__ === "err") {
-          if (r.value.err.toLowerCase().includes("insufficient")) {
-            throw new Error(r.value.err);
-          }
-        }
-      }
-
-      const succeeded = results.filter(
-        (r) => r.status === "fulfilled" && r.value.__kind__ === "ok",
-      ).length;
-      return succeeded;
+      if (r.__kind__ === "err") throw new Error(r.err);
+      return r.ok;
     },
-    onSuccess: (count) => {
-      setRunError(null);
-      queryClient.invalidateQueries({ queryKey: ["payrollRecords"] });
-      toast.success(`Payroll processed for ${count} employee(s)`);
-      navigate({ to: `/app/${workspaceId}/payroll` });
+    onSuccess: () => {
+      toast.success("Payroll processed successfully");
+      void queryClient.invalidateQueries({ queryKey: ["payroll"] });
+      navigate({ to: `/app/${workspaceId}/payroll` as "/" });
     },
-    onError: (e: Error) => {
-      setRunError(e.message);
-      toast.error(e.message);
-    },
+    onError: (e: Error) => toast.error(e.message),
   });
 
-  const isRunDisabled =
-    runMutation.isPending || hasNoFunds || selected.size === 0;
+  function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!selectedEmployee) {
+      toast.error("Please select an employee");
+      return;
+    }
+    if (!hasTreasuryBalance) {
+      toast.error("Insufficient treasury balance");
+      return;
+    }
+    processMutation.mutate();
+  }
+
+  const selectedEmpData = employees.find((e) => e.id === selectedEmployee);
 
   return (
-    <div className="animate-fade-in-up p-6 md:p-8 max-w-2xl mx-auto space-y-6">
+    <div className="flex flex-col gap-6 p-4 sm:p-6 max-w-2xl mx-auto w-full">
       {/* Header */}
       <div className="flex items-center gap-3">
-        <button
-          type="button"
-          onClick={() => navigate({ to: `/app/${workspaceId}/payroll` })}
-          aria-label="Back to payroll"
-          className="flex h-8 w-8 items-center justify-center rounded-lg border border-border bg-card hover:bg-muted transition-smooth"
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={() => navigate({ to: `/app/${workspaceId}/payroll` as "/" })}
+          data-ocid="payroll-new-back"
         >
-          <ArrowLeft className="h-4 w-4 text-muted-foreground" />
-        </button>
-        <div>
-          <h1 className="font-display text-xl font-bold text-foreground flex items-center gap-2">
-            <BadgeDollarSign className="h-5 w-5 text-emerald-500" />
-            Run Payroll
-          </h1>
-          <p className="text-sm text-muted-foreground">
-            Select employees and period to process payroll
-          </p>
+          <ArrowLeft className="w-4 h-4" />
+        </Button>
+        <div className="flex items-center gap-3">
+          <div className="w-9 h-9 rounded-lg bg-primary/10 flex items-center justify-center">
+            <BadgeDollarSign className="w-5 h-5 text-primary" />
+          </div>
+          <div>
+            <h1 className="text-xl font-semibold font-display text-foreground">
+              Process Payroll
+            </h1>
+            <p className="text-sm text-muted-foreground">
+              Run payroll for an employee
+            </p>
+          </div>
         </div>
       </div>
 
-      {/* Treasury balance */}
-      {!treasuryLoading && treasury && (
-        <div className="flex items-center gap-2 rounded-lg border border-border bg-card px-3 py-2 w-fit">
-          <Wallet className="h-3.5 w-3.5 text-muted-foreground" />
-          <span className="text-xs text-muted-foreground">
-            Workspace Treasury:
-          </span>
-          <span
-            className={`text-xs font-semibold tabular-nums ${
-              icpBalance === BigInt(0) ? "text-destructive" : "text-foreground"
-            }`}
-          >
-            {formatIcp(icpBalance)} ICP
-          </span>
-        </div>
-      )}
-
-      {/* No-funds banner */}
-      {hasNoFunds && (
+      {/* Treasury balance check */}
+      {loadingTreasury ? (
+        <Skeleton className="h-16 w-full rounded-lg" />
+      ) : !hasTreasuryBalance ? (
         <div
-          className="flex items-start gap-3 rounded-xl border border-amber-400/40 bg-amber-500/8 px-4 py-3"
-          data-ocid="payroll-run-insufficient-funds-banner"
-          role="alert"
+          data-ocid="payroll-new-balance-warning"
+          className="flex items-start gap-3 p-4 rounded-lg border border-destructive/30 bg-destructive/5"
         >
-          <AlertTriangle className="h-4 w-4 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
+          <AlertTriangle className="w-5 h-5 text-destructive mt-0.5 shrink-0" />
           <div className="flex-1 min-w-0">
-            <p className="text-sm font-medium text-foreground">
-              Your workspace wallet has no funds. Fund it to process payroll.
+            <p className="text-sm font-medium text-destructive">
+              Insufficient treasury balance
+            </p>
+            <p className="text-sm text-muted-foreground mt-0.5">
+              Insufficient treasury balance. Please fund the workspace treasury
+              before processing payroll.
             </p>
           </div>
           <Button
-            asChild
             size="sm"
             variant="outline"
-            className="shrink-0 gap-1.5 border-amber-400/60 text-amber-700 dark:text-amber-400 hover:bg-amber-500/10"
-            data-ocid="payroll-run-fund-wallet-btn"
+            className="shrink-0 gap-1.5"
+            onClick={() =>
+              navigate({ to: `/app/${workspaceId}/wallet` as "/" })
+            }
+            data-ocid="payroll-new-fund-treasury-btn"
           >
-            <Link to={`/app/${workspaceId}/wallet`}>
-              <Wallet className="h-3.5 w-3.5" />
-              Fund Wallet
-            </Link>
+            <Wallet className="w-3.5 h-3.5" />
+            Fund Treasury
           </Button>
         </div>
-      )}
-
-      {/* Run error (e.g. backend returns Insufficient treasury balance) */}
-      {runError && !hasNoFunds && (
-        <div
-          className="flex items-start gap-3 rounded-xl border border-destructive/30 bg-destructive/5 px-4 py-3"
-          data-ocid="payroll-run-error-banner"
-          role="alert"
-        >
-          <AlertTriangle className="h-4 w-4 text-destructive shrink-0 mt-0.5" />
-          <div className="flex-1 min-w-0">
-            <p className="text-sm font-medium text-foreground">{runError}</p>
-          </div>
-          {runError.toLowerCase().includes("insufficient") && (
-            <Button
-              asChild
-              size="sm"
-              variant="outline"
-              className="shrink-0 gap-1.5 border-amber-400/60 text-amber-700 dark:text-amber-400 hover:bg-amber-500/10"
-              data-ocid="payroll-error-fund-wallet-btn"
-            >
-              <Link to={`/app/${workspaceId}/wallet`}>
-                <Wallet className="h-3.5 w-3.5" />
-                Fund Wallet
-              </Link>
-            </Button>
-          )}
+      ) : (
+        <div className="flex items-center gap-3 p-3 rounded-lg bg-primary/5 border border-primary/20">
+          <Wallet className="w-4 h-4 text-primary" />
+          <p className="text-sm text-muted-foreground">
+            Treasury balance:{" "}
+            <span className="font-medium text-foreground">
+              {formatICP(treasury.icpBalance)}
+            </span>
+          </p>
         </div>
       )}
 
-      {/* Period selector */}
-      <Card>
-        <CardHeader className="pb-3">
-          <CardTitle className="text-sm font-semibold text-foreground">
-            Pay Period
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <input
-            type="month"
-            value={period}
-            onChange={(e) => setPeriod(e.target.value)}
-            className="h-9 rounded-md border border-input bg-background px-3 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
-            data-ocid="payroll-run-period"
-          />
-        </CardContent>
-      </Card>
-
-      {/* Employee selection */}
-      <Card>
-        <CardHeader className="pb-3">
-          <div className="flex items-center justify-between">
-            <CardTitle className="text-sm font-semibold text-foreground flex items-center gap-2">
-              <Users className="h-4 w-4 text-emerald-500" />
-              Select Employees
+      {/* Form */}
+      {hasTreasuryBalance && (
+        <Card>
+          <CardHeader className="pb-4">
+            <CardTitle className="text-base font-display">
+              Payroll Details
             </CardTitle>
-            <button
-              type="button"
-              onClick={toggleAll}
-              className="text-xs text-emerald-600 dark:text-emerald-400 hover:underline"
-              data-ocid="payroll-toggle-all"
-            >
-              {selected.size === activeEmployees.length
-                ? "Deselect all"
-                : "Select all"}
-            </button>
-          </div>
-        </CardHeader>
-        <CardContent>
-          {empLoading ? (
-            <div className="space-y-2">
-              {[1, 2, 3].map((n) => (
-                <Skeleton key={n} className="h-12 rounded-lg" />
-              ))}
-            </div>
-          ) : activeEmployees.length === 0 ? (
-            <div className="py-8 text-center">
-              <Users className="mx-auto h-8 w-8 text-muted-foreground/40 mb-2" />
-              <p className="text-sm text-muted-foreground">
-                No active employees
-              </p>
-              <Button
-                asChild
-                variant="ghost"
-                size="sm"
-                className="mt-2 text-xs text-emerald-600"
-              >
-                <Link to={`/app/${workspaceId}/payroll/employees`}>
-                  Add Employees
-                </Link>
-              </Button>
-            </div>
-          ) : (
-            <div className="space-y-1.5">
-              {activeEmployees.map((emp) => {
-                const isSelected = selected.has(emp.id);
-                return (
-                  <button
-                    key={emp.id}
-                    type="button"
-                    onClick={() => toggleOne(emp.id)}
-                    data-ocid={`payroll-select-emp-${emp.id}`}
-                    className={`w-full flex items-center gap-3 rounded-lg border px-4 py-3 text-left transition-smooth ${
-                      isSelected
-                        ? "border-emerald-400/60 bg-emerald-500/8"
-                        : "border-border bg-card hover:bg-muted/50"
-                    }`}
+          </CardHeader>
+          <CardContent>
+            <form onSubmit={handleSubmit} className="flex flex-col gap-5">
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor="payroll-employee">Employee *</Label>
+                {loadingEmployees ? (
+                  <Skeleton className="h-9 w-full" />
+                ) : (
+                  <select
+                    id="payroll-employee"
+                    data-ocid="payroll-employee-select"
+                    value={selectedEmployee}
+                    onChange={(e) => setSelectedEmployee(e.target.value)}
+                    required
+                    className="h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm focus:outline-none focus:ring-1 focus:ring-ring"
                   >
-                    <div
-                      className={`flex h-5 w-5 shrink-0 items-center justify-center rounded border-2 transition-smooth ${
-                        isSelected
-                          ? "border-emerald-500 bg-emerald-500"
-                          : "border-border bg-background"
-                      }`}
-                    >
-                      {isSelected && (
-                        <CheckCircle2 className="h-3 w-3 text-white" />
-                      )}
-                    </div>
-                    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-emerald-500/10 text-xs font-semibold text-emerald-700 dark:text-emerald-400">
-                      {emp.firstName[0]}
-                      {emp.lastName[0]}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium text-foreground truncate">
-                        {emp.firstName} {emp.lastName}
-                      </p>
-                      <p className="text-xs text-muted-foreground truncate">
-                        {emp.email}
-                      </p>
-                    </div>
-                    <p className="text-xs font-semibold text-foreground tabular-nums shrink-0">
-                      {formatCurrency(emp.salary, emp.currency)}
+                    <option value="">Select employee…</option>
+                    {employees.map((emp) => (
+                      <option key={emp.id} value={emp.id}>
+                        {emp.firstName} {emp.lastName} —{" "}
+                        {Number(emp.salary).toLocaleString()} {emp.currency}
+                      </option>
+                    ))}
+                  </select>
+                )}
+              </div>
+
+              {selectedEmpData && (
+                <div className="p-3 rounded-lg bg-muted/30 border border-border grid grid-cols-2 gap-3">
+                  <div>
+                    <p className="text-xs text-muted-foreground">Salary</p>
+                    <p className="text-sm font-semibold text-foreground">
+                      {Number(selectedEmpData.salary).toLocaleString()}{" "}
+                      {selectedEmpData.currency}
                     </p>
-                  </button>
-                );
-              })}
-            </div>
-          )}
+                  </div>
+                  <div>
+                    <p className="text-xs text-muted-foreground">Frequency</p>
+                    <p className="text-sm font-semibold text-foreground">
+                      {selectedEmpData.payFrequency}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-muted-foreground">Tax Rate</p>
+                    <p className="text-sm font-semibold text-foreground">
+                      {selectedEmpData.taxRate.toString()}%
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-muted-foreground">Email</p>
+                    <p className="text-sm font-semibold text-foreground truncate">
+                      {selectedEmpData.email}
+                    </p>
+                  </div>
+                </div>
+              )}
 
-          {selected.size > 0 && (
-            <div className="mt-4 flex items-center justify-between rounded-lg bg-emerald-500/8 border border-emerald-400/30 px-4 py-2.5">
-              <span className="text-xs text-muted-foreground">
-                {selected.size} employee{selected.size !== 1 ? "s" : ""}{" "}
-                selected
-              </span>
-              <span className="text-sm font-semibold text-foreground tabular-nums">
-                Estimated: {formatCurrency(totalEstimate, "USD")}
-              </span>
-            </div>
-          )}
-        </CardContent>
-      </Card>
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor="payroll-period">Pay Period *</Label>
+                <Input
+                  id="payroll-period"
+                  data-ocid="payroll-period-input"
+                  type="month"
+                  value={period}
+                  onChange={(e) => setPeriod(e.target.value)}
+                  required
+                />
+              </div>
 
-      {/* Actions */}
-      <div className="flex gap-3 justify-end pt-2">
-        <Button
-          type="button"
-          variant="outline"
-          onClick={() => navigate({ to: `/app/${workspaceId}/payroll` })}
-          data-ocid="payroll-run-cancel-btn"
-        >
-          Cancel
-        </Button>
-        <Button
-          type="button"
-          disabled={isRunDisabled}
-          onClick={() => {
-            setRunError(null);
-            runMutation.mutate();
-          }}
-          data-ocid="payroll-run-submit-btn"
-          className="bg-emerald-600 hover:bg-emerald-700 text-white min-w-[140px] disabled:opacity-60 gap-2"
-          title={
-            hasNoFunds
-              ? "Fund your workspace wallet before processing payroll"
-              : selected.size === 0
-                ? "Select at least one employee"
-                : undefined
-          }
-        >
-          {runMutation.isPending ? (
-            "Processing..."
-          ) : (
-            <>
-              <Play className="h-3.5 w-3.5" />
-              Process Payroll
-            </>
-          )}
-        </Button>
-      </div>
+              <div className="flex gap-3 justify-end pt-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() =>
+                    navigate({ to: `/app/${workspaceId}/payroll` as "/" })
+                  }
+                >
+                  Cancel
+                </Button>
+                <Button
+                  type="submit"
+                  data-ocid="payroll-submit-btn"
+                  disabled={
+                    processMutation.isPending ||
+                    !selectedEmployee ||
+                    !hasTreasuryBalance
+                  }
+                  className="gap-2"
+                >
+                  {processMutation.isPending ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      Processing…
+                    </>
+                  ) : (
+                    <>
+                      <BadgeDollarSign className="w-4 h-4" />
+                      Process Payroll
+                    </>
+                  )}
+                </Button>
+              </div>
+            </form>
+          </CardContent>
+        </Card>
+      )}
     </div>
   );
 }

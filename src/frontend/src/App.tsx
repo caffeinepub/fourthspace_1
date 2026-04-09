@@ -1,4 +1,4 @@
-import { useInternetIdentity } from "@caffeineai/core-infrastructure";
+import { useActor, useInternetIdentity } from "@caffeineai/core-infrastructure";
 import {
   Outlet,
   RouterProvider,
@@ -6,12 +6,14 @@ import {
   createRoute,
   createRouter,
   redirect,
+  useNavigate,
 } from "@tanstack/react-router";
 import { ThemeProvider } from "next-themes";
-import { Suspense, lazy } from "react";
+import { Suspense, lazy, useEffect } from "react";
+import { createActor } from "./backend";
 import { Layout } from "./components/Layout";
 import { LoadingSpinner } from "./components/LoadingSpinner";
-import { getWorkspaceId } from "./hooks/useWorkspace";
+import { getWorkspaceId, setWorkspaceId } from "./hooks/useWorkspace";
 
 // ---- Lazy page imports ----
 const LandingPage = lazy(() => import("./pages/LandingPage"));
@@ -174,6 +176,46 @@ function WorkspaceLayout() {
   );
 }
 
+// ---- Workspace Gate — loads workspaces from backend after auth, redirects if none ----
+function WorkspaceGate({ children }: { children: React.ReactNode }) {
+  const { actor, isFetching } = useActor(createActor);
+  const navigate = useNavigate();
+  const actorReady = !!actor && !isFetching;
+
+  useEffect(() => {
+    if (!actorReady) return;
+    // Check workspaces from backend — not just localStorage
+    actor
+      .listWorkspaces("default")
+      .then((workspaces) => {
+        if (!workspaces || workspaces.length === 0) {
+          // No workspaces — clear stale localStorage and redirect to create
+          localStorage.removeItem("fourthspace_workspace_id");
+          localStorage.removeItem("activeWorkspaceId");
+          localStorage.removeItem("fourthspace_has_workspace");
+          void navigate({ to: "/app/workspaces/new" });
+          return;
+        }
+        // Auto-select workspace if stored ID is stale/missing
+        const storedId = getWorkspaceId();
+        const validId = workspaces.find((w) => w.id === storedId)?.id;
+        if (!validId) {
+          const firstId = workspaces[0].id;
+          setWorkspaceId(firstId);
+          void navigate({
+            to: "/app/$workspaceId/dashboard",
+            params: { workspaceId: firstId },
+          });
+        }
+      })
+      .catch(() => {
+        // On error, fall through to localStorage-based routing
+      });
+  }, [actorReady, actor, navigate]);
+
+  return <>{children}</>;
+}
+
 // ---- Auth Guard ----
 function AuthGuard({ children }: { children: React.ReactNode }) {
   const { identity, isLoginSuccess } = useInternetIdentity();
@@ -246,13 +288,15 @@ const inviteAcceptRoute = createRoute({
   ),
 });
 
-// ---- App Shell (Auth guard) ----
+// ---- App Shell (Auth guard + workspace gate) ----
 const appRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/app",
   component: () => (
     <AuthGuard>
-      <Outlet />
+      <WorkspaceGate>
+        <Outlet />
+      </WorkspaceGate>
     </AuthGuard>
   ),
 });

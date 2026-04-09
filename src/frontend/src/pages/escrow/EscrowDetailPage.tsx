@@ -1,289 +1,121 @@
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
-import { useInternetIdentity } from "@caffeineai/core-infrastructure";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate, useParams } from "@tanstack/react-router";
+import { format } from "date-fns";
 import {
   AlertTriangle,
   ArrowLeft,
-  CheckCircle2,
-  ChevronRight,
-  Clock,
+  CheckCircle,
   DollarSign,
-  Download,
-  ExternalLink,
   Flag,
-  Gavel,
-  Layers,
+  Loader2,
+  RefreshCw,
   Shield,
-  User,
   XCircle,
 } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
+import { useBackend } from "../../hooks/useBackend";
+import { useWorkspace } from "../../hooks/useWorkspace";
 import type {
+  EscrowContract,
   EscrowDispute,
   EscrowMilestone,
-  EscrowSummary,
-} from "../../backend";
-import { useBackend } from "../../hooks/useBackend";
-import { getTenantId, useWorkspace } from "../../hooks/useWorkspace";
-import { type EscrowContract, EscrowStatus } from "../../types";
+  StatusHistoryEntry,
+} from "../../types";
+import { EscrowStatus, MilestoneStatus__1 } from "../../types";
 
-// Use backend types directly for variant checks
-import { DisputeStatus as DS, MilestoneStatus__1 as MS } from "../../backend";
-
-interface StatusCfg {
-  label: string;
-  className: string;
-  icon: React.ElementType;
-  description: string;
+function formatICP(e8s: bigint): string {
+  return `${(Number(e8s) / 1e8).toFixed(4)} ICP`;
+}
+function formatTs(ts: bigint): string {
+  return format(new Date(Number(ts) / 1_000_000), "MMM d, yyyy HH:mm");
 }
 
-const STATUS_CONFIG: Record<EscrowStatus, StatusCfg> = {
-  [EscrowStatus.Pending]: {
-    label: "Pending",
-    className:
-      "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400",
-    icon: Clock,
-    description: "Awaiting funding by the payer",
-  },
-  [EscrowStatus.Funded]: {
-    label: "Funded",
-    className:
-      "bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400",
-    icon: DollarSign,
-    description: "Funds are held in escrow",
-  },
-  [EscrowStatus.Released]: {
-    label: "Released",
-    className:
-      "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400",
-    icon: CheckCircle2,
-    description: "Funds have been released to payee",
-  },
-  [EscrowStatus.Disputed]: {
-    label: "Disputed",
-    className: "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400",
-    icon: AlertTriangle,
-    description: "Contract is under dispute",
-  },
-  [EscrowStatus.Cancelled]: {
-    label: "Cancelled",
-    className: "bg-muted text-muted-foreground",
-    icon: XCircle,
-    description: "Contract has been cancelled",
-  },
+const ESCROW_COLORS: Record<string, string> = {
+  [EscrowStatus.Pending]: "bg-muted text-muted-foreground",
+  [EscrowStatus.Funded]: "bg-primary/10 text-primary",
+  [EscrowStatus.Released]: "bg-accent/10 text-accent-foreground",
+  [EscrowStatus.Disputed]: "bg-destructive/10 text-destructive",
+  [EscrowStatus.Cancelled]: "bg-muted text-muted-foreground",
 };
 
-const TIMELINE_STEPS: EscrowStatus[] = [
-  EscrowStatus.Pending,
-  EscrowStatus.Funded,
-  EscrowStatus.Released,
-];
-
-function formatAmount(amount: bigint, currency?: string): string {
-  const num = Number(amount) / 100;
-  const curr = currency ?? "USD";
-  return `${curr} ${num.toLocaleString("en-US", {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  })}`;
-}
-
-function formatDate(ts: bigint): string {
-  return new Date(Number(ts) / 1_000_000).toLocaleDateString("en-US", {
-    month: "long",
-    day: "numeric",
-    year: "numeric",
-  });
-}
-
-function formatDateTime(ts: bigint): string {
-  return new Date(Number(ts) / 1_000_000).toLocaleString("en-US", {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
-  });
-}
-
-function StatusTimeline({ status }: { status: EscrowStatus }) {
-  const isDisputed = status === EscrowStatus.Disputed;
-  const isCancelled = status === EscrowStatus.Cancelled;
-
-  if (isDisputed || isCancelled) {
-    const Icon = isDisputed ? AlertTriangle : XCircle;
-    const color = isDisputed ? "text-red-500" : "text-muted-foreground";
-    const bg = isDisputed ? "bg-red-50 dark:bg-red-900/20" : "bg-muted";
-    return (
-      <div className={`flex items-center gap-3 rounded-xl p-4 ${bg}`}>
-        <Icon className={`h-5 w-5 shrink-0 ${color}`} />
-        <p className={`text-sm font-medium ${color}`}>
-          {isDisputed
-            ? "This contract is under dispute"
-            : "This contract was cancelled"}
-        </p>
-      </div>
-    );
-  }
-
-  const currentIdx = TIMELINE_STEPS.indexOf(status);
-
-  return (
-    <div className="flex items-center">
-      {TIMELINE_STEPS.map((s, idx) => {
-        const cfg = STATUS_CONFIG[s];
-        const Icon = cfg.icon;
-        const isPast = idx < currentIdx;
-        const isCurrent = idx === currentIdx;
-        const isFuture = idx > currentIdx;
-
-        return (
-          <div key={s} className="flex items-center flex-1 last:flex-none">
-            <div className="flex flex-col items-center gap-1">
-              <div
-                className={`flex h-8 w-8 items-center justify-center rounded-full border-2 transition-smooth ${
-                  isPast
-                    ? "border-amber-500 bg-amber-500 text-white"
-                    : isCurrent
-                      ? "border-amber-500 bg-amber-100 dark:bg-amber-900/30 text-amber-600 dark:text-amber-400"
-                      : "border-border bg-muted text-muted-foreground"
-                }`}
-              >
-                <Icon className="h-3.5 w-3.5" />
-              </div>
-              <span
-                className={`text-[10px] font-medium whitespace-nowrap ${
-                  isFuture ? "text-muted-foreground" : "text-foreground"
-                }`}
-              >
-                {cfg.label}
-              </span>
-            </div>
-            {idx < TIMELINE_STEPS.length - 1 && (
-              <div
-                className={`h-0.5 flex-1 mx-2 mb-4 rounded-full transition-smooth ${
-                  isPast ? "bg-amber-500" : "bg-border"
-                }`}
-              />
-            )}
-          </div>
-        );
-      })}
-    </div>
-  );
-}
-
-const MILESTONE_STATUS_STYLES: Record<MS, string> = {
-  [MS.Pending]:
-    "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400",
-  [MS.Approved]:
-    "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400",
-  [MS.Releasing]:
-    "bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400",
-  [MS.Released]:
-    "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400",
+const MS_COLORS: Record<string, string> = {
+  [MilestoneStatus__1.Pending]: "bg-muted text-muted-foreground",
+  [MilestoneStatus__1.Approved]: "bg-primary/10 text-primary",
+  [MilestoneStatus__1.Releasing]: "bg-secondary/10 text-secondary-foreground",
+  [MilestoneStatus__1.Released]: "bg-accent/10 text-accent-foreground",
 };
-
-type TabId = "overview" | "milestones" | "timeline" | "dispute";
 
 export default function EscrowDetailPage() {
-  const { escrowId: contractId } = useParams({
-    from: "/app/$workspaceId/escrow/$escrowId",
-  });
+  const { workspaceId, escrowId } = useParams({ strict: false }) as {
+    workspaceId: string;
+    escrowId: string;
+  };
+  const { tenantId } = useWorkspace();
   const { actor, isFetching } = useBackend();
-  const tenantId = getTenantId();
-  const { activeWorkspaceId } = useWorkspace();
-  const workspaceId = activeWorkspaceId ?? "";
   const navigate = useNavigate();
   const queryClient = useQueryClient();
-
-  // Get current user identity to determine if they are the payer
-  const { identity } = useInternetIdentity();
-  const currentPrincipalText = identity?.getPrincipal().toString() ?? "";
-
-  const [activeTab, setActiveTab] = useState<TabId>("overview");
   const [disputeReason, setDisputeReason] = useState("");
-  const [arbiterPrincipal, setArbiterPrincipal] = useState("");
-  const [disputeResolution, setDisputeResolution] = useState("");
   const [showDisputeForm, setShowDisputeForm] = useState(false);
 
-  const { data: contract, isLoading } = useQuery<EscrowContract | null>({
-    queryKey: ["escrow", tenantId, workspaceId, contractId],
+  const { data: escrow, isLoading } = useQuery<EscrowContract | null>({
+    queryKey: ["escrow", tenantId, workspaceId, escrowId],
     queryFn: async () => {
       if (!actor) return null;
-      const r = await actor.getEscrow(tenantId, workspaceId, contractId);
-      return r.__kind__ === "ok" ? r.ok : null;
+      const r = await actor.getEscrow(tenantId, workspaceId, escrowId);
+      if (r.__kind__ === "err") throw new Error(r.err);
+      return r.ok;
     },
-    enabled: !!actor && !isFetching && !!workspaceId,
-    // Poll every 10s so status updates from other workspace members appear automatically
-    refetchInterval: 10_000,
+    enabled: !!actor && !isFetching && !!escrowId,
   });
 
-  const { data: milestones } = useQuery<EscrowMilestone[]>({
-    queryKey: ["escrowMilestones", tenantId, workspaceId, contractId],
+  const { data: milestones = [] } = useQuery<EscrowMilestone[]>({
+    queryKey: ["escrowMilestones", tenantId, workspaceId, escrowId],
     queryFn: async () => {
       if (!actor) return [];
-      return actor.listEscrowMilestones(tenantId, workspaceId, contractId);
+      return actor.listEscrowMilestones(tenantId, workspaceId, escrowId);
     },
-    enabled: !!actor && !isFetching && !!workspaceId,
-    refetchInterval: 10_000,
+    enabled: !!actor && !isFetching && !!escrowId,
   });
 
-  const { data: disputes } = useQuery<EscrowDispute[]>({
-    queryKey: ["escrowDisputes", tenantId, workspaceId, contractId],
+  const { data: disputes = [] } = useQuery<EscrowDispute[]>({
+    queryKey: ["escrowDisputes", tenantId, workspaceId, escrowId],
     queryFn: async () => {
       if (!actor) return [];
-      return actor.listEscrowDisputes(tenantId, workspaceId, contractId);
+      return actor.listEscrowDisputes(tenantId, workspaceId, escrowId);
     },
-    enabled: !!actor && !isFetching && !!workspaceId,
-    refetchInterval: 10_000,
+    enabled: !!actor && !isFetching && !!escrowId,
   });
 
-  const { data: summary } = useQuery<EscrowSummary | null>({
-    queryKey: ["escrowSummary", tenantId, workspaceId, contractId],
-    queryFn: async () => {
-      if (!actor) return null;
-      const r = await actor.getEscrowSummary(tenantId, workspaceId, contractId);
-      return r.__kind__ === "ok" ? r.ok : null;
-    },
-    enabled:
-      !!actor && !isFetching && !!workspaceId && activeTab === "overview",
-  });
-
-  const invalidate = () => {
-    queryClient.invalidateQueries({
-      queryKey: ["escrow", tenantId, workspaceId, contractId],
+  function invalidate() {
+    void queryClient.invalidateQueries({
+      queryKey: ["escrow", tenantId, workspaceId, escrowId],
     });
-    queryClient.invalidateQueries({
-      queryKey: ["escrows", tenantId, workspaceId],
+    void queryClient.invalidateQueries({
+      queryKey: ["escrowMilestones", tenantId, workspaceId, escrowId],
     });
-    queryClient.invalidateQueries({
-      queryKey: ["escrowMilestones", tenantId, workspaceId, contractId],
+    void queryClient.invalidateQueries({
+      queryKey: ["escrowDisputes", tenantId, workspaceId, escrowId],
     });
-    queryClient.invalidateQueries({
-      queryKey: ["escrowDisputes", tenantId, workspaceId, contractId],
+    void queryClient.invalidateQueries({
+      queryKey: ["escrow", tenantId, workspaceId],
     });
-  };
+  }
 
   const fundMutation = useMutation({
     mutationFn: async () => {
       if (!actor) throw new Error("Not connected");
-      const r = await actor.fundEscrow(tenantId, workspaceId, contractId);
+      const r = await actor.fundEscrow(tenantId, workspaceId, escrowId);
       if (r.__kind__ === "err") throw new Error(r.err);
-      return r.ok;
     },
     onSuccess: () => {
-      invalidate();
       toast.success("Escrow funded successfully");
+      invalidate();
     },
     onError: (e: Error) => toast.error(e.message),
   });
@@ -291,13 +123,25 @@ export default function EscrowDetailPage() {
   const releaseMutation = useMutation({
     mutationFn: async () => {
       if (!actor) throw new Error("Not connected");
-      const r = await actor.releaseEscrow(tenantId, workspaceId, contractId);
+      const r = await actor.releaseEscrow(tenantId, workspaceId, escrowId);
       if (r.__kind__ === "err") throw new Error(r.err);
-      return r.ok;
     },
     onSuccess: () => {
+      toast.success("Funds released successfully");
       invalidate();
-      toast.success("Funds released to payee");
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  const refundMutation = useMutation({
+    mutationFn: async () => {
+      if (!actor) throw new Error("Not connected");
+      const r = await actor.refundEscrow(tenantId, workspaceId, escrowId);
+      if (r.__kind__ === "err") throw new Error(r.err);
+    },
+    onSuccess: () => {
+      toast.success("Escrow refunded");
+      invalidate();
     },
     onError: (e: Error) => toast.error(e.message),
   });
@@ -305,18 +149,37 @@ export default function EscrowDetailPage() {
   const cancelMutation = useMutation({
     mutationFn: async () => {
       if (!actor) throw new Error("Not connected");
-      const r = await actor.cancelEscrow(tenantId, workspaceId, contractId);
+      const r = await actor.cancelEscrow(tenantId, workspaceId, escrowId);
       if (r.__kind__ === "err") throw new Error(r.err);
-      return r.ok;
     },
     onSuccess: () => {
+      toast.success("Escrow cancelled");
       invalidate();
-      toast.info("Escrow contract cancelled");
     },
     onError: (e: Error) => toast.error(e.message),
   });
 
-  const approveMilestoneMutation = useMutation({
+  const disputeMutation = useMutation({
+    mutationFn: async (reason: string) => {
+      if (!actor) throw new Error("Not connected");
+      const r = await actor.raiseEscrowDispute(
+        tenantId,
+        workspaceId,
+        escrowId,
+        reason,
+      );
+      if (r.__kind__ === "err") throw new Error(r.err);
+    },
+    onSuccess: () => {
+      toast.success("Dispute raised");
+      setShowDisputeForm(false);
+      setDisputeReason("");
+      invalidate();
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  const approveMsMutation = useMutation({
     mutationFn: async (milestoneId: string) => {
       if (!actor) throw new Error("Not connected");
       const r = await actor.approveMilestone(
@@ -325,16 +188,15 @@ export default function EscrowDetailPage() {
         milestoneId,
       );
       if (r.__kind__ === "err") throw new Error(r.err);
-      return r.ok;
     },
     onSuccess: () => {
-      invalidate();
       toast.success("Milestone approved");
+      invalidate();
     },
     onError: (e: Error) => toast.error(e.message),
   });
 
-  const releaseMilestoneMutation = useMutation({
+  const releaseMsMutation = useMutation({
     mutationFn: async (milestoneId: string) => {
       if (!actor) throw new Error("Not connected");
       const r = await actor.releaseMilestoneFunds(
@@ -343,119 +205,31 @@ export default function EscrowDetailPage() {
         milestoneId,
       );
       if (r.__kind__ === "err") throw new Error(r.err);
-      return r.ok;
     },
     onSuccess: () => {
+      toast.success("Milestone released successfully");
       invalidate();
-      toast.success("Milestone funds released");
     },
     onError: (e: Error) => toast.error(e.message),
   });
-
-  const raiseDisputeMutation = useMutation({
-    mutationFn: async () => {
-      if (!actor) throw new Error("Not connected");
-      const r = await actor.raiseEscrowDispute(
-        tenantId,
-        workspaceId,
-        contractId,
-        disputeReason,
-      );
-      if (r.__kind__ === "err") throw new Error(r.err);
-      return r.ok;
-    },
-    onSuccess: () => {
-      invalidate();
-      toast.warning("Dispute raised");
-      setShowDisputeForm(false);
-      setDisputeReason("");
-      setArbiterPrincipal("");
-      setActiveTab("dispute");
-    },
-    onError: (e: Error) => toast.error(e.message),
-  });
-
-  const resolveDisputeMutation = useMutation({
-    mutationFn: async (disputeId: string) => {
-      if (!actor) throw new Error("Not connected");
-      const r = await actor.resolveDispute(
-        tenantId,
-        workspaceId,
-        disputeId,
-        disputeResolution,
-      );
-      if (r.__kind__ === "err") throw new Error(r.err);
-      return r.ok;
-    },
-    onSuccess: () => {
-      invalidate();
-      toast.success("Dispute resolved");
-      setDisputeResolution("");
-    },
-    onError: (e: Error) => toast.error(e.message),
-  });
-
-  const isBusy =
-    fundMutation.isPending ||
-    releaseMutation.isPending ||
-    cancelMutation.isPending ||
-    raiseDisputeMutation.isPending;
-
-  function handleDownloadSummary() {
-    if (!summary) {
-      toast.error("Summary not available");
-      return;
-    }
-    const lines = [
-      "Escrow Summary",
-      "==============",
-      `Title: ${summary.title}`,
-      `Status: ${summary.status}`,
-      `Amount: ${summary.currency} ${(Number(summary.amount) / 100).toFixed(2)}`,
-      `Payer: ${summary.payerId}`,
-      `Payee: ${summary.payeeId}`,
-      `Created: ${new Date(Number(summary.createdAt) / 1_000_000).toLocaleString("en-US")}`,
-      `Milestone Count: ${Number(summary.milestoneCount)}`,
-      "",
-      "Conditions:",
-      ...summary.conditions.map((c, i) => `  ${i + 1}. ${c}`),
-      "",
-      "Status History:",
-      ...summary.statusHistory.map(
-        (h) =>
-          `  ${h.status} — ${new Date(Number(h.timestamp) / 1_000_000).toLocaleString("en-US")} by ${h.changedBy.toString()}`,
-      ),
-    ];
-    const text = lines.join("\n");
-    const blob = new Blob([text], { type: "text/plain" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `escrow-${contractId.slice(0, 8)}-summary.txt`;
-    a.click();
-    URL.revokeObjectURL(url);
-    toast.success("Summary downloaded");
-  }
 
   if (isLoading) {
     return (
-      <div className="p-6 md:p-8 max-w-3xl mx-auto space-y-4">
-        <Skeleton className="h-8 w-48" />
-        <Skeleton className="h-40 rounded-xl" />
-        <Skeleton className="h-32 rounded-xl" />
+      <div className="flex flex-col gap-4 p-4 sm:p-6 max-w-3xl mx-auto">
+        <Skeleton className="h-10 w-64" />
+        <Skeleton className="h-40 w-full rounded-lg" />
+        <Skeleton className="h-32 w-full rounded-lg" />
       </div>
     );
   }
 
-  if (!contract) {
+  if (!escrow) {
     return (
-      <div className="p-6 md:p-8 max-w-3xl mx-auto text-center py-20">
-        <Shield className="mx-auto h-12 w-12 text-muted-foreground mb-4" />
-        <p className="font-semibold text-foreground">Contract not found</p>
+      <div className="flex flex-col items-center justify-center py-20 gap-4 text-center">
+        <XCircle className="w-12 h-12 text-muted-foreground" />
+        <p className="text-muted-foreground">Escrow not found.</p>
         <Button
-          variant="outline"
-          className="mt-4"
-          onClick={() => navigate({ to: `/app/${workspaceId}/escrow` })}
+          onClick={() => navigate({ to: `/app/${workspaceId}/escrow` as "/" })}
         >
           Back to Escrow
         </Button>
@@ -463,210 +237,181 @@ export default function EscrowDetailPage() {
     );
   }
 
-  const cfg = STATUS_CONFIG[contract.status];
-  const StatusIcon = cfg.icon;
+  const canFund = escrow.status === EscrowStatus.Pending;
+  const canRelease = escrow.status === EscrowStatus.Funded;
+  const canDispute =
+    escrow.status === EscrowStatus.Funded ||
+    escrow.status === EscrowStatus.Pending;
+  const canRefund =
+    escrow.status === EscrowStatus.Disputed ||
+    escrow.status === EscrowStatus.Funded;
+  const canCancel = escrow.status === EscrowStatus.Pending;
   const isTerminal =
-    contract.status === EscrowStatus.Released ||
-    contract.status === EscrowStatus.Cancelled;
-  const milestoneList = milestones ?? [];
-  const disputeList = disputes ?? [];
-  const openDispute = disputeList.find((d) => d.status === DS.Open) ?? null;
-
-  // The payer is the creator of the escrow — only they can approve milestones
-  const isPayer =
-    currentPrincipalText.length > 0 &&
-    contract.payerId.toString() === currentPrincipalText;
-
-  const TABS: { id: TabId; label: string; icon: React.ElementType }[] = [
-    { id: "overview", label: "Overview", icon: Shield },
-    {
-      id: "milestones",
-      label: `Milestones${milestoneList.length > 0 ? ` (${milestoneList.length})` : ""}`,
-      icon: Layers,
-    },
-    { id: "timeline", label: "Status History", icon: Clock },
-    {
-      id: "dispute",
-      label: `Dispute${disputeList.length > 0 ? ` (${disputeList.length})` : ""}`,
-      icon: Gavel,
-    },
-  ];
+    escrow.status === EscrowStatus.Released ||
+    escrow.status === EscrowStatus.Cancelled;
 
   return (
-    <div className="animate-fade-in-up p-6 md:p-8 max-w-3xl mx-auto space-y-6">
+    <div className="flex flex-col gap-5 p-4 sm:p-6 max-w-3xl mx-auto w-full">
       {/* Header */}
-      <div className="flex items-start gap-3">
-        <button
-          type="button"
-          onClick={() => navigate({ to: `/app/${workspaceId}/escrow` })}
-          aria-label="Back to escrow"
-          className="mt-0.5 flex h-8 w-8 items-center justify-center rounded-lg border border-border bg-card hover:bg-muted transition-smooth shrink-0"
-        >
-          <ArrowLeft className="h-4 w-4 text-muted-foreground" />
-        </button>
-        <div className="flex-1 min-w-0">
-          <div className="flex flex-wrap items-center gap-2">
-            <h1 className="font-display text-xl font-bold text-foreground truncate">
-              {contract.title}
-            </h1>
-            <span
-              className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-medium ${cfg.className}`}
-            >
-              <StatusIcon className="h-3 w-3" />
-              {cfg.label}
-            </span>
-          </div>
-          <p className="text-sm text-muted-foreground mt-0.5">
-            {cfg.description}
-          </p>
-        </div>
+      <div className="flex items-center gap-3">
         <Button
-          variant="outline"
-          size="sm"
-          onClick={handleDownloadSummary}
-          disabled={!summary}
-          data-ocid="escrow-download-summary"
-          className="shrink-0 gap-1.5"
+          variant="ghost"
+          size="icon"
+          onClick={() => navigate({ to: `/app/${workspaceId}/escrow` as "/" })}
+          data-ocid="escrow-detail-back"
         >
-          <Download className="h-3.5 w-3.5" />
-          Summary
+          <ArrowLeft className="w-4 h-4" />
         </Button>
+        <Shield className="w-5 h-5 text-primary shrink-0" />
+        <h1 className="text-xl font-semibold font-display truncate flex-1 min-w-0">
+          {escrow.title}
+        </h1>
+        <Badge
+          className={`shrink-0 text-xs ${ESCROW_COLORS[escrow.status] ?? "bg-muted text-muted-foreground"}`}
+          variant="outline"
+        >
+          {escrow.status}
+        </Badge>
       </div>
 
-      {/* Amount hero */}
-      <div className="rounded-2xl bg-gradient-to-br from-amber-500 to-yellow-500 p-6 text-white shadow-lg">
-        <p className="text-sm font-medium text-white/80 mb-1">
-          Contract Amount
-        </p>
-        <p className="font-display text-4xl font-bold tracking-tight">
-          {formatAmount(contract.amount, contract.currency)}
-        </p>
-        {contract.dueDate && (
-          <p className="text-sm text-white/70 mt-2 flex items-center gap-1.5">
-            <Clock className="h-3.5 w-3.5" />
-            Due {formatDate(contract.dueDate)}
-          </p>
-        )}
-      </div>
+      {/* Overview card */}
+      <Card>
+        <CardContent className="p-4 grid grid-cols-2 sm:grid-cols-4 gap-4">
+          <Stat label="Amount" value={formatICP(escrow.amount)} />
+          <Stat label="Currency" value={escrow.currency} />
+          <Stat label="Created" value={formatTs(escrow.createdAt)} />
+          {escrow.dueDate ? (
+            <Stat label="Due" value={formatTs(escrow.dueDate)} />
+          ) : null}
+        </CardContent>
+      </Card>
 
-      {/* Action buttons — visible to all workspace members for viewing context, but only payer can trigger fund/release */}
+      {escrow.description && (
+        <Card>
+          <CardContent className="p-4">
+            <p className="text-xs text-muted-foreground mb-1.5">Description</p>
+            <p className="text-sm text-foreground">{escrow.description}</p>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Actions */}
       {!isTerminal && (
-        <Card className="border-amber-200 dark:border-amber-800 bg-amber-50/50 dark:bg-amber-900/10">
-          <CardHeader className="pb-3">
-            <CardTitle className="text-sm font-semibold text-foreground">
-              Actions
-            </CardTitle>
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-display">Actions</CardTitle>
           </CardHeader>
-          <CardContent>
+          <CardContent className="px-4 pb-4 pt-0 flex flex-col gap-3">
             <div className="flex flex-wrap gap-2">
-              {contract.status === EscrowStatus.Pending && (
-                <>
-                  <Button
-                    onClick={() => fundMutation.mutate()}
-                    disabled={isBusy}
-                    data-ocid="escrow-fund-btn"
-                    className="bg-amber-500 hover:bg-amber-600 text-white gap-2"
-                  >
-                    <DollarSign className="h-4 w-4" />
-                    {fundMutation.isPending ? "Funding..." : "Fund Escrow"}
-                  </Button>
-                  <Button
-                    variant="outline"
-                    onClick={() => cancelMutation.mutate()}
-                    disabled={isBusy}
-                    data-ocid="escrow-cancel-contract-btn"
-                    className="gap-2 border-destructive/40 text-destructive hover:bg-destructive/10"
-                  >
-                    <XCircle className="h-4 w-4" />
-                    {cancelMutation.isPending ? "Cancelling..." : "Cancel"}
-                  </Button>
-                </>
-              )}
-              {contract.status === EscrowStatus.Funded && (
-                <>
-                  <Button
-                    onClick={() => releaseMutation.mutate()}
-                    disabled={isBusy}
-                    data-ocid="escrow-release-btn"
-                    className="bg-green-600 hover:bg-green-700 text-white gap-2"
-                  >
-                    <CheckCircle2 className="h-4 w-4" />
-                    {releaseMutation.isPending
-                      ? "Releasing..."
-                      : "Release Funds"}
-                  </Button>
-                  {!openDispute && (
-                    <Button
-                      variant="outline"
-                      onClick={() => setShowDisputeForm(!showDisputeForm)}
-                      disabled={isBusy}
-                      data-ocid="escrow-dispute-btn"
-                      className="gap-2 border-red-300 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20"
-                    >
-                      <Flag className="h-4 w-4" />
-                      Raise Dispute
-                    </Button>
+              {canFund && (
+                <Button
+                  data-ocid="escrow-fund-btn"
+                  size="sm"
+                  onClick={() => fundMutation.mutate()}
+                  disabled={fundMutation.isPending}
+                  className="gap-1.5"
+                >
+                  {fundMutation.isPending ? (
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  ) : (
+                    <DollarSign className="w-3.5 h-3.5" />
                   )}
-                </>
+                  Fund Escrow
+                </Button>
+              )}
+              {canRelease && (
+                <Button
+                  data-ocid="escrow-release-btn"
+                  size="sm"
+                  variant="outline"
+                  onClick={() => releaseMutation.mutate()}
+                  disabled={releaseMutation.isPending}
+                  className="gap-1.5"
+                >
+                  {releaseMutation.isPending ? (
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  ) : (
+                    <CheckCircle className="w-3.5 h-3.5" />
+                  )}
+                  Release Funds
+                </Button>
+              )}
+              {canDispute && !showDisputeForm && (
+                <Button
+                  data-ocid="escrow-dispute-btn"
+                  size="sm"
+                  variant="outline"
+                  onClick={() => setShowDisputeForm(true)}
+                  className="gap-1.5 text-destructive border-destructive/30 hover:bg-destructive/5"
+                >
+                  <Flag className="w-3.5 h-3.5" />
+                  Raise Dispute
+                </Button>
+              )}
+              {canRefund && (
+                <Button
+                  data-ocid="escrow-refund-btn"
+                  size="sm"
+                  variant="outline"
+                  onClick={() => refundMutation.mutate()}
+                  disabled={refundMutation.isPending}
+                  className="gap-1.5"
+                >
+                  {refundMutation.isPending ? (
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  ) : (
+                    <RefreshCw className="w-3.5 h-3.5" />
+                  )}
+                  Refund
+                </Button>
+              )}
+              {canCancel && (
+                <Button
+                  data-ocid="escrow-cancel-btn"
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => cancelMutation.mutate()}
+                  disabled={cancelMutation.isPending}
+                  className="gap-1.5 text-destructive hover:text-destructive"
+                >
+                  <XCircle className="w-3.5 h-3.5" />
+                  Cancel
+                </Button>
               )}
             </div>
-            {/* Inline dispute form */}
             {showDisputeForm && (
-              <div className="mt-4 rounded-xl border border-red-200 dark:border-red-800 bg-red-50/50 dark:bg-red-900/10 p-4 space-y-3">
-                <p className="text-sm font-semibold text-red-700 dark:text-red-400 flex items-center gap-2">
-                  <AlertTriangle className="h-4 w-4" />
+              <div className="p-3 rounded-lg border border-destructive/30 bg-destructive/5 flex flex-col gap-3">
+                <p className="text-sm font-medium text-destructive flex items-center gap-2">
+                  <AlertTriangle className="w-4 h-4" />
                   Raise a Dispute
                 </p>
-                <div className="space-y-1.5">
-                  <Label htmlFor="dispute-reason" className="text-xs">
-                    Reason <span className="text-red-500">*</span>
-                  </Label>
-                  <Textarea
-                    id="dispute-reason"
-                    placeholder="Describe the reason for the dispute..."
-                    value={disputeReason}
-                    onChange={(e) => setDisputeReason(e.target.value)}
-                    rows={3}
-                    data-ocid="dispute-reason-textarea"
-                  />
-                </div>
-                <div className="space-y-1.5">
-                  <Label htmlFor="arbiter-principal" className="text-xs">
-                    Arbiter Principal ID{" "}
-                    <span className="text-muted-foreground">(optional)</span>
-                  </Label>
-                  <Input
-                    id="arbiter-principal"
-                    placeholder="Enter arbiter's principal ID"
-                    value={arbiterPrincipal}
-                    onChange={(e) => setArbiterPrincipal(e.target.value)}
-                    className="font-mono text-xs"
-                    data-ocid="arbiter-principal-input"
-                  />
-                </div>
-                <div className="flex gap-2">
+                <Textarea
+                  data-ocid="escrow-dispute-reason"
+                  placeholder="Describe the reason for the dispute..."
+                  value={disputeReason}
+                  onChange={(e) => setDisputeReason(e.target.value)}
+                  rows={3}
+                />
+                <div className="flex gap-2 justify-end">
                   <Button
                     size="sm"
-                    onClick={() => raiseDisputeMutation.mutate()}
-                    disabled={
-                      !disputeReason.trim() || raiseDisputeMutation.isPending
-                    }
-                    className="bg-red-600 hover:bg-red-700 text-white"
-                    data-ocid="dispute-submit-btn"
+                    variant="ghost"
+                    onClick={() => setShowDisputeForm(false)}
                   >
-                    {raiseDisputeMutation.isPending
-                      ? "Submitting..."
-                      : "Submit Dispute"}
+                    Cancel
                   </Button>
                   <Button
                     size="sm"
-                    variant="outline"
-                    onClick={() => {
-                      setShowDisputeForm(false);
-                      setDisputeReason("");
-                    }}
+                    variant="destructive"
+                    data-ocid="escrow-dispute-submit"
+                    onClick={() => disputeMutation.mutate(disputeReason)}
+                    disabled={
+                      disputeMutation.isPending || !disputeReason.trim()
+                    }
                   >
-                    Cancel
+                    {disputeMutation.isPending
+                      ? "Submitting..."
+                      : "Submit Dispute"}
                   </Button>
                 </div>
               </div>
@@ -675,594 +420,221 @@ export default function EscrowDetailPage() {
         </Card>
       )}
 
-      {/* Tabs */}
-      <div className="border-b border-border">
-        <div className="flex gap-0 overflow-x-auto">
-          {TABS.map((tab) => {
-            const TabIcon = tab.icon;
-            return (
-              <button
-                key={tab.id}
-                type="button"
-                onClick={() => setActiveTab(tab.id)}
-                data-ocid={`escrow-tab-${tab.id}`}
-                className={`flex items-center gap-1.5 px-4 py-2.5 text-sm font-medium border-b-2 transition-smooth whitespace-nowrap ${
-                  activeTab === tab.id
-                    ? "border-amber-500 text-amber-600 dark:text-amber-400"
-                    : "border-transparent text-muted-foreground hover:text-foreground hover:border-border"
-                }`}
+      {/* Milestones */}
+      {milestones.length > 0 && (
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-display">
+              Milestones ({milestones.length})
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="px-4 pb-4 pt-0 flex flex-col gap-3">
+            {milestones.map((m) => (
+              <div
+                key={m.id}
+                data-ocid={`milestone-card-${m.id}`}
+                className="p-3 rounded-lg border border-border bg-background flex items-start justify-between gap-3 flex-wrap"
               >
-                <TabIcon className="h-3.5 w-3.5" />
-                {tab.label}
-              </button>
-            );
-          })}
-        </div>
-      </div>
-
-      {/* Tab: Overview */}
-      {activeTab === "overview" && (
-        <div className="space-y-4">
-          {/* Status timeline */}
-          <Card>
-            <CardHeader className="pb-3">
-              <CardTitle className="text-sm font-semibold text-foreground">
-                Status Timeline
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <StatusTimeline status={contract.status} />
-            </CardContent>
-          </Card>
-
-          {/* Details grid */}
-          <div className="grid gap-4 md:grid-cols-2">
-            <Card>
-              <CardHeader className="pb-3">
-                <CardTitle className="text-sm font-semibold text-foreground flex items-center gap-2">
-                  <User className="h-4 w-4 text-amber-500" />
-                  Parties
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                <div>
-                  <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-0.5">
-                    Payer
-                  </p>
-                  <div className="flex items-center gap-1.5">
-                    <p
-                      className="text-xs text-foreground font-mono truncate"
-                      title={contract.payerId.toString()}
-                    >
-                      {contract.payerId.toString().slice(0, 24)}…
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 mb-0.5 flex-wrap">
+                    <p className="text-sm font-medium text-foreground truncate">
+                      {m.title}
                     </p>
-                    {isPayer && (
-                      <span className="shrink-0 text-[10px] font-semibold text-amber-600 dark:text-amber-400 bg-amber-100 dark:bg-amber-900/30 rounded px-1.5 py-0.5">
-                        You
+                    <Badge
+                      variant="outline"
+                      className={`text-xs shrink-0 ${MS_COLORS[m.status] ?? "bg-muted"}`}
+                    >
+                      {m.status}
+                    </Badge>
+                  </div>
+                  {m.description && (
+                    <p className="text-xs text-muted-foreground line-clamp-1">
+                      {m.description}
+                    </p>
+                  )}
+                  <p className="text-xs font-medium text-foreground mt-1">
+                    {formatICP(m.amount)}
+                    {m.ledgerBlockHeight != null && (
+                      <span className="text-muted-foreground font-normal ml-2">
+                        Block #{m.ledgerBlockHeight.toString()}
                       </span>
                     )}
-                  </div>
-                </div>
-                <Separator />
-                <div>
-                  <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-0.5">
-                    Payee
-                  </p>
-                  <p
-                    className="text-xs text-foreground font-mono truncate"
-                    title={contract.payeeId.toString()}
-                  >
-                    {contract.payeeId.toString().slice(0, 24)}…
                   </p>
                 </div>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader className="pb-3">
-                <CardTitle className="text-sm font-semibold text-foreground flex items-center gap-2">
-                  <Clock className="h-4 w-4 text-amber-500" />
-                  Dates
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                <div>
-                  <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-0.5">
-                    Created
-                  </p>
-                  <p className="text-sm text-foreground">
-                    {formatDate(contract.createdAt)}
-                  </p>
-                </div>
-                <Separator />
-                <div>
-                  <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-0.5">
-                    Due Date
-                  </p>
-                  <p className="text-sm text-foreground">
-                    {contract.dueDate ? formatDate(contract.dueDate) : "—"}
-                  </p>
-                </div>
-              </CardContent>
-            </Card>
-          </div>
-
-          {contract.description && (
-            <Card>
-              <CardHeader className="pb-3">
-                <CardTitle className="text-sm font-semibold text-foreground">
-                  Description
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <p className="text-sm text-foreground leading-relaxed">
-                  {contract.description}
-                </p>
-              </CardContent>
-            </Card>
-          )}
-
-          {contract.conditions.length > 0 && (
-            <Card>
-              <CardHeader className="pb-3">
-                <CardTitle className="text-sm font-semibold text-foreground flex items-center gap-2">
-                  <CheckCircle2 className="h-4 w-4 text-amber-500" />
-                  Release Conditions
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <ol className="space-y-2">
-                  {contract.conditions.map((cond, idx) => (
-                    <li
-                      key={`cond-${cond.slice(0, 20)}-${idx}`}
-                      className="flex gap-3 text-sm text-foreground"
+                <div className="flex gap-1.5 shrink-0">
+                  {m.status === MilestoneStatus__1.Pending && (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => approveMsMutation.mutate(m.id)}
+                      disabled={approveMsMutation.isPending}
+                      data-ocid={`milestone-approve-${m.id}`}
+                      className="text-xs h-7 px-2 gap-1"
                     >
-                      <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 text-[10px] font-bold mt-0.5">
-                        {idx + 1}
-                      </span>
-                      <span className="leading-relaxed">{cond}</span>
-                    </li>
-                  ))}
-                </ol>
-              </CardContent>
-            </Card>
-          )}
-
-          {contract.crossLinks.length > 0 && (
-            <Card>
-              <CardHeader className="pb-3">
-                <CardTitle className="text-sm font-semibold text-foreground flex items-center gap-2">
-                  <ExternalLink className="h-4 w-4 text-amber-500" />
-                  Cross-Links
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="flex flex-wrap gap-2">
-                  {contract.crossLinks.map((link, idx) => (
-                    <Badge
-                      key={`${link.entityType}-${link.entityId}-${idx}`}
-                      variant="secondary"
-                      className="gap-1.5 py-1 px-2.5 text-xs"
+                      {approveMsMutation.isPending ? (
+                        <Loader2 className="w-3 h-3 animate-spin" />
+                      ) : (
+                        <CheckCircle className="w-3 h-3" />
+                      )}
+                      Approve
+                    </Button>
+                  )}
+                  {m.status === MilestoneStatus__1.Approved && (
+                    <Button
+                      size="sm"
+                      onClick={() => releaseMsMutation.mutate(m.id)}
+                      disabled={releaseMsMutation.isPending}
+                      data-ocid={`milestone-release-${m.id}`}
+                      className="text-xs h-7 px-2 gap-1"
                     >
-                      <span className="capitalize text-muted-foreground">
-                        {link.entityType}:
-                      </span>
-                      <span className="font-medium">{link.linkLabel}</span>
-                    </Badge>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
-          )}
-        </div>
-      )}
-
-      {/* Tab: Milestones — visible to all workspace members, approve only for payer */}
-      {activeTab === "milestones" && (
-        <div className="space-y-3">
-          {milestoneList.length === 0 ? (
-            <div className="rounded-2xl border border-dashed border-border py-12 text-center">
-              <Layers className="mx-auto h-8 w-8 text-muted-foreground/40 mb-3" />
-              <p className="text-sm text-muted-foreground">
-                No milestones for this contract
-              </p>
-            </div>
-          ) : (
-            <>
-              {/* Milestone progress bar */}
-              {(() => {
-                const releasedCount = milestoneList.filter(
-                  (m) => m.status === MS.Released,
-                ).length;
-                const releasedAmount = milestoneList
-                  .filter((m) => m.status === MS.Released)
-                  .reduce((s, m) => s + Number(m.amount), 0);
-                const totalAmount = milestoneList.reduce(
-                  (s, m) => s + Number(m.amount),
-                  0,
-                );
-                const pct =
-                  totalAmount > 0
-                    ? Math.round((releasedAmount / totalAmount) * 100)
-                    : 0;
-                return (
-                  <Card className="border-border" key="progress-bar">
-                    <CardContent className="pt-4 pb-4">
-                      <div className="flex items-center justify-between mb-2">
-                        <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-                          Milestone Progress
-                        </p>
-                        <p className="text-xs font-semibold text-foreground tabular-nums">
-                          {releasedCount} / {milestoneList.length} released ·{" "}
-                          {pct}%
-                        </p>
-                      </div>
-                      <div className="h-2 rounded-full bg-muted overflow-hidden">
-                        <div
-                          className="h-full rounded-full bg-amber-500 transition-all duration-500"
-                          style={{ width: `${pct}%` }}
-                        />
-                      </div>
-                      <div className="flex items-center justify-between mt-2">
-                        <p className="text-xs text-muted-foreground">
-                          Released:{" "}
-                          {formatAmount(
-                            BigInt(releasedAmount),
-                            contract.currency,
-                          )}
-                        </p>
-                        <p className="text-xs text-muted-foreground">
-                          Total:{" "}
-                          {formatAmount(contract.amount, contract.currency)}
-                        </p>
-                      </div>
-                    </CardContent>
-                  </Card>
-                );
-              })()}
-              {milestoneList.map((milestone) => (
-                <Card key={milestone.id}>
-                  <CardContent className="pt-4 pb-4">
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2 mb-1">
-                          <p className="font-medium text-sm text-foreground truncate">
-                            {milestone.title}
-                          </p>
-                          <Badge
-                            className={`text-[10px] px-1.5 py-0.5 ${MILESTONE_STATUS_STYLES[milestone.status]}`}
-                            variant="secondary"
-                          >
-                            {milestone.status}
-                          </Badge>
-                        </div>
-                        {milestone.description && (
-                          <p className="text-xs text-muted-foreground line-clamp-2">
-                            {milestone.description}
-                          </p>
-                        )}
-                        <p className="text-xs text-muted-foreground mt-1">
-                          Created {formatDate(milestone.createdAt)}
-                        </p>
-                      </div>
-                      <div className="text-right shrink-0 space-y-2">
-                        <p className="font-bold text-sm text-amber-600 dark:text-amber-400">
-                          {formatAmount(milestone.amount, contract.currency)}
-                        </p>
-                        <div className="flex gap-1.5 justify-end">
-                          {/* Approve milestone — payer only */}
-                          {milestone.status === MS.Pending && isPayer && (
-                            <Button
-                              size="sm"
-                              onClick={() =>
-                                approveMilestoneMutation.mutate(milestone.id)
-                              }
-                              disabled={approveMilestoneMutation.isPending}
-                              className="h-7 text-xs bg-blue-600 hover:bg-blue-700 text-white"
-                              data-ocid={`milestone-approve-${milestone.id}`}
-                            >
-                              Approve
-                            </Button>
-                          )}
-                          {/* Show pending indicator to non-payers */}
-                          {milestone.status === MS.Pending && !isPayer && (
-                            <span className="flex items-center gap-1 text-xs text-muted-foreground">
-                              <Clock className="h-3.5 w-3.5" />
-                              Awaiting payer
-                            </span>
-                          )}
-                          {milestone.status === MS.Approved && (
-                            <Button
-                              size="sm"
-                              onClick={() =>
-                                releaseMilestoneMutation.mutate(milestone.id)
-                              }
-                              disabled={releaseMilestoneMutation.isPending}
-                              className="h-7 text-xs bg-green-600 hover:bg-green-700 text-white"
-                              data-ocid={`milestone-release-${milestone.id}`}
-                            >
-                              Release Funds
-                            </Button>
-                          )}
-                          {milestone.status === MS.Released && (
-                            <span className="flex items-center gap-1 text-xs text-green-600 dark:text-green-400">
-                              <CheckCircle2 className="h-3.5 w-3.5" />
-                              Released
-                            </span>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-              ))}
-            </>
-          )}
-        </div>
-      )}
-
-      {/* Tab: Status History — visible to all workspace members */}
-      {activeTab === "timeline" && (
-        <div>
-          {!summary && (
-            <div className="space-y-0">
-              <div className="relative pl-8">
-                <div className="absolute left-0 top-2 flex h-6 w-6 items-center justify-center rounded-full bg-amber-500 text-white">
-                  <StatusIcon className="h-3 w-3" />
-                </div>
-                <div className="pb-4 border-b border-border last:border-0">
-                  <p className="text-sm font-semibold text-foreground">
-                    {cfg.label}
-                  </p>
-                  <p className="text-xs text-muted-foreground">
-                    Current status
-                  </p>
+                      {releaseMsMutation.isPending ? (
+                        <Loader2 className="w-3 h-3 animate-spin" />
+                      ) : (
+                        <DollarSign className="w-3 h-3" />
+                      )}
+                      Release
+                    </Button>
+                  )}
                 </div>
               </div>
-              <div className="relative pl-8 mt-3">
-                <div className="absolute left-0 top-2 flex h-6 w-6 items-center justify-center rounded-full bg-muted border border-border">
-                  <Clock className="h-3 w-3 text-muted-foreground" />
-                </div>
-                <div className="pb-4">
-                  <p className="text-sm font-semibold text-foreground">
-                    Created
-                  </p>
-                  <p className="text-xs text-muted-foreground">
-                    {formatDateTime(contract.createdAt)}
-                  </p>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* Full status history from summary */}
-          {summary && summary.statusHistory.length > 0 && (
-            <Card>
-              <CardHeader className="pb-3">
-                <CardTitle className="text-sm font-semibold text-foreground flex items-center gap-2">
-                  <ChevronRight className="h-4 w-4 text-amber-500" />
-                  Full Status History
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-2">
-                  {summary.statusHistory.map((h, idx) => (
-                    <div
-                      key={`${h.status}-${idx}`}
-                      className="flex items-start gap-3 py-2 border-b border-border last:border-0"
-                    >
-                      <div className="flex h-6 w-6 items-center justify-center rounded-full bg-amber-100 dark:bg-amber-900/30 shrink-0 mt-0.5">
-                        <Clock className="h-3 w-3 text-amber-600 dark:text-amber-400" />
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium text-foreground">
-                          {h.status}
-                        </p>
-                        <p className="text-xs text-muted-foreground">
-                          {new Date(
-                            Number(h.timestamp) / 1_000_000,
-                          ).toLocaleString("en-US", {
-                            month: "short",
-                            day: "numeric",
-                            year: "numeric",
-                            hour: "numeric",
-                            minute: "2-digit",
-                          })}
-                        </p>
-                        <p
-                          className="text-xs text-muted-foreground font-mono truncate"
-                          title={h.changedBy.toString()}
-                        >
-                          {h.changedBy.toString().slice(0, 24)}…
-                        </p>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
-          )}
-        </div>
+            ))}
+          </CardContent>
+        </Card>
       )}
 
-      {/* Tab: Dispute — visible to all workspace members */}
-      {activeTab === "dispute" && (
-        <div className="space-y-4">
-          {disputeList.length === 0 && !showDisputeForm ? (
-            <div className="rounded-2xl border border-dashed border-border py-12 text-center">
-              <Gavel className="mx-auto h-8 w-8 text-muted-foreground/40 mb-3" />
-              <p className="text-sm text-muted-foreground">
-                No disputes for this contract
-              </p>
-              {contract.status === EscrowStatus.Funded && (
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={() => setShowDisputeForm(true)}
-                  className="mt-4 gap-1.5 border-red-300 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20"
-                  data-ocid="dispute-raise-btn"
-                >
-                  <Flag className="h-3.5 w-3.5" />
-                  Raise Dispute
-                </Button>
-              )}
-            </div>
-          ) : (
-            disputeList.map((dispute) => (
-              <Card
-                key={dispute.id}
-                className={
-                  dispute.status === DS.Open
-                    ? "border-red-200 dark:border-red-800 bg-red-50/30 dark:bg-red-900/10"
-                    : ""
-                }
+      {/* Status Timeline */}
+      {escrow.statusHistory?.length > 0 && (
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-display">
+              Status Timeline
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="px-4 pb-4 pt-0">
+            {escrow.statusHistory.map((entry, idx) => (
+              <TimelineEntry
+                key={`timeline-${entry.timestamp.toString()}-${idx}`}
+                entry={entry}
+                isLast={idx === escrow.statusHistory.length - 1}
+              />
+            ))}
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Disputes */}
+      {disputes.length > 0 && (
+        <Card className="border-destructive/30">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-display text-destructive flex items-center gap-2">
+              <AlertTriangle className="w-4 h-4" />
+              Disputes
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="px-4 pb-4 pt-0 flex flex-col gap-3">
+            {disputes.map((d) => (
+              <div
+                key={d.id}
+                className="p-3 rounded-md bg-destructive/5 border border-destructive/20"
               >
-                <CardHeader className="pb-3">
-                  <div className="flex items-center justify-between">
-                    <CardTitle className="text-sm font-semibold text-foreground flex items-center gap-2">
-                      <Gavel className="h-4 w-4 text-red-500" />
-                      Dispute
-                    </CardTitle>
-                    <Badge
-                      variant="secondary"
-                      className={
-                        dispute.status === DS.Open
-                          ? "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400"
-                          : "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400"
-                      }
-                    >
-                      {dispute.status}
-                    </Badge>
-                  </div>
-                </CardHeader>
-                <CardContent className="space-y-3">
-                  <div>
-                    <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-0.5">
-                      Reason
-                    </p>
-                    <p className="text-sm text-foreground">{dispute.reason}</p>
-                  </div>
-                  <div className="grid grid-cols-2 gap-3">
-                    <div>
-                      <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-0.5">
-                        Raised By
-                      </p>
-                      <p
-                        className="text-xs text-foreground font-mono truncate"
-                        title={dispute.raisedBy.toString()}
-                      >
-                        {dispute.raisedBy.toString().slice(0, 18)}…
-                      </p>
-                    </div>
-                    <div>
-                      <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-0.5">
-                        Date
-                      </p>
-                      <p className="text-xs text-foreground">
-                        {formatDateTime(dispute.createdAt)}
-                      </p>
-                    </div>
-                  </div>
-                  {dispute.arbiter && (
-                    <div>
-                      <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-0.5">
-                        Arbiter
-                      </p>
-                      <p className="text-xs text-foreground font-mono truncate">
-                        {dispute.arbiter.toString().slice(0, 24)}…
-                      </p>
-                    </div>
-                  )}
-                  {dispute.resolution && (
-                    <div>
-                      <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-0.5">
-                        Resolution
-                      </p>
-                      <p className="text-sm text-foreground">
-                        {dispute.resolution}
-                      </p>
-                    </div>
-                  )}
-                  {dispute.status === DS.Open && (
-                    <div className="pt-2 space-y-2">
-                      <Separator />
-                      <p className="text-xs font-medium text-foreground">
-                        Resolve Dispute (Arbiter only)
-                      </p>
-                      <Textarea
-                        placeholder="Enter resolution details..."
-                        value={disputeResolution}
-                        onChange={(e) => setDisputeResolution(e.target.value)}
-                        rows={2}
-                        data-ocid="dispute-resolution-textarea"
-                      />
-                      <Button
-                        size="sm"
-                        onClick={() =>
-                          resolveDisputeMutation.mutate(dispute.id)
-                        }
-                        disabled={
-                          !disputeResolution.trim() ||
-                          resolveDisputeMutation.isPending
-                        }
-                        className="bg-green-600 hover:bg-green-700 text-white gap-1.5"
-                        data-ocid="dispute-resolve-btn"
-                      >
-                        <CheckCircle2 className="h-3.5 w-3.5" />
-                        {resolveDisputeMutation.isPending
-                          ? "Resolving..."
-                          : "Resolve Dispute"}
-                      </Button>
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
-            ))
-          )}
-
-          {/* Inline raise form in dispute tab */}
-          {showDisputeForm && disputeList.length === 0 && (
-            <Card className="border-red-200 dark:border-red-800">
-              <CardContent className="pt-4 space-y-3">
-                <div className="space-y-1.5">
-                  <Label htmlFor="dispute-reason-tab" className="text-xs">
-                    Reason *
-                  </Label>
-                  <Textarea
-                    id="dispute-reason-tab"
-                    placeholder="Describe the reason..."
-                    value={disputeReason}
-                    onChange={(e) => setDisputeReason(e.target.value)}
-                    rows={3}
-                    data-ocid="dispute-reason-tab-textarea"
-                  />
-                </div>
-                <div className="flex gap-2">
-                  <Button
-                    size="sm"
-                    onClick={() => raiseDisputeMutation.mutate()}
-                    disabled={
-                      !disputeReason.trim() || raiseDisputeMutation.isPending
-                    }
-                    className="bg-red-600 hover:bg-red-700 text-white"
-                  >
-                    {raiseDisputeMutation.isPending
-                      ? "Submitting..."
-                      : "Submit"}
-                  </Button>
-                  <Button
-                    size="sm"
+                <div className="flex items-center justify-between mb-1">
+                  <Badge
                     variant="outline"
-                    onClick={() => setShowDisputeForm(false)}
+                    className={
+                      d.status === "Open"
+                        ? "text-destructive border-destructive/30"
+                        : "text-muted-foreground"
+                    }
                   >
-                    Cancel
-                  </Button>
+                    {d.status}
+                  </Badge>
+                  <span className="text-xs text-muted-foreground">
+                    {formatTs(d.createdAt)}
+                  </span>
                 </div>
-              </CardContent>
-            </Card>
-          )}
-        </div>
+                <p className="text-sm text-foreground">{d.reason}</p>
+                {d.resolution && (
+                  <p className="text-xs text-muted-foreground mt-1.5">
+                    Resolution: {d.resolution}
+                  </p>
+                )}
+              </div>
+            ))}
+          </CardContent>
+        </Card>
       )}
+
+      {/* Conditions */}
+      {escrow.conditions?.length > 0 && (
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-display">Conditions</CardTitle>
+          </CardHeader>
+          <CardContent className="px-4 pb-4 pt-0">
+            <ol className="flex flex-col gap-1.5">
+              {escrow.conditions.map((c, idx) => (
+                <li
+                  key={`cond-${c.slice(0, 10)}-${idx}`}
+                  className="flex items-start gap-2 text-sm text-foreground"
+                >
+                  <span className="text-muted-foreground shrink-0 mt-0.5 font-mono text-xs">
+                    {idx + 1}.
+                  </span>
+                  {c}
+                </li>
+              ))}
+            </ol>
+          </CardContent>
+        </Card>
+      )}
+    </div>
+  );
+}
+
+function Stat({ label, value }: { label: string; value: string }) {
+  return (
+    <div>
+      <p className="text-xs text-muted-foreground">{label}</p>
+      <p className="text-sm font-semibold text-foreground mt-0.5">{value}</p>
+    </div>
+  );
+}
+
+function TimelineEntry({
+  entry,
+  isLast,
+}: {
+  entry: StatusHistoryEntry;
+  isLast: boolean;
+}) {
+  const dotColor =
+    entry.status === EscrowStatus.Disputed
+      ? "bg-destructive"
+      : entry.status === EscrowStatus.Released
+        ? "bg-accent"
+        : entry.status === EscrowStatus.Funded
+          ? "bg-primary"
+          : "bg-muted-foreground";
+
+  return (
+    <div className="flex gap-3">
+      <div className="flex flex-col items-center">
+        <div className={`w-2 h-2 rounded-full mt-1.5 shrink-0 ${dotColor}`} />
+        {!isLast && <div className="w-px flex-1 bg-border mt-1" />}
+      </div>
+      <div className="pb-4">
+        <div className="flex items-center gap-2 flex-wrap">
+          <span className="text-sm font-medium text-foreground">
+            {entry.status}
+          </span>
+          <span className="text-xs text-muted-foreground">
+            {formatTs(entry.timestamp)}
+          </span>
+        </div>
+        {entry.note && (
+          <p className="text-xs text-muted-foreground mt-0.5">{entry.note}</p>
+        )}
+      </div>
     </div>
   );
 }

@@ -25,6 +25,46 @@ import {
   useWorkspace,
 } from "../../hooks/useWorkspace";
 
+// Map typed backend error variants to user-friendly messages
+function mapWorkspaceError(
+  err:
+    | {
+        __kind__: "workspaceExists";
+        workspaceExists: string;
+      }
+    | {
+        __kind__: "invalidName";
+        invalidName: string;
+      }
+    | {
+        __kind__: "canisterUnavailable";
+        canisterUnavailable: string;
+      }
+    | {
+        __kind__: "unauthorized";
+        unauthorized: string;
+      }
+    | {
+        __kind__: "unknown";
+        unknown: string;
+      },
+): string {
+  switch (err.__kind__) {
+    case "invalidName":
+      return "Please enter a valid workspace name.";
+    case "workspaceExists":
+      return "A workspace with this name already exists. Try a different name.";
+    case "canisterUnavailable":
+      return "The service is temporarily unavailable. Please try again in a moment.";
+    case "unauthorized":
+      return "You must be logged in to create a workspace.";
+    case "unknown":
+      return "Something went wrong. Please try again.";
+    default:
+      return "Something went wrong. Please try again.";
+  }
+}
+
 export default function WorkspaceNewPage() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
@@ -56,6 +96,8 @@ export default function WorkspaceNewPage() {
       return;
     }
 
+    // Prevent double submission
+    if (isSubmitting) return;
     setIsSubmitting(true);
 
     try {
@@ -83,23 +125,21 @@ export default function WorkspaceNewPage() {
           params: { workspaceId: workspace.id },
         });
       } else {
-        const errMsg =
-          result.__kind__ === "err"
-            ? String(result.err)
-            : "Failed to create workspace. Please try again.";
-        setError(errMsg);
-        toast.error(errMsg);
+        // result.__kind__ === "err" with typed variant
+        const msg = mapWorkspaceError(result.err);
+        setError(msg);
+        toast.error(msg);
       }
     } catch (e) {
       let msg = "Something went wrong. Please try again.";
       if (e instanceof Error) {
-        // Surface IC0508 canister stopped error in a friendly way
         if (e.message.includes("IC0508") || e.message.includes("stopped")) {
           msg =
-            "The backend is temporarily unavailable (canister stopped). Please try again in a moment.";
-        } else {
-          msg = e.message;
+            "The service is temporarily unavailable. Please try again in a moment.";
+        } else if (e.message.includes("unauthorized")) {
+          msg = "You must be logged in to create a workspace.";
         }
+        // No raw error strings shown to the user
       }
       setError(msg);
       toast.error(msg);
@@ -201,7 +241,7 @@ export default function WorkspaceNewPage() {
                   </div>
                 )}
 
-                {/* Error message */}
+                {/* Error message — friendly, no raw text */}
                 {error && (
                   <Alert variant="destructive" className="py-2.5">
                     <AlertCircle className="h-4 w-4" />
@@ -228,7 +268,12 @@ export default function WorkspaceNewPage() {
                       if (error) setError(null);
                     }}
                     onKeyDown={(e) => {
-                      if (e.key === "Enter" && name.trim() && actorReady) {
+                      if (
+                        e.key === "Enter" &&
+                        name.trim() &&
+                        actorReady &&
+                        !isSubmitting
+                      ) {
                         void handleCreate();
                       }
                     }}
@@ -265,7 +310,7 @@ export default function WorkspaceNewPage() {
                   />
                 </div>
 
-                {/* Submit button */}
+                {/* Submit button — loading state prevents double-submission */}
                 <Button
                   className="w-full h-10 gap-2 font-semibold active-press"
                   size="lg"

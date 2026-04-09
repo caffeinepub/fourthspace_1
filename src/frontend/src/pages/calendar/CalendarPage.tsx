@@ -1,3 +1,4 @@
+// Calendar Page — clean rebuild v2
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";

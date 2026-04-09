@@ -1,11 +1,99 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { Variant_away_offline_online } from "../backend";
-import type { MessageSearchFilters, UserId } from "../types";
+import type {
+  Channel,
+  Message,
+  MessageSearchFilters,
+  UserId,
+  WorkspaceMember,
+} from "../types";
 import { useBackend } from "./useBackend";
 
 const POLL_INTERVAL = 3000;
+const UNREAD_POLL_INTERVAL = 10_000;
 
 // ── Query Hooks ──────────────────────────────────────────────────────────────
+
+export function useChannelMessages(
+  tenantId: string,
+  workspaceId: string,
+  channelId: string,
+  limit = 50,
+) {
+  const { actor, isFetching } = useBackend();
+  return useQuery<Message[]>({
+    queryKey: ["messages", tenantId, workspaceId, channelId],
+    queryFn: async () => {
+      if (!actor) return [];
+      return actor.getMessages(
+        tenantId,
+        workspaceId,
+        channelId,
+        BigInt(limit),
+        null,
+      );
+    },
+    enabled: !!actor && !isFetching && !!channelId,
+    refetchInterval: POLL_INTERVAL,
+  });
+}
+
+export function useChannelMessagesBefore(
+  tenantId: string,
+  workspaceId: string,
+  channelId: string,
+  beforeTimestamp: bigint | null,
+  limit = 50,
+  enabled = false,
+) {
+  const { actor, isFetching } = useBackend();
+  return useQuery<Message[]>({
+    queryKey: [
+      "messages-before",
+      tenantId,
+      workspaceId,
+      channelId,
+      beforeTimestamp?.toString(),
+    ],
+    queryFn: async () => {
+      if (!actor || !beforeTimestamp) return [];
+      return actor.getMessages(
+        tenantId,
+        workspaceId,
+        channelId,
+        BigInt(limit),
+        beforeTimestamp,
+      );
+    },
+    enabled:
+      !!actor && !isFetching && !!channelId && enabled && !!beforeTimestamp,
+  });
+}
+
+export function useWorkspaceMembers(tenantId: string, workspaceId: string) {
+  const { actor, isFetching } = useBackend();
+  return useQuery<WorkspaceMember[]>({
+    queryKey: ["members", tenantId, workspaceId],
+    queryFn: async () => {
+      if (!actor) return [];
+      return actor.listWorkspaceMembers(tenantId, workspaceId);
+    },
+    enabled: !!actor && !isFetching && !!workspaceId,
+  });
+}
+
+export function useWorkspaceChannels(tenantId: string, workspaceId: string) {
+  const { actor, isFetching } = useBackend();
+  return useQuery<Channel[]>({
+    queryKey: ["channels", tenantId, workspaceId],
+    queryFn: async () => {
+      if (!actor) return [];
+      return actor.listChannels(tenantId, workspaceId);
+    },
+    enabled: !!actor && !isFetching && !!workspaceId,
+    refetchInterval: 5_000,
+  });
+}
 
 export function useThreadMessages(
   tenantId: string,
@@ -76,7 +164,7 @@ export function useUnreadCounts(tenantId: string, workspaceId: string) {
       return actor.getUnreadCounts(tenantId, workspaceId);
     },
     enabled: !!actor && !isFetching,
-    refetchInterval: POLL_INTERVAL,
+    refetchInterval: UNREAD_POLL_INTERVAL,
   });
 }
 

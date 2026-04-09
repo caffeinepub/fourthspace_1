@@ -167,6 +167,7 @@ module {
     workspaceId : Common.WorkspaceId,
     caller : Common.UserId,
     displayName : Text,
+    isEditing : Bool,
   ) : [(Text, Types.NotePresenceEntry)] {
     let m : Map.Map<Text, Types.NotePresenceEntry> = Map.fromArray(presenceStore);
     let key = presenceKey(noteId, caller);
@@ -176,6 +177,7 @@ module {
       workspaceId;
       userId = caller;
       displayName;
+      isEditing;
       lastSeen = Time.now();
     };
     m.add(key, entry);
@@ -196,9 +198,19 @@ module {
         e.noteId == noteId and e.tenantId == tenantId and e.workspaceId == workspaceId and e.lastSeen >= cutoff
       })
       .map<Types.NotePresenceEntry, Types.NoteEditorPresence>(func(e : Types.NotePresenceEntry) : Types.NoteEditorPresence {
-        { userId = e.userId; displayName = e.displayName; lastSeen = e.lastSeen }
+        { userId = e.userId; displayName = e.displayName; isEditing = e.isEditing; lastSeen = e.lastSeen }
       })
       .toArray()
+  };
+
+  /// Returns all presence entries within the last 30 seconds (including isEditing=false viewers).
+  public func getNotePresence(
+    presenceStore : [(Text, Types.NotePresenceEntry)],
+    noteId : Common.EntityId,
+    tenantId : Common.TenantId,
+    workspaceId : Common.WorkspaceId,
+  ) : [Types.NoteEditorPresence] {
+    getNoteActiveEditors(presenceStore, noteId, tenantId, workspaceId)
   };
 
   public func updateLastEdit(

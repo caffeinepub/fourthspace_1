@@ -145,6 +145,7 @@ module {
       priority = input.priority;
       assigneeId = input.assigneeId;
       dueDate = input.dueDate;
+      tags = input.tags;
       crossLinks = input.crossLinks;
       createdAt = now;
       updatedAt = now;
@@ -200,6 +201,7 @@ module {
           priority = input.priority;
           assigneeId = input.assigneeId;
           dueDate = input.dueDate;
+          tags = input.tags;
           crossLinks = input.crossLinks;
           updatedAt = Time.now();
         };

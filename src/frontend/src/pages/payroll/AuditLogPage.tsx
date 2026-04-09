@@ -1,279 +1,198 @@
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useQuery } from "@tanstack/react-query";
-import { Link } from "@tanstack/react-router";
-import { ArrowLeft, FileSearch, Filter, X } from "lucide-react";
-import { useState } from "react";
+import { useNavigate, useParams } from "@tanstack/react-router";
+import { format } from "date-fns";
+import { ArrowLeft, FileSearch, RefreshCw, Search } from "lucide-react";
+import { useMemo, useState } from "react";
 import { useBackend } from "../../hooks/useBackend";
-import { getTenantId, useWorkspace } from "../../hooks/useWorkspace";
+import { useWorkspace } from "../../hooks/useWorkspace";
 import type { AuditLogEntry } from "../../types";
 
 const ACTION_COLORS: Record<string, string> = {
-  create:
-    "bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 border-emerald-500/20",
-  update: "bg-blue-500/15 text-blue-700 dark:text-blue-400 border-blue-500/20",
-  delete: "bg-red-500/15 text-red-700 dark:text-red-400 border-red-500/20",
-  approve:
-    "bg-purple-500/15 text-purple-700 dark:text-purple-400 border-purple-500/20",
-  reject:
-    "bg-orange-500/15 text-orange-700 dark:text-orange-400 border-orange-500/20",
-  process: "bg-cyan-500/15 text-cyan-700 dark:text-cyan-400 border-cyan-500/20",
+  CREATE: "bg-primary/10 text-primary",
+  APPROVE: "bg-accent/10 text-accent-foreground",
+  REJECT: "bg-destructive/10 text-destructive",
+  PROCESS: "bg-secondary/10 text-secondary-foreground",
+  UPDATE: "bg-muted text-muted-foreground",
 };
 
-const ACTION_DOT_COLORS: Record<string, string> = {
-  create: "bg-emerald-500",
-  update: "bg-blue-500",
-  delete: "bg-red-500",
-  approve: "bg-purple-500",
-  reject: "bg-orange-500",
-  process: "bg-cyan-500",
-};
-
-function actionColor(action: string) {
-  const key = Object.keys(ACTION_COLORS).find((k) =>
-    action.toLowerCase().includes(k),
-  );
-  return key
-    ? ACTION_COLORS[key]
-    : "bg-muted text-muted-foreground border-border";
+function getActionColor(action: string): string {
+  const upper = action.toUpperCase();
+  for (const [key, val] of Object.entries(ACTION_COLORS)) {
+    if (upper.includes(key)) return val;
+  }
+  return "bg-muted text-muted-foreground";
 }
 
-function actionDotColor(action: string) {
-  const key = Object.keys(ACTION_DOT_COLORS).find((k) =>
-    action.toLowerCase().includes(k),
-  );
-  return key ? ACTION_DOT_COLORS[key] : "bg-muted-foreground";
+function formatTs(ts: bigint): string {
+  return format(new Date(Number(ts) / 1_000_000), "MMM d, yyyy HH:mm:ss");
 }
 
 export default function AuditLogPage() {
+  const { workspaceId } = useParams({ strict: false }) as {
+    workspaceId: string;
+  };
+  const { tenantId } = useWorkspace();
   const { actor, isFetching } = useBackend();
-  const tenantId = getTenantId();
-  const { activeWorkspaceId } = useWorkspace();
-  const workspaceId = activeWorkspaceId ?? "";
-  const [filterAction, setFilterAction] = useState("");
-  const [filterFrom, setFilterFrom] = useState("");
-  const [filterTo, setFilterTo] = useState("");
-  const [showFilters, setShowFilters] = useState(false);
+  const navigate = useNavigate();
+  const [search, setSearch] = useState("");
+  const [limit] = useState(50);
 
-  const { data: rawEntries = [], isLoading } = useQuery<AuditLogEntry[]>({
-    queryKey: ["payrollAuditLog", tenantId, workspaceId],
-    queryFn: async () =>
-      actor
-        ? actor.listPayrollAuditLog(tenantId, workspaceId, BigInt(200))
-        : [],
+  const {
+    data: entries = [],
+    isLoading,
+    refetch,
+  } = useQuery<AuditLogEntry[]>({
+    queryKey: ["payrollAuditLog", tenantId, workspaceId, limit],
+    queryFn: async () => {
+      if (!actor) return [];
+      return actor.listPayrollAuditLog(tenantId, workspaceId, BigInt(limit));
+    },
     enabled: !!actor && !isFetching && !!workspaceId,
   });
 
-  // Sort all entries by timestamp descending (most recent first)
-  const entries = [...rawEntries].sort(
-    (a, b) => Number(b.timestamp) - Number(a.timestamp),
-  );
-
-  const filtered = entries.filter((e) => {
-    if (
-      filterAction &&
-      !e.action.toLowerCase().includes(filterAction.toLowerCase())
-    )
-      return false;
-    if (filterFrom) {
-      const from = new Date(filterFrom).getTime() * 1_000_000;
-      if (Number(e.timestamp) < from) return false;
-    }
-    if (filterTo) {
-      const to =
-        new Date(filterTo).getTime() * 1_000_000 + 86400000 * 1_000_000;
-      if (Number(e.timestamp) > to) return false;
-    }
-    return true;
-  });
-
-  const hasFilters = !!filterAction || !!filterFrom || !!filterTo;
+  const filtered = useMemo(() => {
+    if (!search.trim()) return entries;
+    const q = search.toLowerCase();
+    return entries.filter(
+      (e) =>
+        e.action.toLowerCase().includes(q) ||
+        e.entityType.toLowerCase().includes(q) ||
+        e.details.toLowerCase().includes(q) ||
+        e.entityId.toLowerCase().includes(q),
+    );
+  }, [entries, search]);
 
   return (
-    <div className="animate-fade-in-up p-6 space-y-6 max-w-6xl mx-auto">
+    <div className="flex flex-col gap-6 p-4 sm:p-6 max-w-5xl mx-auto w-full">
       {/* Header */}
-      <div className="flex items-center gap-3 flex-wrap justify-between">
+      <div className="flex items-center justify-between gap-3 flex-wrap">
         <div className="flex items-center gap-3">
-          <Button variant="ghost" size="icon" asChild aria-label="Back">
-            <Link to={`/app/${workspaceId}/payroll`}>
-              <ArrowLeft className="h-4 w-4" />
-            </Link>
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() =>
+              navigate({ to: `/app/${workspaceId}/payroll` as "/" })
+            }
+            data-ocid="audit-log-back"
+          >
+            <ArrowLeft className="w-4 h-4" />
           </Button>
-          <div>
-            <h1 className="font-display text-2xl font-bold tracking-tight text-foreground">
-              Audit Log
-            </h1>
-            <p className="text-sm text-muted-foreground">
-              {isLoading
-                ? "Loading…"
-                : `${filtered.length} entries${hasFilters ? " (filtered)" : ""}`}
-            </p>
+          <div className="flex items-center gap-3">
+            <div className="w-9 h-9 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
+              <FileSearch className="w-5 h-5 text-primary" />
+            </div>
+            <div>
+              <h1 className="text-xl font-semibold font-display text-foreground">
+                Payroll Audit Log
+              </h1>
+              <p className="text-sm text-muted-foreground">
+                {entries.length} entr{entries.length !== 1 ? "ies" : "y"} — full
+                history
+              </p>
+            </div>
           </div>
         </div>
-        <div className="flex items-center gap-2">
-          {hasFilters && (
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => {
-                setFilterAction("");
-                setFilterFrom("");
-                setFilterTo("");
-              }}
-              data-ocid="audit-clear-filters"
-            >
-              <X className="mr-1.5 h-3.5 w-3.5" /> Clear filters
-            </Button>
-          )}
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => setShowFilters((v) => !v)}
-            data-ocid="audit-filter-btn"
-          >
-            <Filter className="mr-1.5 h-3.5 w-3.5" />
-            Filter
-          </Button>
-        </div>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => void refetch()}
+          data-ocid="audit-log-refresh"
+          className="gap-1.5"
+        >
+          <RefreshCw className="w-3.5 h-3.5" />
+          Refresh
+        </Button>
       </div>
 
-      {/* Filters */}
-      {showFilters && (
-        <div className="rounded-xl border border-border/50 bg-card shadow-card p-4 grid gap-4 sm:grid-cols-3">
-          <div className="space-y-1.5">
-            <Label
-              htmlFor="filter-action"
-              className="text-xs font-semibold text-muted-foreground uppercase tracking-wider"
-            >
-              Action type
-            </Label>
-            <Input
-              id="filter-action"
-              value={filterAction}
-              onChange={(e) => setFilterAction(e.target.value)}
-              placeholder="e.g. create, approve…"
-              data-ocid="audit-filter-action"
-            />
-          </div>
-          <div className="space-y-1.5">
-            <Label
-              htmlFor="filter-from"
-              className="text-xs font-semibold text-muted-foreground uppercase tracking-wider"
-            >
-              From date
-            </Label>
-            <Input
-              id="filter-from"
-              type="date"
-              value={filterFrom}
-              onChange={(e) => setFilterFrom(e.target.value)}
-              data-ocid="audit-filter-from"
-            />
-          </div>
-          <div className="space-y-1.5">
-            <Label
-              htmlFor="filter-to"
-              className="text-xs font-semibold text-muted-foreground uppercase tracking-wider"
-            >
-              To date
-            </Label>
-            <Input
-              id="filter-to"
-              type="date"
-              value={filterTo}
-              onChange={(e) => setFilterTo(e.target.value)}
-              data-ocid="audit-filter-to"
-            />
-          </div>
-        </div>
-      )}
+      {/* Search */}
+      <div className="relative">
+        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+        <Input
+          data-ocid="audit-log-search"
+          placeholder="Search by action, entity type, or details..."
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          className="pl-9"
+        />
+      </div>
 
-      {/* Timeline / Table */}
+      {/* Table */}
       {isLoading ? (
-        <div className="space-y-2">
-          {[1, 2, 3, 4, 5].map((n) => (
-            <Skeleton key={n} className="h-16 rounded-xl" />
+        <div className="flex flex-col gap-2">
+          {(["a", "b", "c", "d", "e"] as const).map((k) => (
+            <Skeleton key={k} className="h-16 w-full rounded-lg" />
           ))}
         </div>
       ) : filtered.length === 0 ? (
         <div
-          className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-border bg-muted/20 py-20 text-center"
-          data-ocid="audit-empty"
+          data-ocid="audit-log-empty"
+          className="flex flex-col items-center justify-center py-16 gap-3 text-center rounded-lg border border-dashed border-border"
         >
-          <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-muted mb-4">
-            <FileSearch className="h-7 w-7 text-muted-foreground/60" />
+          <FileSearch className="w-10 h-10 text-muted-foreground" />
+          <div>
+            <p className="font-medium text-foreground font-display">
+              No audit log entries
+            </p>
+            <p className="text-sm text-muted-foreground mt-1">
+              {search
+                ? "Try a different search."
+                : "Payroll actions will appear here."}
+            </p>
           </div>
-          <h3 className="font-display font-semibold text-foreground">
-            {hasFilters
-              ? "No entries match your filters"
-              : "No audit entries yet"}
-          </h3>
-          <p className="mt-2 text-sm text-muted-foreground max-w-xs">
-            {hasFilters
-              ? "Try adjusting your filter criteria."
-              : "Audit entries are recorded automatically as payroll actions occur."}
-          </p>
         </div>
       ) : (
-        <div className="space-y-0 relative">
-          {/* Timeline line */}
-          <div className="absolute left-[18px] top-3 bottom-3 w-px bg-border/60" />
+        <div className="flex flex-col gap-1.5">
           {filtered.map((entry) => (
-            <div
-              key={entry.id}
-              className="relative pl-10 pb-4 last:pb-0"
-              data-ocid={`audit-row-${entry.id}`}
-            >
-              {/* Dot */}
-              <div
-                className={`absolute left-[11px] top-[14px] h-4 w-4 rounded-full border-2 border-background ${actionDotColor(entry.action)}`}
-              />
-              <div className="rounded-xl border border-border/50 bg-card shadow-card hover:bg-muted/30 transition-colors p-4">
-                <div className="flex items-start justify-between gap-4 flex-wrap">
-                  <div className="flex items-start gap-3 flex-1 min-w-0">
-                    <span
-                      className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium border capitalize shrink-0 ${actionColor(entry.action)}`}
-                    >
-                      {entry.action}
-                    </span>
-                    <div className="min-w-0">
-                      <p className="text-sm font-medium text-foreground capitalize">
-                        {entry.entityType}
-                      </p>
-                      <p className="text-xs text-muted-foreground font-mono truncate max-w-[200px]">
-                        {entry.entityId}
-                      </p>
-                      {entry.details && (
-                        <p className="text-xs text-muted-foreground mt-0.5 line-clamp-1">
-                          {entry.details}
-                        </p>
-                      )}
-                    </div>
-                  </div>
-                  <div className="text-right shrink-0">
-                    <p className="text-xs text-muted-foreground whitespace-nowrap">
-                      {new Date(
-                        Number(entry.timestamp) / 1_000_000,
-                      ).toLocaleString("en-US", {
-                        month: "short",
-                        day: "numeric",
-                        year: "numeric",
-                        hour: "2-digit",
-                        minute: "2-digit",
-                      })}
-                    </p>
-                    <p className="text-[11px] text-muted-foreground/60 font-mono truncate max-w-[120px]">
-                      {String(entry.performedBy).slice(0, 16)}…
-                    </p>
-                  </div>
-                </div>
-              </div>
-            </div>
+            <AuditEntry key={entry.id} entry={entry} />
           ))}
         </div>
       )}
     </div>
+  );
+}
+
+function AuditEntry({ entry }: { entry: AuditLogEntry }) {
+  return (
+    <Card
+      data-ocid={`audit-entry-${entry.id}`}
+      className="hover:bg-muted/20 transition-colors"
+    >
+      <CardContent className="p-4 flex items-start gap-3">
+        <Badge
+          variant="outline"
+          className={`text-xs shrink-0 mt-0.5 ${getActionColor(entry.action)}`}
+        >
+          {entry.action}
+        </Badge>
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2 flex-wrap">
+            <p className="text-sm font-medium text-foreground">
+              {entry.entityType}
+            </p>
+            <span className="text-xs font-mono text-muted-foreground">
+              #{entry.entityId.slice(0, 8)}
+            </span>
+          </div>
+          {entry.details && (
+            <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">
+              {entry.details}
+            </p>
+          )}
+          <p className="text-xs font-mono text-muted-foreground mt-1">
+            By: {entry.performedBy.toString().slice(0, 20)}…
+          </p>
+        </div>
+        <div className="shrink-0 text-right">
+          <p className="text-xs text-muted-foreground whitespace-nowrap">
+            {formatTs(entry.timestamp)}
+          </p>
+        </div>
+      </CardContent>
+    </Card>
   );
 }

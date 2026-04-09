@@ -105,7 +105,7 @@ module {
         let estimatedNet = emp.salary.toFloat() / cycles;
         let estimatedNetNat = if (estimatedNet > 0.0) { Int.abs(estimatedNet.toInt()) } else { 0 };
         if (treasuryBalance < estimatedNetNat) {
-          return #err("Insufficient treasury balance. Please fund your workspace wallet before processing payroll.");
+          return #err("Insufficient treasury balance. Please fund the workspace treasury before processing payroll.");
         };
       };
     };
@@ -166,7 +166,7 @@ module {
       };
     };
     if (treasuryBalance < totalAmount) {
-      return #err("Insufficient treasury balance. Please fund your workspace wallet before processing payroll.");
+      return #err("Insufficient treasury balance. Please fund the workspace treasury before processing payroll.");
     };
     let updatedRecords = PayLib.bulkApprovePayroll(payrollRecords, tenantId, workspaceId, recordIds, caller);
     let newCounter = idCounter + 1;

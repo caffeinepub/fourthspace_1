@@ -1,3 +1,4 @@
+// Goal New Page — clean rebuild v3
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -12,7 +13,7 @@ import {
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { Link, useNavigate } from "@tanstack/react-router";
+import { Link, useNavigate, useSearch } from "@tanstack/react-router";
 import {
   ArrowLeft,
   Check,
@@ -24,7 +25,7 @@ import {
   Target,
   X,
 } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import type { GoalInput, KeyResultInput, WorkspaceMember } from "../../backend";
 import { GoalStatus } from "../../backend";
@@ -176,6 +177,10 @@ export default function GoalNewPage() {
   const { actor, isFetching } = useBackend();
   const navigate = useNavigate();
 
+  // Support pre-loading a template from URL query param
+  const search = useSearch({ strict: false }) as { template?: string };
+  const preloadTemplateId = search.template;
+
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [contributorIds, setContributorIds] = useState<string[]>([]);
@@ -184,10 +189,10 @@ export default function GoalNewPage() {
   const [endDate, setEndDate] = useState("2026-06-30");
   const [goalStatus, setGoalStatus] = useState<GoalStatus>(GoalStatus.Active);
   const [keyResults, setKeyResults] = useState<LocalKR[]>([]);
-  const [showTemplates, setShowTemplates] = useState(true);
+  const [showTemplates, setShowTemplates] = useState(!preloadTemplateId);
   const [appliedTemplate, setAppliedTemplate] = useState<string | null>(null);
 
-  // Load workspace members for owner/contributor picker
+  // Load workspace members for contributor picker
   const { data: members = [] } = useQuery<WorkspaceMember[]>({
     queryKey: ["workspaceMembers", tenantId, wsId],
     queryFn: async () => {
@@ -196,6 +201,14 @@ export default function GoalNewPage() {
     },
     enabled: !!actor && !isFetching && !!wsId,
   });
+
+  // Auto-apply template from URL on mount (run once)
+  useEffect(() => {
+    if (!preloadTemplateId) return;
+    const tmpl = OKR_TEMPLATES.find((t) => t.id === preloadTemplateId);
+    if (tmpl) applyTemplate(tmpl);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [preloadTemplateId]);
 
   const createGoalMutation = useMutation({
     mutationFn: async () => {
@@ -437,6 +450,7 @@ export default function GoalNewPage() {
               <CardTitle className="text-sm font-semibold">Details</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4 pt-4">
+              {/* Contributors */}
               <div className="space-y-1.5">
                 <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
                   Contributors
@@ -474,6 +488,8 @@ export default function GoalNewPage() {
                   </p>
                 )}
               </div>
+
+              {/* Period */}
               <div className="space-y-1.5">
                 <Label
                   htmlFor="goal-period"
@@ -489,6 +505,8 @@ export default function GoalNewPage() {
                   data-ocid="goal-period-input"
                 />
               </div>
+
+              {/* Date range */}
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1.5">
                   <Label
@@ -521,6 +539,8 @@ export default function GoalNewPage() {
                   />
                 </div>
               </div>
+
+              {/* Status */}
               <div className="space-y-1.5">
                 <Label
                   htmlFor="goal-status"

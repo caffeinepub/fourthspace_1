@@ -142,7 +142,13 @@ export {
   DisputeStatus,
 } from "../backend";
 
-export type { WorkspaceSpendingLimit, EscrowSummary } from "../backend";
+export type {
+  WorkspaceSpendingLimit,
+  EscrowSummary,
+  EscrowDispute,
+  EscrowMilestone,
+  StatusHistoryEntry,
+} from "../backend";
 
 // Derived / UI-only types
 
@@ -390,6 +396,7 @@ export type BlockType =
   | "heading3"
   | "bulletList"
   | "numberedList"
+  | "todo"
   | "toggle"
   | "callout"
   | "code"

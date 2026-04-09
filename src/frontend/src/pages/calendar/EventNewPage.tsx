@@ -1,5 +1,7 @@
+// Event New Page — rebuild v3 with full validation and attendee RSVP
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import {
   Select,
   SelectContent,
@@ -11,14 +13,19 @@ import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate, useParams } from "@tanstack/react-router";
-import { ArrowLeft, Calendar, Save } from "lucide-react";
+import { ArrowLeft, Calendar, Save, Users } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 import { CrossLinkPicker } from "../../components/CrossLinkPicker";
 import { useBackend } from "../../hooks/useBackend";
 import { getTenantId } from "../../hooks/useWorkspace";
 import { CalendarType, EventCategory, RecurrenceRule } from "../../types";
-import type { CalendarDef, CrossLink, EventInput } from "../../types";
+import type {
+  CalendarDef,
+  CrossLink,
+  EventInput,
+  WorkspaceMember,
+} from "../../types";
 
 // ---- Helpers ----
 function pad(n: number) {
@@ -115,6 +122,7 @@ export default function EventNewPage() {
   const [endDate, setEndDate] = useState("");
   const [afterN, setAfterN] = useState("10");
   const [crossLinks, setCrossLinks] = useState<CrossLink[]>([]);
+  const [selectedAttendees, setSelectedAttendees] = useState<string[]>([]);
 
   const { data: calendars = [] } = useQuery<CalendarDef[]>({
     queryKey: ["calendars", tenantId, workspaceId],
@@ -124,20 +132,26 @@ export default function EventNewPage() {
       return result;
     },
     enabled: !!actor && !isFetching,
-    // Pre-select the first calendar once loaded
     select: (data) => {
       if (data.length > 0 && calendarId === "") {
-        // schedule state update outside render
         setTimeout(() => setCalendarId(data[0].id), 0);
       }
       return data;
     },
   });
 
+  const { data: members = [] } = useQuery<WorkspaceMember[]>({
+    queryKey: ["workspaceMembers", tenantId, workspaceId],
+    queryFn: async () => {
+      if (!actor) return [];
+      return actor.listWorkspaceMembers(tenantId, workspaceId);
+    },
+    enabled: !!actor && !isFetching,
+  });
+
   const { mutate, isPending } = useMutation({
     mutationFn: async () => {
       if (!actor) throw new Error("Not connected");
-      // Validate dates before submitting
       const start = localToTs(startTime);
       const end = localToTs(endTime);
       if (end <= start) throw new Error("End time must be after start time");
@@ -147,7 +161,7 @@ export default function EventNewPage() {
         startTime: start,
         endTime: end,
         recurrence,
-        attendeeIds: [],
+        attendeeIds: selectedAttendees as unknown as EventInput["attendeeIds"],
         crossLinks,
         category,
         calendarId: calendarId || undefined,
@@ -174,17 +188,26 @@ export default function EventNewPage() {
       ),
   });
 
+  const endDateError =
+    endTime && startTime && new Date(endTime) <= new Date(startTime);
+
   const isValid =
     title.trim().length > 0 &&
     startTime.length > 0 &&
     endTime.length > 0 &&
-    new Date(endTime) > new Date(startTime);
+    !endDateError;
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!isValid) return;
     mutate();
   };
+
+  function toggleAttendee(id: string) {
+    setSelectedAttendees((prev) =>
+      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id],
+    );
+  }
 
   return (
     <div className="min-h-screen bg-background animate-fade-in-up">
@@ -331,7 +354,6 @@ export default function EventNewPage() {
                 value={startTime}
                 onChange={(e) => {
                   setStartTime(e.target.value);
-                  // Auto-advance end time if it would become before start
                   if (
                     e.target.value &&
                     new Date(endTime) <= new Date(e.target.value)
@@ -357,16 +379,14 @@ export default function EventNewPage() {
                 min={startTime}
                 onChange={(e) => setEndTime(e.target.value)}
                 data-ocid="event-end-input"
-                className="border-border/60 focus:border-primary focus:ring-1 focus:ring-primary/30"
+                className={`border-border/60 focus:border-primary focus:ring-1 focus:ring-primary/30 ${endDateError ? "border-red-500" : ""}`}
                 required
               />
-              {endTime &&
-                startTime &&
-                new Date(endTime) <= new Date(startTime) && (
-                  <p className="text-xs text-red-500 mt-1">
-                    End time must be after start time
-                  </p>
-                )}
+              {endDateError && (
+                <p className="text-xs text-red-500 mt-1" role="alert">
+                  End time must be after start time
+                </p>
+              )}
             </div>
           </div>
 
@@ -492,6 +512,42 @@ export default function EventNewPage() {
               data-ocid="event-rsvp-toggle"
             />
           </div>
+
+          {/* Attendees */}
+          {members.length > 0 && (
+            <div className="space-y-1.5">
+              <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground block">
+                <Users className="h-3.5 w-3.5 inline mr-1.5" />
+                Invite Members
+              </Label>
+              <div
+                className="flex flex-wrap gap-1.5"
+                data-ocid="event-attendees-picker"
+              >
+                {members.map((m) => {
+                  const id = m.userId.toString();
+                  const isSelected = selectedAttendees.includes(id);
+                  return (
+                    <button
+                      key={id}
+                      type="button"
+                      onClick={() => toggleAttendee(id)}
+                      className={`rounded-full px-2.5 py-1 text-xs font-medium border transition-colors ${isSelected ? "bg-primary text-primary-foreground border-primary" : "bg-muted text-muted-foreground border-border hover:border-primary/50"}`}
+                      data-ocid={`attendee-toggle-${id}`}
+                    >
+                      {m.displayName.split(" ")[0]}
+                    </button>
+                  );
+                })}
+              </div>
+              {selectedAttendees.length > 0 && (
+                <p className="text-xs text-muted-foreground">
+                  {selectedAttendees.length} member
+                  {selectedAttendees.length !== 1 ? "s" : ""} invited
+                </p>
+              )}
+            </div>
+          )}
 
           {/* Cross-links */}
           <div className="space-y-1.5">

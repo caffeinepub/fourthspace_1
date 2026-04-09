@@ -839,11 +839,27 @@ export default function ChatPage() {
             <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
               Direct Messages
             </span>
-            <span className="ml-auto text-xs text-muted-foreground">
+            <span className="text-xs text-muted-foreground">
               {dmMembers.length}
             </span>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-5 w-5 ml-auto text-muted-foreground hover:text-foreground"
+              title="New direct message"
+              aria-label="New direct message"
+              data-ocid="new-dm-btn"
+              onClick={() => {
+                // Scroll to the DM list so user can pick someone
+                document
+                  .getElementById("dm-member-list")
+                  ?.scrollIntoView({ behavior: "smooth" });
+              }}
+            >
+              <Plus className="h-3.5 w-3.5" />
+            </Button>
           </div>
-          <div className="space-y-1.5">
+          <div className="space-y-1.5" id="dm-member-list">
             {dmMembers.map((member) => {
               const uid = member.userId.toString();
               const dmChannelId = dmChannelByUserId.get(uid);

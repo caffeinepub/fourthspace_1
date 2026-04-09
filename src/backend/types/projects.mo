@@ -47,6 +47,7 @@ module {
     priority : TaskPriority;
     assigneeId : ?C.UserId;
     dueDate : ?C.Timestamp;
+    tags : [Text];
     crossLinks : [C.CrossLink];
     createdAt : C.Timestamp;
     updatedAt : C.Timestamp;
@@ -65,6 +66,7 @@ module {
     priority : TaskPriority;
     assigneeId : ?C.UserId;
     dueDate : ?C.Timestamp;
+    tags : [Text];
     crossLinks : [C.CrossLink];
   };
 

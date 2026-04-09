@@ -3,141 +3,52 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Link } from "@tanstack/react-router";
+import { useNavigate, useParams } from "@tanstack/react-router";
+import { format } from "date-fns";
 import {
-  AlertCircle,
   AlertTriangle,
-  ArrowRight,
   BadgeDollarSign,
-  Calendar,
+  Building2,
   CheckCircle2,
   Clock,
-  DollarSign,
-  FileText,
-  Play,
+  Loader2,
   Plus,
-  RefreshCw,
-  TrendingUp,
   Users,
   Wallet,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useBackend } from "../../hooks/useBackend";
-import { getTenantId, useWorkspace } from "../../hooks/useWorkspace";
-import { PayrollStatus } from "../../types";
+import { useWorkspace } from "../../hooks/useWorkspace";
 import type { Employee, PayrollRecord, WalletAccount } from "../../types";
+import { PayrollStatus } from "../../types";
 
-function formatCurrency(amount: number | bigint, currency = "USD") {
-  return new Intl.NumberFormat("en-US", {
-    style: "currency",
-    currency: currency || "USD",
-  }).format(Number(amount) / 100);
+function formatICP(e8s: bigint): string {
+  return `${(Number(e8s) / 1e8).toFixed(4)} ICP`;
 }
 
-function formatIcp(balance: bigint): string {
-  return (Number(balance) / 1_000_000_00).toFixed(4);
-}
-
-function PayrollStatusBadge({ status }: { status: PayrollStatus }) {
-  const map: Record<string, { label: string; className: string }> = {
-    [PayrollStatus.Completed]: {
-      label: "Completed",
-      className:
-        "bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 border-emerald-500/20",
-    },
-    [PayrollStatus.Approved]: {
-      label: "Approved",
-      className:
-        "bg-blue-500/15 text-blue-700 dark:text-blue-400 border-blue-500/20",
-    },
-    [PayrollStatus.PendingApproval]: {
-      label: "Pending",
-      className:
-        "bg-amber-500/15 text-amber-700 dark:text-amber-400 border-amber-500/20",
-    },
-    [PayrollStatus.Rejected]: {
-      label: "Rejected",
-      className:
-        "bg-red-500/15 text-red-700 dark:text-red-400 border-red-500/20",
-    },
-    [PayrollStatus.Processed]: {
-      label: "Processed",
-      className:
-        "bg-purple-500/15 text-purple-700 dark:text-purple-400 border-purple-500/20",
-    },
-    [PayrollStatus.Active]: {
-      label: "Active",
-      className:
-        "bg-cyan-500/15 text-cyan-700 dark:text-cyan-400 border-cyan-500/20",
-    },
-    [PayrollStatus.Paused]: {
-      label: "Paused",
-      className: "bg-muted text-muted-foreground",
-    },
-  };
-  const s = map[status] ?? {
-    label: status,
-    className: "bg-muted text-muted-foreground",
-  };
-  return (
-    <span
-      className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium border ${s.className}`}
-    >
-      {s.label}
-    </span>
-  );
-}
+const PAYROLL_STATUS_COLORS: Record<string, string> = {
+  [PayrollStatus.Active]: "bg-primary/10 text-primary",
+  [PayrollStatus.Approved]: "bg-accent/10 text-accent-foreground",
+  [PayrollStatus.Processed]: "bg-accent/10 text-accent-foreground",
+  [PayrollStatus.Completed]: "bg-muted text-muted-foreground",
+  [PayrollStatus.PendingApproval]: "bg-secondary/10 text-secondary-foreground",
+  [PayrollStatus.Rejected]: "bg-destructive/10 text-destructive",
+  [PayrollStatus.Paused]: "bg-muted text-muted-foreground",
+};
 
 export default function PayrollPage() {
+  const { workspaceId } = useParams({ strict: false }) as {
+    workspaceId: string;
+  };
+  const { tenantId } = useWorkspace();
   const { actor, isFetching } = useBackend();
-  const tenantId = getTenantId();
-  const { activeWorkspaceId } = useWorkspace();
-  const workspaceId = activeWorkspaceId ?? "";
+  const navigate = useNavigate();
   const queryClient = useQueryClient();
 
-  const navLinks = [
-    {
-      to: `/app/${workspaceId}/payroll/employees` as const,
-      label: "Employees",
-      icon: Users,
-      desc: "Manage employee profiles",
-    },
-    {
-      to: `/app/${workspaceId}/payroll/schedules` as const,
-      label: "Pay Schedules",
-      icon: Calendar,
-      desc: "Weekly, bi-weekly, monthly",
-    },
-    {
-      to: `/app/${workspaceId}/payroll/contractors` as const,
-      label: "Contractors",
-      icon: FileText,
-      desc: "Freelancer & contractor payments",
-    },
-    {
-      to: `/app/${workspaceId}/payroll/bulk-approval` as const,
-      label: "Bulk Approval",
-      icon: CheckCircle2,
-      desc: "Review & approve payroll runs",
-    },
-    {
-      to: `/app/${workspaceId}/payroll/off-cycle` as const,
-      label: "Off-Cycle Payments",
-      icon: RefreshCw,
-      desc: "Bonuses & reimbursements",
-    },
-    {
-      to: `/app/${workspaceId}/payroll/audit-log` as const,
-      label: "Audit Log",
-      icon: AlertCircle,
-      desc: "Full payroll history log",
-    },
-  ];
-
-  // Fetch workspace treasury balance
-  const { data: treasury, isLoading: treasuryLoading } =
+  // Check treasury balance FIRST
+  const { data: treasury, isLoading: loadingTreasury } =
     useQuery<WalletAccount | null>({
-      queryKey: ["workspaceTreasury", tenantId, workspaceId],
+      queryKey: ["treasury", tenantId, workspaceId],
       queryFn: async () => {
         if (!actor) return null;
         return actor.getWorkspaceTreasury(tenantId, workspaceId);
@@ -145,405 +56,358 @@ export default function PayrollPage() {
       enabled: !!actor && !isFetching && !!workspaceId,
     });
 
-  const { data: employees = [], isLoading: empLoading } = useQuery<Employee[]>({
+  const { data: employees = [], isLoading: loadingEmployees } = useQuery<
+    Employee[]
+  >({
     queryKey: ["employees", tenantId, workspaceId],
-    queryFn: async () =>
-      actor ? actor.listEmployees(tenantId, workspaceId) : [],
+    queryFn: async () => {
+      if (!actor) return [];
+      return actor.listEmployees(tenantId, workspaceId);
+    },
     enabled: !!actor && !isFetching && !!workspaceId,
   });
 
-  const { data: records = [], isLoading: recLoading } = useQuery<
+  const { data: records = [], isLoading: loadingRecords } = useQuery<
     PayrollRecord[]
   >({
-    queryKey: ["payrollRecords", tenantId, workspaceId, null],
-    queryFn: async () =>
-      actor ? actor.listPayrollRecords(tenantId, workspaceId, null) : [],
+    queryKey: ["payroll", tenantId, workspaceId],
+    queryFn: async () => {
+      if (!actor) return [];
+      return actor.listPayrollRecords(tenantId, workspaceId, null);
+    },
     enabled: !!actor && !isFetching && !!workspaceId,
   });
 
-  const icpBalance = treasury?.icpBalance ?? BigInt(0);
-  const hasNoFunds = !treasuryLoading && icpBalance === BigInt(0);
-
-  const runPayroll = useMutation({
-    mutationFn: async () => {
+  const processMutation = useMutation({
+    mutationFn: async ({
+      employeeId,
+      period,
+    }: { employeeId: string; period: string }) => {
       if (!actor) throw new Error("Not connected");
-      const activeEmps = employees.filter((e) => e.isActive);
-      if (activeEmps.length === 0) throw new Error("No active employees");
-      const period = new Date().toISOString().slice(0, 7);
-      const results = await Promise.allSettled(
-        activeEmps.map((e) =>
-          actor.processPayroll(tenantId, workspaceId, e.id, period),
-        ),
-      );
-
-      // Collect errors — if any is "insufficient funds", surface it prominently
-      for (const r of results) {
-        if (r.status === "fulfilled" && r.value.__kind__ === "err") {
-          if (r.value.err.toLowerCase().includes("insufficient")) {
-            throw new Error(r.value.err);
-          }
-        }
+      // Block if no treasury balance
+      if (!hasTreasuryBalance) {
+        throw new Error(
+          "The workspace treasury has no funds. Please fund the treasury before processing payroll.",
+        );
       }
-
-      return results.filter((r) => r.status === "fulfilled").length;
+      const r = await actor.processPayroll(
+        tenantId,
+        workspaceId,
+        employeeId,
+        period,
+      );
+      if (r.__kind__ === "err") throw new Error(r.err);
+      return r.ok;
     },
-    onSuccess: (count) => {
-      toast.success(`Payroll processed for ${count} employee(s)`);
-      queryClient.invalidateQueries({ queryKey: ["payrollRecords"] });
+    onSuccess: () => {
+      toast.success("Payroll processed");
+      void queryClient.invalidateQueries({ queryKey: ["payroll"] });
     },
     onError: (e: Error) => toast.error(e.message),
   });
 
-  const activeEmployees = employees.filter((e) => e.isActive);
-  const pendingApproval = records.filter(
-    (r) => r.status === PayrollStatus.PendingApproval,
-  );
-  const thisMonth = new Date().toISOString().slice(0, 7);
-  const monthRecords = records.filter((r) => r.period.startsWith(thisMonth));
-  const totalPayroll = monthRecords.reduce(
-    (sum, r) => sum + Number(r.amount),
-    0,
-  );
-  const recentRecords = [...records]
-    .sort((a, b) => Number(b.createdAt) - Number(a.createdAt))
-    .slice(0, 6);
-  const employeeMap = new Map(employees.map((e) => [e.id, e]));
-  const statsLoading = empLoading || recLoading;
-
-  const stats = [
-    {
-      label: "Active Employees",
-      value: statsLoading ? null : String(activeEmployees.length),
-      icon: Users,
-      trend: null,
-    },
-    {
-      label: "Payroll This Month",
-      value: statsLoading
-        ? null
-        : `$${(totalPayroll / 100).toLocaleString("en-US", { minimumFractionDigits: 2 })}`,
-      icon: DollarSign,
-      trend: "Current period",
-    },
-    {
-      label: "Pending Approval",
-      value: statsLoading ? null : String(pendingApproval.length),
-      icon: Clock,
-      link: `/app/${workspaceId}/payroll/bulk-approval`,
-      urgent: pendingApproval.length > 0,
-    },
-    {
-      label: "Total Payroll Runs",
-      value: statsLoading ? null : String(records.length),
-      icon: TrendingUp,
-      trend: "All time",
-    },
-  ];
-
-  const isRunDisabled =
-    runPayroll.isPending || activeEmployees.length === 0 || hasNoFunds;
+  const hasTreasuryBalance = treasury != null && treasury.icpBalance > 0n;
+  const isLoading = loadingTreasury || loadingEmployees || loadingRecords;
+  const currentPeriod = format(new Date(), "yyyy-MM");
 
   return (
-    <div className="animate-fade-in-up p-6 space-y-6 max-w-7xl mx-auto">
+    <div className="flex flex-col gap-6 p-4 sm:p-6 max-w-5xl mx-auto w-full">
       {/* Header */}
-      <div className="flex items-center justify-between flex-wrap gap-4">
+      <div className="flex items-center justify-between gap-3 flex-wrap">
         <div className="flex items-center gap-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-500/15 border border-emerald-500/20">
-            <BadgeDollarSign className="h-5 w-5 text-emerald-600 dark:text-emerald-400" />
+          <div className="w-9 h-9 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
+            <BadgeDollarSign className="w-5 h-5 text-primary" />
           </div>
           <div>
-            <h1 className="font-display text-2xl font-bold tracking-tight text-foreground">
+            <h1 className="text-xl font-semibold font-display text-foreground">
               Payroll
             </h1>
             <p className="text-sm text-muted-foreground">
-              Manage employee payments and compensation
+              Manage employee pay and approvals
             </p>
           </div>
         </div>
-        <div className="flex items-center gap-2 flex-wrap">
-          {/* Treasury balance chip */}
-          {!treasuryLoading && treasury && (
-            <div className="flex items-center gap-2 rounded-lg border border-border bg-card px-3 py-1.5">
-              <Wallet className="h-3.5 w-3.5 text-muted-foreground" />
-              <span className="text-xs text-muted-foreground">Treasury:</span>
-              <span
-                className={`text-xs font-semibold tabular-nums ${
-                  icpBalance === BigInt(0)
-                    ? "text-destructive"
-                    : "text-foreground"
-                }`}
-                data-ocid="payroll-treasury-balance"
-              >
-                {formatIcp(icpBalance)} ICP
-              </span>
-            </div>
-          )}
-          <Button asChild variant="outline" size="sm" className="active-press">
-            <Link to={`/app/${workspaceId}/payroll/employees`}>
-              <Plus className="mr-1.5 h-3.5 w-3.5" />
-              Add Employee
-            </Link>
+        <div className="flex gap-2 flex-wrap">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() =>
+              navigate({
+                to: `/app/${workspaceId}/payroll/bulk-approval` as "/",
+              })
+            }
+            data-ocid="payroll-bulk-approval-btn"
+            className="gap-1.5"
+          >
+            <CheckCircle2 className="w-3.5 h-3.5" />
+            Bulk Approval
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() =>
+              navigate({ to: `/app/${workspaceId}/payroll/employees` as "/" })
+            }
+            data-ocid="payroll-employees-btn"
+            className="gap-1.5"
+          >
+            <Users className="w-3.5 h-3.5" />
+            Employees
           </Button>
           <Button
             size="sm"
-            className="bg-emerald-600 hover:bg-emerald-700 text-white active-press disabled:opacity-60"
-            onClick={() => runPayroll.mutate()}
-            disabled={isRunDisabled}
-            data-ocid="payroll-run-all-btn"
-            title={
-              hasNoFunds
-                ? "Fund your workspace wallet before processing payroll"
-                : activeEmployees.length === 0
-                  ? "No active employees"
-                  : undefined
+            onClick={() =>
+              navigate({ to: `/app/${workspaceId}/payroll/audit-log` as "/" })
             }
+            data-ocid="payroll-audit-btn"
+            className="gap-1.5"
           >
-            {runPayroll.isPending ? (
-              "Running…"
-            ) : (
-              <>
-                <Play className="mr-1.5 h-3.5 w-3.5" />
-                Run Payroll
-              </>
-            )}
+            Audit Log
           </Button>
         </div>
       </div>
 
-      {/* No-funds warning banner */}
-      {hasNoFunds && (
+      {/* Treasury balance check */}
+      {loadingTreasury ? (
+        <Skeleton className="h-16 w-full rounded-lg" />
+      ) : !hasTreasuryBalance ? (
         <div
-          className="flex items-start gap-3 rounded-xl border border-amber-400/40 bg-amber-500/8 px-4 py-3"
-          data-ocid="payroll-no-funds-banner"
-          role="alert"
+          data-ocid="payroll-balance-warning"
+          className="flex items-start gap-3 p-4 rounded-lg border border-destructive/30 bg-destructive/5"
         >
-          <AlertTriangle className="h-4 w-4 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
+          <AlertTriangle className="w-5 h-5 text-destructive mt-0.5 shrink-0" />
           <div className="flex-1 min-w-0">
-            <p className="text-sm font-medium text-foreground">
-              Your workspace wallet has no funds. Fund it to process payroll.
+            <p className="text-sm font-medium text-destructive">
+              Treasury balance is empty
+            </p>
+            <p className="text-sm text-muted-foreground mt-0.5">
+              The workspace treasury has no funds. Please fund the treasury
+              wallet before processing payroll.
             </p>
           </div>
           <Button
-            asChild
             size="sm"
             variant="outline"
-            className="shrink-0 gap-1.5 border-amber-400/60 text-amber-700 dark:text-amber-400 hover:bg-amber-500/10"
-            data-ocid="payroll-fund-wallet-btn"
+            className="shrink-0 gap-1.5"
+            onClick={() =>
+              navigate({ to: `/app/${workspaceId}/wallet` as "/" })
+            }
+            data-ocid="payroll-fund-treasury-btn"
           >
-            <Link to={`/app/${workspaceId}/wallet`}>
-              <Wallet className="h-3.5 w-3.5" />
-              Fund Wallet
-            </Link>
+            <Wallet className="w-3.5 h-3.5" />
+            Fund Treasury
           </Button>
         </div>
-      )}
-
-      {/* Stats */}
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        {stats.map(({ label, value, icon: Icon, trend, link, urgent }) => {
-          const card = (
-            <Card
-              key={label}
-              className={`shadow-card rounded-xl border border-border/50 bg-card transition-colors ${link ? "card-interactive" : ""} ${urgent ? "border-amber-500/40" : ""}`}
-            >
-              <CardContent className="p-5">
-                <div className="flex items-start justify-between">
-                  <div className="space-y-1">
-                    <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
-                      {label}
-                    </p>
-                    {value === null ? (
-                      <Skeleton className="h-7 w-24 mt-1" />
-                    ) : (
-                      <p
-                        className={`text-2xl font-bold font-mono tabular-nums ${urgent ? "text-amber-600 dark:text-amber-400" : "text-foreground"}`}
-                      >
-                        {value}
-                      </p>
-                    )}
-                    {trend && (
-                      <p className="text-[11px] text-muted-foreground/70">
-                        {trend}
-                      </p>
-                    )}
-                  </div>
-                  <div
-                    className={`flex h-9 w-9 items-center justify-center rounded-lg ${urgent ? "bg-amber-500/10" : "bg-emerald-500/10"}`}
-                  >
-                    <Icon
-                      className={`h-4 w-4 ${urgent ? "text-amber-600 dark:text-amber-400" : "text-emerald-600 dark:text-emerald-400"}`}
-                    />
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          );
-          return link ? (
-            <Link key={label} to={link}>
-              {card}
-            </Link>
-          ) : (
-            <div key={label}>{card}</div>
-          );
-        })}
-      </div>
-
-      {/* Pending Approval Banner */}
-      {pendingApproval.length > 0 && (
-        <div className="flex items-center justify-between gap-4 rounded-xl border border-amber-500/30 bg-amber-500/5 px-4 py-3">
-          <div className="flex items-center gap-2.5">
-            <AlertCircle className="h-4 w-4 text-amber-600 dark:text-amber-400 shrink-0" />
-            <p className="text-sm font-medium text-foreground">
-              <span className="text-amber-700 dark:text-amber-400 font-semibold">
-                {pendingApproval.length} payroll record
-                {pendingApproval.length !== 1 ? "s" : ""}
-              </span>{" "}
-              awaiting approval
-            </p>
-          </div>
-          <Button
-            asChild
-            size="sm"
-            className="bg-amber-600 hover:bg-amber-700 text-white shrink-0 active-press"
-            data-ocid="payroll-approval-banner-btn"
-          >
-            <Link to={`/app/${workspaceId}/payroll/bulk-approval`}>
-              Review Now <ArrowRight className="ml-1.5 h-3.5 w-3.5" />
-            </Link>
-          </Button>
-        </div>
-      )}
-
-      <div className="grid gap-6 lg:grid-cols-5">
-        {/* Quick Navigation */}
-        <div className="lg:col-span-2 space-y-2">
-          <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider px-1">
-            Quick Access
+      ) : (
+        <div className="flex items-center gap-3 p-3 rounded-lg bg-primary/5 border border-primary/20">
+          <Building2 className="w-4 h-4 text-primary" />
+          <p className="text-sm text-muted-foreground">
+            Treasury balance:{" "}
+            <span className="font-medium text-foreground">
+              {formatICP(treasury.icpBalance)}
+            </span>
           </p>
-          <div className="space-y-1.5">
-            {navLinks.map(({ to, label, icon: Icon, desc }) => (
-              <Link
-                key={to}
-                to={to}
-                data-ocid={`payroll-nav-${label.toLowerCase().replace(/\s+/g, "-")}`}
-              >
-                <div className="flex items-center gap-3 rounded-xl border border-border/50 bg-card px-4 py-3 hover:border-emerald-400/50 hover:bg-emerald-500/5 transition-colors group">
-                  <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-emerald-500/10">
-                    <Icon className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
-                  </div>
-                  <div className="min-w-0 flex-1">
+        </div>
+      )}
+
+      {/* Quick process section — only when treasury has funds */}
+      {hasTreasuryBalance && employees.length > 0 && (
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="text-sm font-display flex items-center gap-2">
+              <Clock className="w-4 h-4" />
+              Process Payroll — {currentPeriod}
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="px-4 pb-4 pt-0">
+            <div className="flex flex-col gap-2">
+              {employees.slice(0, 8).map((emp) => (
+                <div
+                  key={emp.id}
+                  className="flex items-center justify-between gap-3 p-2.5 rounded-lg hover:bg-muted/30 transition-colors"
+                >
+                  <div className="flex-1 min-w-0">
                     <p className="text-sm font-medium text-foreground truncate">
-                      {label}
+                      {emp.firstName} {emp.lastName}
                     </p>
                     <p className="text-xs text-muted-foreground truncate">
-                      {desc}
+                      {emp.email}
                     </p>
                   </div>
-                  <ArrowRight className="h-3.5 w-3.5 text-muted-foreground/40 group-hover:text-emerald-600 transition-colors shrink-0" />
+                  <div className="text-right shrink-0">
+                    <p className="text-sm font-semibold text-foreground">
+                      {Number(emp.salary).toLocaleString()} {emp.currency}
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      {emp.payFrequency}
+                    </p>
+                  </div>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    data-ocid={`payroll-process-${emp.id}`}
+                    disabled={processMutation.isPending || !hasTreasuryBalance}
+                    onClick={() =>
+                      processMutation.mutate({
+                        employeeId: emp.id,
+                        period: currentPeriod,
+                      })
+                    }
+                    className="text-xs h-7 px-2 shrink-0"
+                  >
+                    {processMutation.isPending ? (
+                      <Loader2 className="w-3 h-3 animate-spin" />
+                    ) : (
+                      "Process"
+                    )}
+                  </Button>
                 </div>
-              </Link>
-            ))}
-          </div>
-        </div>
-
-        {/* Recent Records */}
-        <Card
-          className="lg:col-span-3 shadow-card rounded-xl border border-border/50 bg-card"
-          data-ocid="recent-payroll-card"
-        >
-          <CardHeader className="pb-3 flex flex-row items-center justify-between border-b border-border/40">
-            <CardTitle className="text-sm font-semibold text-foreground">
-              Recent Payroll Records
-            </CardTitle>
-            {records.length > 6 && (
-              <Button asChild variant="ghost" size="sm" className="text-xs">
-                <Link to={`/app/${workspaceId}/payroll/bulk-approval`}>
-                  View all
-                </Link>
-              </Button>
-            )}
-          </CardHeader>
-          <CardContent className="p-0">
-            {recLoading ? (
-              <div className="space-y-2 p-4">
-                {[1, 2, 3, 4].map((n) => (
-                  <Skeleton key={n} className="h-12 rounded-lg" />
-                ))}
-              </div>
-            ) : recentRecords.length === 0 ? (
-              <div
-                className="flex flex-col items-center justify-center py-12 text-center"
-                data-ocid="payroll-records-empty"
-              >
-                <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-emerald-500/10 mb-3">
-                  <BadgeDollarSign className="h-6 w-6 text-emerald-600 dark:text-emerald-400" />
-                </div>
-                <p className="text-sm font-medium text-foreground">
-                  No payroll records yet
-                </p>
-                <p className="text-xs text-muted-foreground mt-1">
-                  Click "Run Payroll" to process the current pay period.
-                </p>
-              </div>
-            ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="border-b border-border/40 bg-muted/30">
-                      <th className="px-5 py-2.5 text-left text-xs font-medium text-muted-foreground">
-                        Employee
-                      </th>
-                      <th className="px-5 py-2.5 text-left text-xs font-medium text-muted-foreground hidden sm:table-cell">
-                        Period
-                      </th>
-                      <th className="px-5 py-2.5 text-right text-xs font-medium text-muted-foreground">
-                        Amount
-                      </th>
-                      <th className="px-5 py-2.5 text-right text-xs font-medium text-muted-foreground">
-                        Status
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-border/40">
-                    {recentRecords.map((record) => {
-                      const emp = employeeMap.get(record.employeeId);
-                      return (
-                        <tr
-                          key={record.id}
-                          className="hover:bg-muted/50 transition-colors"
-                          data-ocid={`payroll-record-${record.id}`}
-                        >
-                          <td className="px-5 py-3">
-                            <div className="flex items-center gap-2.5">
-                              <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-emerald-500/10 text-xs font-semibold text-emerald-700 dark:text-emerald-400">
-                                {emp
-                                  ? `${emp.firstName[0]}${emp.lastName[0]}`
-                                  : "?"}
-                              </div>
-                              <span className="font-medium text-foreground truncate max-w-[140px]">
-                                {emp ? `${emp.firstName} ${emp.lastName}` : "—"}
-                              </span>
-                            </div>
-                          </td>
-                          <td className="px-5 py-3 text-muted-foreground hidden sm:table-cell">
-                            {record.period}
-                          </td>
-                          <td className="px-5 py-3 text-right font-mono font-semibold tabular-nums text-foreground">
-                            {formatCurrency(record.amount, record.currency)}
-                          </td>
-                          <td className="px-5 py-3 text-right">
-                            <PayrollStatusBadge status={record.status} />
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
+              ))}
+            </div>
+            {employees.length > 8 && (
+              <p className="text-xs text-muted-foreground mt-3 text-center">
+                +{employees.length - 8} more employees — use Bulk Approval to
+                process all.
+              </p>
             )}
           </CardContent>
         </Card>
+      )}
+
+      {/* Navigation cards */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+        {[
+          {
+            href: `/app/${workspaceId}/payroll/employees`,
+            icon: <Users className="w-5 h-5 text-primary" />,
+            label: "Employees",
+            desc: `${employees.length} active`,
+            ocid: "payroll-nav-employees",
+          },
+          {
+            href: `/app/${workspaceId}/payroll/bulk-approval`,
+            icon: <CheckCircle2 className="w-5 h-5 text-primary" />,
+            label: "Bulk Approval",
+            desc: `${records.filter((r) => r.status === PayrollStatus.PendingApproval).length} pending`,
+            ocid: "payroll-nav-bulk",
+          },
+          {
+            href: `/app/${workspaceId}/payroll/audit-log`,
+            icon: <BadgeDollarSign className="w-5 h-5 text-primary" />,
+            label: "Audit Log",
+            desc: "Full history",
+            ocid: "payroll-nav-audit",
+          },
+        ].map((item) => (
+          <Card
+            key={item.label}
+            className="cursor-pointer hover:border-primary/40 transition-colors"
+            onClick={() => navigate({ to: item.href as "/" })}
+            data-ocid={item.ocid}
+          >
+            <CardContent className="p-4 flex items-center gap-3">
+              <div className="w-9 h-9 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
+                {item.icon}
+              </div>
+              <div>
+                <p className="text-sm font-medium text-foreground font-display">
+                  {item.label}
+                </p>
+                <p className="text-xs text-muted-foreground">{item.desc}</p>
+              </div>
+            </CardContent>
+          </Card>
+        ))}
       </div>
+
+      {/* Recent records */}
+      <div>
+        <div className="flex items-center justify-between mb-3">
+          <h2 className="text-sm font-semibold text-foreground font-display">
+            Recent Payroll Records
+          </h2>
+          <Button
+            size="sm"
+            variant="ghost"
+            onClick={() =>
+              navigate({
+                to: `/app/${workspaceId}/payroll/bulk-approval` as "/",
+              })
+            }
+            className="text-xs gap-1"
+          >
+            <Plus className="w-3 h-3" />
+            View All
+          </Button>
+        </div>
+        {isLoading ? (
+          <div className="flex flex-col gap-2">
+            {(["a", "b", "c"] as const).map((k) => (
+              <Skeleton key={k} className="h-16 w-full rounded-lg" />
+            ))}
+          </div>
+        ) : records.length === 0 ? (
+          <div
+            data-ocid="payroll-records-empty"
+            className="flex flex-col items-center justify-center py-12 gap-3 text-center rounded-lg border border-dashed border-border"
+          >
+            <BadgeDollarSign className="w-8 h-8 text-muted-foreground" />
+            <p className="text-sm text-muted-foreground">
+              No payroll records yet
+            </p>
+            {employees.length === 0 && (
+              <Button
+                size="sm"
+                onClick={() =>
+                  navigate({
+                    to: `/app/${workspaceId}/payroll/employees` as "/",
+                  })
+                }
+                className="gap-1.5"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                Add Employees
+              </Button>
+            )}
+          </div>
+        ) : (
+          <div className="flex flex-col gap-2">
+            {records.slice(0, 10).map((rec) => (
+              <PayrollRecordRow key={rec.id} record={rec} />
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function PayrollRecordRow({ record }: { record: PayrollRecord }) {
+  return (
+    <div
+      data-ocid={`payroll-record-${record.id}`}
+      className="flex items-center gap-3 p-3 rounded-lg border border-border bg-background hover:bg-muted/20 transition-colors"
+    >
+      <div className="flex-1 min-w-0">
+        <p className="text-sm font-medium text-foreground">{record.period}</p>
+        <p className="text-xs text-muted-foreground">
+          Employee #{record.employeeId.slice(0, 8)}
+        </p>
+      </div>
+      <div className="text-right shrink-0">
+        <p className="text-sm font-semibold text-foreground">
+          {record.grossAmount.toLocaleString()} {record.currency}
+        </p>
+        <p className="text-xs text-muted-foreground">
+          Net: {record.netAmount.toLocaleString()}
+        </p>
+      </div>
+      <Badge
+        variant="outline"
+        className={`text-xs shrink-0 ${PAYROLL_STATUS_COLORS[record.status] ?? "bg-muted text-muted-foreground"}`}
+      >
+        {record.status}
+      </Badge>
     </div>
   );
 }

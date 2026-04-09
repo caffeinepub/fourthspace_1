@@ -57,6 +57,45 @@ module {
     else ({ result = #err "Subtask not found or access denied"; store = store })
   };
 
+  /// Toggle a subtask between #Todo and #Done.
+  /// Returns the updated subtask and parent task progress percentage (0–100).
+  public func toggleSubtask(
+    store : [(Common.EntityId, PTypes.Subtask)],
+    tenantId : Common.TenantId,
+    workspaceId : Common.WorkspaceId,
+    subtaskId : Common.EntityId,
+  ) : {
+    result : { #ok : PTypes.Subtask; #err : Text };
+    progress : Nat;
+    store : [(Common.EntityId, PTypes.Subtask)];
+  } {
+    switch (Subtasks.getSubtask(store, subtaskId, tenantId, workspaceId)) {
+      case null ({ result = #err "Subtask not found or access denied"; progress = 0; store = store });
+      case (?existing) {
+        let newStatus : PTypes.TaskStatus = switch (existing.status) {
+          case (#Done) #Todo;
+          case _ #Done;
+        };
+        let (maybe, updated) = Subtasks.updateSubtask(store, subtaskId, existing.title, newStatus, tenantId, workspaceId);
+        switch (maybe) {
+          case null ({ result = #err "Subtask not found or access denied"; progress = 0; store = store });
+          case (?s) {
+            let siblings = updated.filter(func(entry : (Common.EntityId, PTypes.Subtask)) : Bool {
+              let (_, st) = entry;
+              st.parentTaskId == s.parentTaskId and st.tenantId == tenantId and st.workspaceId == workspaceId
+            });
+            let total = siblings.size();
+            let doneCount = siblings.filter(func(entry : (Common.EntityId, PTypes.Subtask)) : Bool {
+              let (_, st) = entry; st.status == #Done
+            }).size();
+            let progress = if (total == 0) 0 else (doneCount * 100) / total;
+            { result = #ok s; progress; store = updated }
+          };
+        }
+      };
+    }
+  };
+
   // ── Sprints ───────────────────────────────────────────────────────────────────
 
   public func createSprint(

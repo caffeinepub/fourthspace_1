@@ -28,8 +28,10 @@ import {
   ListChecks,
   Loader2,
   MessageSquare,
+  Tag,
   Trash2,
   User,
+  X,
   Zap,
 } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -186,6 +188,84 @@ function CollapsibleSection({
   );
 }
 
+// ─── Tags Input ───────────────────────────────────────────────────────────────
+
+function TagsInput({
+  tags,
+  onChange,
+}: {
+  tags: string[];
+  onChange: (tags: string[]) => void;
+}) {
+  const [inputValue, setInputValue] = useState("");
+
+  function addTag(value: string) {
+    const trimmed = value.trim().toLowerCase().replace(/\s+/g, "-");
+    if (!trimmed || tags.includes(trimmed)) return;
+    onChange([...tags, trimmed]);
+    setInputValue("");
+  }
+
+  function removeTag(tag: string) {
+    onChange(tags.filter((t) => t !== tag));
+  }
+
+  return (
+    <div
+      className="flex flex-wrap items-center gap-1.5 min-h-10 sm:min-h-8 rounded-md border border-input bg-background px-2 py-1.5 text-xs focus-within:ring-1 focus-within:ring-ring cursor-text"
+      onClick={() => {
+        const el = document.getElementById("tag-input");
+        el?.focus();
+      }}
+      onKeyDown={() => {
+        const el = document.getElementById("tag-input");
+        el?.focus();
+      }}
+      data-ocid="task-tags-container"
+    >
+      {tags.map((tag) => (
+        <span
+          key={tag}
+          className="inline-flex items-center gap-0.5 rounded-full bg-primary/10 px-2 py-0.5 text-[11px] font-medium text-primary border border-primary/20"
+        >
+          {tag}
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              removeTag(tag);
+            }}
+            aria-label={`Remove tag ${tag}`}
+            className="text-primary/60 hover:text-primary transition-colors ml-0.5"
+          >
+            <X className="h-2.5 w-2.5" />
+          </button>
+        </span>
+      ))}
+      <input
+        id="tag-input"
+        value={inputValue}
+        onChange={(e) => setInputValue(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" || e.key === ",") {
+            e.preventDefault();
+            addTag(inputValue);
+          }
+          if (e.key === "Backspace" && !inputValue && tags.length > 0) {
+            removeTag(tags[tags.length - 1]);
+          }
+        }}
+        onBlur={() => {
+          if (inputValue.trim()) addTag(inputValue);
+        }}
+        placeholder={tags.length === 0 ? "Add tags…" : ""}
+        className="flex-1 min-w-[80px] outline-none bg-transparent text-xs text-foreground placeholder:text-muted-foreground"
+        data-ocid="tag-input"
+      />
+    </div>
+  );
+}
+
 // ─── Main Component ───────────────────────────────────────────────────────────
 
 const MOCK_TIME_ENTRIES: TimeEntryLocal[] = [];
@@ -238,6 +318,7 @@ export default function TaskDetailPage() {
   const [priority, setPriority] = useState<TaskPriority>(TaskPriority.Medium);
   const [dueDate, setDueDate] = useState("");
   const [assigneeId, setAssigneeId] = useState<string>("none");
+  const [tags, setTags] = useState<string[]>([]);
   const [crossLinks, setCrossLinks] = useState<CrossLink[]>([]);
   const [isDirty, setIsDirty] = useState(false);
   const [timeEntries, setTimeEntries] = useState<TimeEntryLocal[]>(
@@ -252,6 +333,7 @@ export default function TaskDetailPage() {
       setPriority(task.priority);
       setDueDate(formatDateValue(task.dueDate));
       setAssigneeId(task.assigneeId ? task.assigneeId.toString() : "none");
+      setTags(task.tags ?? []);
       setCrossLinks(task.crossLinks);
       setIsDirty(false);
     }
@@ -332,6 +414,7 @@ export default function TaskDetailPage() {
         dueDate: parseDateToTimestamp(dueDate),
         crossLinks,
         assigneeId: resolvedAssignee,
+        tags,
         ...overrides,
       };
     },
@@ -343,6 +426,7 @@ export default function TaskDetailPage() {
       dueDate,
       crossLinks,
       assigneeId,
+      tags,
       members,
     ],
   );
@@ -418,7 +502,6 @@ export default function TaskDetailPage() {
     setPriority(v);
     setIsDirty(true);
     if (!isNew) {
-      // Immediate save for dropdown changes
       if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
       saveMutation.mutate(buildInput({ priority: v }));
     }
@@ -444,6 +527,15 @@ export default function TaskDetailPage() {
     if (!isNew) {
       if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
       saveMutation.mutate(buildInput({ dueDate: parseDateToTimestamp(v) }));
+    }
+  }
+
+  function handleTagsChange(newTags: string[]) {
+    setTags(newTags);
+    setIsDirty(true);
+    if (!isNew) {
+      if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+      saveMutation.mutate(buildInput({ tags: newTags }));
     }
   }
 
@@ -765,6 +857,17 @@ export default function TaskDetailPage() {
                   ))}
                 </SelectContent>
               </Select>
+            </div>
+
+            {/* Tags */}
+            <div className="space-y-1.5">
+              <Label className="text-xs text-muted-foreground flex items-center gap-1">
+                <Tag className="h-3 w-3" /> Tags
+                <span className="text-muted-foreground/60">
+                  (press Enter or comma to add)
+                </span>
+              </Label>
+              <TagsInput tags={tags} onChange={handleTagsChange} />
             </div>
 
             {/* Meta */}

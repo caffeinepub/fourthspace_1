@@ -215,19 +215,21 @@ module {
     var currentTaskStore = taskStore;
     for (tmplTask in tmpl.tasks.values()) {
       let taskInput : PTypes.TaskInput = {
-        projectId;
-        title = tmplTask.title;
-        description = tmplTask.description;
-        priority = tmplTask.priority;
-        assigneeId = null;
-        dueDate = null;
-        crossLinks = [];
-      };
+          projectId;
+          title = tmplTask.title;
+          description = tmplTask.description;
+          priority = tmplTask.priority;
+          assigneeId = null;
+          dueDate = null;
+          tags = [];
+          crossLinks = [];
+        };
       let (createdTask, newTaskStore) = Projects.createTask(currentTaskStore, tenantId, workspaceId, caller, taskInput);
       // Set the task status — createTask always sets #Todo, so update if different
       let finalTaskStore = if (tmplTask.status != #Todo) {
         // Patch status directly in the store since updateTask requires a full input
-        newTaskStore.map(func((k, t)) {
+        newTaskStore.map<(Common.EntityId, PTypes.Task), (Common.EntityId, PTypes.Task)>(func(entry : (Common.EntityId, PTypes.Task)) : (Common.EntityId, PTypes.Task) {
+          let (k, t) = entry;
           if (k == createdTask.id) {
             (k, { t with status = tmplTask.status })
           } else {

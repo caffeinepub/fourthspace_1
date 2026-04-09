@@ -1,681 +1,710 @@
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Textarea } from "@/components/ui/textarea";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Link, useNavigate, useParams } from "@tanstack/react-router";
 import {
   ArrowLeft,
-  CheckSquare,
-  FileCode2,
+  BookOpen,
+  Briefcase,
+  Calendar,
+  CheckCircle2,
+  ChevronRight,
+  FolderKanban,
   Loader2,
-  Plus,
+  Megaphone,
+  Rocket,
   Search,
-  Star,
-  Trash2,
+  Target,
+  Users,
   X,
+  Zap,
 } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import { toast } from "sonner";
 import { useBackend } from "../../hooks/useBackend";
 import { useWorkspace } from "../../hooks/useWorkspace";
-import { TaskPriority, type TaskTemplate } from "../../types";
 
-const PRIORITY_COLOR: Record<TaskPriority, string> = {
-  [TaskPriority.Low]: "bg-muted text-muted-foreground border-border",
-  [TaskPriority.Medium]:
-    "bg-orange-500/10 text-orange-600 border-orange-200 dark:border-orange-800 dark:text-orange-400",
-  [TaskPriority.High]:
-    "bg-red-500/10 text-red-600 border-red-200 dark:border-red-800 dark:text-red-400",
-  [TaskPriority.Critical]:
-    "bg-red-600/20 text-red-700 border-red-300 font-semibold",
-};
+// ─── Template Data ────────────────────────────────────────────────────────────
 
-interface BuiltInTaskTemplate {
+interface ProjectTemplateCard {
   id: string;
+  icon: React.ReactNode;
   name: string;
   description: string;
-  icon: string;
-  defaultPriority: TaskPriority;
-  checklistItems: string[];
+  category: string;
+  categoryColor: string;
+  taskCount: number;
+  createWhiteboard?: boolean;
+  previewTasks: string[];
+  fullTaskList: string[];
 }
 
-const BUILT_IN_TASK_TEMPLATES: BuiltInTaskTemplate[] = [
+const PROJECT_TEMPLATES: ProjectTemplateCard[] = [
   {
-    id: "builtin-bug-report",
-    name: "Bug Report",
+    id: "agile-sprint",
+    icon: <Zap className="h-5 w-5" />,
+    name: "Agile Sprint",
     description:
-      "Structured bug investigation with steps to reproduce, root cause analysis, and verification",
-    icon: "🐛",
-    defaultPriority: TaskPriority.High,
-    checklistItems: [
-      "Reproduce the issue on local environment",
-      "Document exact steps to reproduce (numbered list)",
-      "Capture screenshots or screen recording of the bug",
-      "Check browser console for JavaScript errors",
-      "Identify affected users and environments (browser, OS, version)",
-      "Search codebase for root cause — check logs and error tracking",
-      "Write a failing test case that confirms the bug",
-      "Implement fix and verify test now passes",
-      "Confirm fix works in staging environment",
-      "Request code review and get sign-off",
-      "Deploy fix to production",
-      "Monitor error tracking for 30 minutes post-deploy to confirm resolution",
+      "Run a 2-week sprint with ceremonies, velocity tracking, and retrospectives. Pre-loaded with planning, development, QA, and release tasks.",
+    category: "Engineering",
+    categoryColor:
+      "text-violet-500 bg-violet-500/10 border-violet-200 dark:border-violet-800",
+    taskCount: 15,
+    createWhiteboard: false,
+    previewTasks: [
+      "Sprint Planning",
+      "User Story Development",
+      "Frontend Development",
+      "Backend Development",
+      "Code Review",
+    ],
+    fullTaskList: [
+      "Sprint Planning",
+      "User Story Development",
+      "Frontend Development",
+      "Backend Development",
+      "Code Review",
+      "QA Testing",
+      "Bug Fixes",
+      "Daily Standups",
+      "Sprint Demo",
+      "Sprint Retrospective",
+      "Backlog Refinement",
+      "Performance Monitoring",
+      "Dependency Management",
+      "Documentation Update",
+      "Release to Production",
     ],
   },
   {
-    id: "builtin-feature-request",
-    name: "Feature Request",
+    id: "product-roadmap",
+    icon: <Target className="h-5 w-5" />,
+    name: "Product Roadmap",
     description:
-      "End-to-end flow from user story through design, build, tests, and deployment",
-    icon: "✨",
-    defaultPriority: TaskPriority.Medium,
-    checklistItems: [
-      "Define user story: 'As a [user], I want [feature], so that [outcome]'",
-      "Write clear acceptance criteria (what 'done' looks like)",
-      "Validate requirements with product manager before starting",
-      "Create wireframes or mockups and get design approval",
-      "Break implementation into technical subtasks",
-      "Estimate effort in story points and confirm with engineering lead",
-      "Add to sprint backlog and assign to engineer",
-      "Implement feature following coding standards",
-      "Write unit and integration tests for all new code paths",
-      "Complete self-review checklist (no console logs, no hardcoded values)",
-      "Submit for code review — address all reviewer comments",
-      "Deploy to staging and perform smoke testing",
-      "Get stakeholder sign-off on staging",
-      "Deploy to production and notify the original requester",
+      "Plan a full-year product roadmap across four quarters with discovery, design, development, and launch phases.",
+    category: "Product",
+    categoryColor:
+      "text-blue-500 bg-blue-500/10 border-blue-200 dark:border-blue-800",
+    taskCount: 12,
+    createWhiteboard: true,
+    previewTasks: [
+      "Q1 Discovery & Research",
+      "Q1 UX Design",
+      "Q1 Development",
+      "Q1 Stakeholder Review",
+      "Q2 Feature A",
+    ],
+    fullTaskList: [
+      "Q1 Discovery & Research",
+      "Q1 UX Design",
+      "Q1 Development",
+      "Q1 Stakeholder Review",
+      "Q2 Feature A",
+      "Q2 Feature B",
+      "Q3 Scale & Performance",
+      "Q3 Feature C",
+      "Q4 Beta Program",
+      "Q4 Launch Prep",
+      "Q4 Public Launch",
+      "Roadmap Retrospective",
     ],
   },
   {
-    id: "builtin-code-review",
-    name: "Code Review",
+    id: "bug-tracker",
+    icon: <BookOpen className="h-5 w-5" />,
+    name: "Bug Tracker",
     description:
-      "Thorough PR review checklist covering security, tests, logic, performance, and style",
-    icon: "👀",
-    defaultPriority: TaskPriority.Medium,
-    checklistItems: [
-      "Read the PR description and linked ticket to understand the intent",
-      "Check that the PR scope matches what's described — no unrelated changes",
-      "Review for security vulnerabilities (SQL injection, XSS, exposed secrets)",
-      "Verify test coverage is adequate — new code should have corresponding tests",
-      "Review logic for correctness and edge cases (null inputs, empty arrays, large datasets)",
-      "Check for performance issues (N+1 queries, unnecessary re-renders, blocking calls)",
-      "Ensure error handling is present and meaningful error messages are used",
-      "Verify naming conventions are followed (variables, functions, files)",
-      "Check that no TODO comments or debug code were left in",
-      "Leave constructive inline comments with specific suggestions, not just 'fix this'",
-      "Approve if all checks pass, or request changes with clear explanation",
+      "Systematic bug investigation with triage, root cause analysis, automated tests, staging verification, and release notes.",
+    category: "Engineering",
+    categoryColor:
+      "text-red-500 bg-red-500/10 border-red-200 dark:border-red-800",
+    taskCount: 13,
+    createWhiteboard: false,
+    previewTasks: [
+      "Bug Triage Session",
+      "Critical: Auth Login Failure",
+      "High: Data Export Broken",
+      "Root Cause Analysis",
+      "Regression Testing",
+    ],
+    fullTaskList: [
+      "Bug Triage Session",
+      "Critical: Auth Login Failure",
+      "High: Data Export Broken",
+      "High: Performance Regression",
+      "Medium: Dashboard Slow Load",
+      "Medium: Email Notification Delay",
+      "Low: UI Alignment Issue",
+      "Low: Tooltip Positioning",
+      "Root Cause Analysis",
+      "Automated Test Coverage",
+      "Regression Testing",
+      "Staging Verification",
+      "Release Notes & Documentation",
     ],
   },
   {
-    id: "builtin-documentation",
-    name: "Documentation Task",
+    id: "marketing-campaign",
+    icon: <Megaphone className="h-5 w-5" />,
+    name: "Marketing Campaign",
     description:
-      "Research, draft, review, and publish documentation with examples and diagrams",
-    icon: "📝",
-    defaultPriority: TaskPriority.Low,
-    checklistItems: [
-      "Define the audience: who will read this and what do they need to know?",
-      "Outline the document structure — section headings before writing prose",
-      "Write first draft from existing code, specs, or subject matter expert interviews",
-      "Add working code examples for every technical concept covered",
-      "Add screenshots or diagrams where a visual explanation is clearer than text",
-      "Run through a 'naive reader' test — would someone new understand this?",
-      "Get technical accuracy review from the subject matter expert",
-      "Get editorial review for clarity and tone",
-      "Address all review feedback",
-      "Publish to the documentation site in the correct section",
-      "Add to the documentation site's search index",
-      "Announce the new documentation in the team Slack channel",
+      "Launch a targeted campaign from strategy through audience research, content, paid ads, email, influencers, and post-campaign analysis.",
+    category: "Marketing",
+    categoryColor:
+      "text-orange-500 bg-orange-500/10 border-orange-200 dark:border-orange-800",
+    taskCount: 14,
+    createWhiteboard: false,
+    previewTasks: [
+      "Campaign Strategy",
+      "Audience Research",
+      "Messaging & Positioning",
+      "Content Creation",
+      "Landing Page",
+    ],
+    fullTaskList: [
+      "Campaign Strategy",
+      "Audience Research",
+      "Messaging & Positioning",
+      "Content Creation",
+      "Landing Page",
+      "Social Media Scheduling",
+      "Email Campaign",
+      "Influencer Outreach",
+      "Paid Ads Setup",
+      "PR & Outreach",
+      "Campaign Launch",
+      "Mid-Campaign Analytics Review",
+      "Customer Follow-up Sequence",
+      "Campaign Wrap-up Report",
     ],
   },
   {
-    id: "builtin-deployment",
-    name: "Deployment Checklist",
+    id: "design-sprint",
+    icon: <Zap className="h-5 w-5" />,
+    name: "Design Sprint",
     description:
-      "Full release flow from tests to production deploy, monitoring, and announcement",
-    icon: "🚀",
-    defaultPriority: TaskPriority.High,
-    checklistItems: [
-      "Run full automated test suite — all tests must pass before proceeding",
-      "Review deployment diff: confirm only expected changes are included",
-      "Update CHANGELOG with all changes included in this release",
-      "Tag the release version in version control (e.g. v2.5.0)",
-      "Deploy to staging environment",
-      "Perform smoke testing on staging: test the 5 most critical user flows",
-      "Get explicit QA sign-off for staging build",
-      "Notify stakeholders of upcoming production deployment and timing",
-      "Schedule maintenance window if downtime is expected",
-      "Deploy to production",
-      "Monitor error tracking dashboard for 30 minutes post-deploy",
-      "Verify key metrics are within normal range (error rate, response time, conversion)",
-      "Update status page to reflect successful deployment",
-      "Send release announcement to team and relevant stakeholders",
+      "5-day design sprint following Google Ventures methodology — problem mapping, sketching, prototyping, and user testing.",
+    category: "Design",
+    categoryColor:
+      "text-pink-500 bg-pink-500/10 border-pink-200 dark:border-pink-800",
+    taskCount: 12,
+    createWhiteboard: true,
+    previewTasks: [
+      "Day 1: Map the Problem",
+      "Day 1: Competitive Analysis",
+      "Day 2: Sketch Solutions",
+      "Day 4: Build Prototype",
+      "Day 5: User Testing",
+    ],
+    fullTaskList: [
+      "Day 1: Map the Problem",
+      "Day 1: Competitive Analysis",
+      "Day 2: Sketch Solutions",
+      "Day 2: Decide on Direction",
+      "Day 3: Storyboard",
+      "Day 4: Build Prototype",
+      "Day 4: Prepare Interview Script",
+      "Day 5: User Testing",
+      "Day 5: Synthesize Findings",
+      "Sprint Retrospective",
+      "Sprint Report",
+      "Next Steps Planning",
     ],
   },
   {
-    id: "builtin-design-review",
-    name: "Design Review",
+    id: "client-project",
+    icon: <Briefcase className="h-5 w-5" />,
+    name: "Client Project",
     description:
-      "UI/UX review covering brand guidelines, accessibility, responsiveness, and user flows",
-    icon: "🎨",
-    defaultPriority: TaskPriority.Medium,
-    checklistItems: [
-      "Review designs against brand guidelines (colors, typography, spacing)",
-      "Check WCAG 2.1 AA accessibility: color contrast ratios meet 4.5:1 minimum",
-      "Validate responsive behavior on mobile (375px), tablet (768px), and desktop (1440px)",
-      "Review all interactive states: default, hover, focus, active, disabled, loading, error",
-      "Check user flow for edge cases: empty states, error states, long content, special characters",
-      "Review copy and microcopy for correct tone, spelling, and grammar",
-      "Confirm all icons have accessible labels (not just visual icons)",
-      "Check that animations honor prefers-reduced-motion",
-      "Get sign-off from product manager on user flows",
-      "Get sign-off from engineering on technical feasibility",
-      "Export final assets at correct sizes and formats (2× for retina)",
+      "End-to-end client delivery from kickoff through scope of work, milestones, revisions, QA, final delivery, and invoicing.",
+    category: "Operations",
+    categoryColor:
+      "text-sky-500 bg-sky-500/10 border-sky-200 dark:border-sky-800",
+    taskCount: 14,
+    createWhiteboard: false,
+    previewTasks: [
+      "Client Kickoff Call",
+      "Scope of Work Document",
+      "Project Plan",
+      "Delivery: Milestone 1",
+      "Revision Round 1",
+    ],
+    fullTaskList: [
+      "Client Kickoff Call",
+      "Scope of Work Document",
+      "Project Plan",
+      "Weekly Status Reports",
+      "Delivery: Milestone 1",
+      "Revision Round 1",
+      "Delivery: Milestone 2",
+      "Revision Round 2",
+      "Quality Assurance",
+      "Final Delivery",
+      "Client Sign-off",
+      "Post-Project Survey",
+      "Final Invoice",
+      "Case Study",
     ],
   },
   {
-    id: "builtin-support-ticket",
-    name: "Support Ticket",
+    id: "event-planning",
+    icon: <Calendar className="h-5 w-5" />,
+    name: "Event Planning",
     description:
-      "Customer support workflow from acknowledgment through resolution and knowledge base update",
-    icon: "🎫",
-    defaultPriority: TaskPriority.Medium,
-    checklistItems: [
-      "Acknowledge customer within SLA window (e.g. 4 business hours for standard tier)",
-      "Gather complete information: account ID, browser, OS, exact steps to reproduce",
-      "Reproduce the issue on a test account to confirm behavior",
-      "Search the knowledge base and existing bug tracker for known solutions",
-      "If a workaround exists, communicate it to the customer immediately",
-      "If engineering escalation is needed, create a bug ticket with full reproduction steps",
-      "Communicate resolution timeline estimate to the customer",
-      "Implement fix or coordinate with engineering if a code change is required",
-      "Test resolution before closing — confirm in same environment as the customer",
-      "Resolve ticket and document the solution clearly for future reference",
-      "Follow up with customer 24 hours after resolution to confirm it worked",
-      "Add solution to knowledge base if it could help other customers",
+      "Plan a corporate event or conference from venue sourcing through catering, speakers, marketing, day-of logistics, and post-event report.",
+    category: "Operations",
+    categoryColor:
+      "text-amber-500 bg-amber-500/10 border-amber-200 dark:border-amber-800",
+    taskCount: 15,
+    createWhiteboard: false,
+    previewTasks: [
+      "Event Brief & Goals",
+      "Venue Sourcing",
+      "Catering",
+      "Speaker Coordination",
+      "Audio/Visual Setup",
+    ],
+    fullTaskList: [
+      "Event Brief & Goals",
+      "Venue Sourcing",
+      "Catering",
+      "Speaker Coordination",
+      "Audio/Visual Setup",
+      "Marketing & Invitations",
+      "Registration Setup",
+      "Agenda & Run of Show",
+      "Staff & Volunteer Briefing",
+      "Branded Materials",
+      "Day-of Logistics",
+      "Photography & Recording",
+      "Post-Event Thank-you",
+      "Content Distribution",
+      "Post-Event Report",
     ],
   },
   {
-    id: "builtin-onboarding",
-    name: "Employee Onboarding",
+    id: "onboarding",
+    icon: <Users className="h-5 w-5" />,
+    name: "Onboarding",
     description:
-      "New hire setup from pre-boarding through 90-day performance review",
-    icon: "🙋",
-    defaultPriority: TaskPriority.Medium,
-    checklistItems: [
-      "Send welcome email 3 days before start date with day-1 logistics (time, location/Zoom, dress code)",
-      "Provision all accounts: email, Slack, GitHub, project management tools, HR system",
-      "Set up hardware and ensure laptop is ready before first day",
-      "Schedule week-1 onboarding sessions: HR orientation, team intro, tool walkthroughs",
-      "Assign an onboarding buddy — a peer (not manager) who can answer day-to-day questions",
-      "Share the company handbook, code of conduct, and key policies",
-      "Introduce new hire to the full team — post a welcome message in Slack",
-      "Walk through the team's current projects, priorities, and how work gets done",
-      "Assign a low-complexity first task to give the new hire an early win",
-      "Week 2: first check-in with manager — answer questions, gather feedback on onboarding",
-      "30-day review: assess ramp progress, address any gaps in training or knowledge",
-      "90-day performance check-in: set 6-month goals and development plan",
+      "Structured 90-day employee onboarding from IT setup and Day 1 orientation through 30/60/90-day check-ins and performance reviews.",
+    category: "HR",
+    categoryColor:
+      "text-green-500 bg-green-500/10 border-green-200 dark:border-green-800",
+    taskCount: 14,
+    createWhiteboard: false,
+    previewTasks: [
+      "Pre-boarding: IT Setup",
+      "Pre-boarding: Welcome Package",
+      "Day 1: Orientation",
+      "Week 1: Product Training",
+      "30-Day Check-in",
+    ],
+    fullTaskList: [
+      "Pre-boarding: IT Setup",
+      "Pre-boarding: Welcome Package",
+      "Day 1: Orientation",
+      "Day 1: Role Overview",
+      "Week 1: Product & Domain Training",
+      "Week 1: Team Process Training",
+      "Week 2: First Project Assignment",
+      "Week 2: Key Stakeholder Meetings",
+      "30-Day Check-in",
+      "60-Day Feedback Session",
+      "60-Day Project Review",
+      "90-Day Formal Review",
+      "Onboarding Survey",
+      "Benefits & Payroll Enrollment",
     ],
   },
   {
-    id: "builtin-content-creation",
-    name: "Content Creation",
+    id: "content-calendar",
+    icon: <Calendar className="h-5 w-5" />,
+    name: "Content Calendar",
     description:
-      "Full content lifecycle from research through publish, SEO, and distribution",
-    icon: "✍️",
-    defaultPriority: TaskPriority.Medium,
-    checklistItems: [
-      "Define target audience, goal, and primary call-to-action for this piece",
-      "Research keywords and SEO angles — identify 1 primary and 3–5 secondary keywords",
-      "Create a detailed outline and get approval before writing",
-      "Write the first draft — focus on clarity and structure over perfection",
-      "Self-review: cut anything that doesn't serve the reader",
-      "Submit for internal review (subject matter accuracy + editorial)",
-      "Revise based on all feedback",
-      "SEO optimization pass: meta title, meta description, header tags, internal links",
-      "Final proofreading — grammar, spelling, formatting consistency",
-      "Add visuals: featured image, inline images, charts, or video where relevant",
-      "Schedule or publish at the optimal time for audience engagement",
-      "Share on all relevant social channels and internal Slack",
-      "Track performance after 7 days (views, engagement, conversions) and report findings",
+      "Plan and publish a month of multi-channel content — strategy, blog posts, social media, email newsletter, video, SEO, and performance reporting.",
+    category: "Marketing",
+    categoryColor:
+      "text-teal-500 bg-teal-500/10 border-teal-200 dark:border-teal-800",
+    taskCount: 14,
+    createWhiteboard: false,
+    previewTasks: [
+      "Monthly Content Strategy",
+      "Editorial Calendar Setup",
+      "Keyword Research",
+      "Blog Post: Topic A",
+      "Email Newsletter",
+    ],
+    fullTaskList: [
+      "Monthly Content Strategy",
+      "Editorial Calendar Setup",
+      "Keyword Research",
+      "Blog Post: Topic A",
+      "Blog Post: Topic B",
+      "Long-form Content Piece",
+      "Social Media Week 1 & 2",
+      "Social Media Week 3 & 4",
+      "Email Newsletter",
+      "Video Content",
+      "Guest Post Outreach",
+      "Content Repurposing",
+      "SEO Audit",
+      "Monthly Performance Report",
     ],
   },
   {
-    id: "builtin-security-review",
-    name: "Security Review",
+    id: "sales-pipeline",
+    icon: <Target className="h-5 w-5" />,
+    name: "Sales Pipeline",
     description:
-      "Security audit covering authentication, injection attacks, encryption, and access control",
-    icon: "🔒",
-    defaultPriority: TaskPriority.High,
-    checklistItems: [
-      "Review authentication flows: token validation, session expiry, brute-force protection",
-      "Check authorization logic: verify users can only access their own data",
-      "Test for SQL injection vulnerabilities on all database query inputs",
-      "Test for XSS attack vectors in all form fields and URL parameters",
-      "Review data encryption at rest: sensitive fields (PII, passwords) must be encrypted",
-      "Review data encryption in transit: all endpoints must use HTTPS/TLS",
-      "Scan codebase for exposed secrets (API keys, passwords, tokens in code or .env)",
-      "Review third-party dependencies for known vulnerabilities (run npm audit or equivalent)",
-      "Check file upload handling for malicious file type injection",
-      "Review rate limiting and DDoS protection on public-facing endpoints",
-      "Document all findings with severity ratings (Critical / High / Medium / Low)",
-      "Immediately remediate all Critical and High severity findings",
-      "Schedule follow-up review in 90 days",
+      "Build and run a complete B2B sales pipeline — ICP definition, prospecting, discovery calls, demos, proposals, negotiation, and CS handoff.",
+    category: "Sales",
+    categoryColor:
+      "text-yellow-600 bg-yellow-500/10 border-yellow-200 dark:border-yellow-800",
+    taskCount: 13,
+    createWhiteboard: false,
+    previewTasks: [
+      "ICP Definition",
+      "Target Account List",
+      "Cold Outreach Sequences",
+      "Discovery Calls",
+      "Product Demos",
+    ],
+    fullTaskList: [
+      "ICP Definition",
+      "Target Account List",
+      "Cold Outreach Sequences",
+      "Discovery Calls",
+      "Opportunity Qualification",
+      "Product Demos",
+      "Champion Development",
+      "Business Case",
+      "Proposals",
+      "Negotiation",
+      "Contract Sign",
+      "Revenue Recognition",
+      "CS Handoff",
     ],
   },
   {
-    id: "builtin-performance",
-    name: "Performance Investigation",
+    id: "feature-launch",
+    icon: <Rocket className="h-5 w-5" />,
+    name: "Feature Launch",
     description:
-      "Define baseline, profile bottlenecks, optimize, and benchmark improvements",
-    icon: "⚡",
-    defaultPriority: TaskPriority.High,
-    checklistItems: [
-      "Define performance baseline and measurable targets (e.g. LCP < 2.5s, API p95 < 200ms)",
-      "Run Lighthouse audit and record current scores (Performance, Accessibility, SEO)",
-      "Use profiling tools to identify the top 3 performance bottlenecks",
-      "Analyze database query performance — identify slow queries with EXPLAIN ANALYZE",
-      "Review API response times — flag any endpoints exceeding 500ms",
-      "Analyze frontend bundle size — identify large dependencies or duplicate modules",
-      "Check for unnecessary network requests, render-blocking resources, or large images",
-      "Implement fixes for the top 3 identified bottlenecks",
-      "Re-run profiling and Lighthouse to confirm improvement",
-      "Verify changes don't introduce regressions in other areas",
-      "Document findings, root causes, solutions, and benchmark comparisons",
-      "Share results with team and add to performance monitoring dashboard",
+      "End-to-end feature from discovery through spec, design, engineering, QA, beta testing, documentation, and public launch with monitoring.",
+    category: "Product",
+    categoryColor:
+      "text-indigo-500 bg-indigo-500/10 border-indigo-200 dark:border-indigo-800",
+    taskCount: 15,
+    createWhiteboard: true,
+    previewTasks: [
+      "Discovery & Research",
+      "Feature Specification",
+      "UX Design",
+      "Backend Engineering",
+      "QA Testing",
+    ],
+    fullTaskList: [
+      "Discovery & Research",
+      "Feature Specification",
+      "UX Design",
+      "Technical Design",
+      "Backend Engineering",
+      "Frontend Engineering",
+      "Integration Testing",
+      "QA Testing",
+      "Bug Fixes",
+      "Beta Program",
+      "Feature Flag Rollout",
+      "Help Documentation",
+      "Internal Training",
+      "Launch Marketing",
+      "Public Launch & Monitoring",
     ],
   },
   {
-    id: "builtin-sprint-planning",
-    name: "Sprint Planning",
+    id: "hiring-pipeline",
+    icon: <Users className="h-5 w-5" />,
+    name: "Hiring Pipeline",
     description:
-      "Sprint setup from backlog grooming through capacity confirmation and kickoff",
-    icon: "🗓️",
-    defaultPriority: TaskPriority.Medium,
-    checklistItems: [
-      "Review and groom the backlog — ensure all tickets have clear descriptions and acceptance criteria",
-      "Confirm team capacity: account for PTO, holidays, and non-development time",
-      "Select sprint goal: one clear sentence that describes the sprint's primary outcome",
-      "Pull candidate tickets into the sprint based on priority and dependency order",
-      "Estimate story points for each ticket as a team (Planning Poker recommended)",
-      "Verify total story points don't exceed team capacity (use 80% of theoretical max)",
-      "Assign tickets to team members based on skills and availability",
-      "Identify and resolve blockers or missing dependencies before the sprint starts",
-      "Update the project board — move all sprint tickets to 'To Do'",
-      "Send sprint kickoff summary to the team: goal, tickets, capacity, key dates",
-      "Schedule the sprint review and retrospective dates now",
+      "Full recruiting flow from job description through posting, screening, phone screens, panel interviews, offer letter, and onboarding prep.",
+    category: "HR",
+    categoryColor:
+      "text-emerald-500 bg-emerald-500/10 border-emerald-200 dark:border-emerald-800",
+    taskCount: 15,
+    createWhiteboard: false,
+    previewTasks: [
+      "Role Definition",
+      "Job Description",
+      "Job Posting",
+      "Resume Screening",
+      "Panel Interviews",
+    ],
+    fullTaskList: [
+      "Role Definition",
+      "Job Description",
+      "Job Posting",
+      "Sourcing Campaign",
+      "Application Tracking Setup",
+      "Resume Screening",
+      "Phone Screens",
+      "Technical Assessment",
+      "Interview Coordination",
+      "Panel Interviews",
+      "Interview Debrief",
+      "Reference Checks",
+      "Offer Letter",
+      "Background Check",
+      "Onboarding Prep",
     ],
   },
 ];
 
+const CATEGORIES = [
+  "All",
+  "Engineering",
+  "Product",
+  "Marketing",
+  "Design",
+  "Operations",
+  "Sales",
+  "HR",
+];
+
+// ─── Component ────────────────────────────────────────────────────────────────
+
 export default function ProjectTemplatesPage() {
-  const params = useParams({ strict: false });
-  const { projectId } = useParams({
-    from: "/app/$workspaceId/projects/$projectId/templates",
-  });
-  const workspaceId = params.workspaceId as string;
+  const { workspaceId } = useParams({ strict: false }) as {
+    workspaceId: string;
+  };
   const navigate = useNavigate();
   const { actor, isFetching } = useBackend();
-  const { tenantId, activeWorkspaceId } = useWorkspace();
-  const effectiveWorkspaceId = workspaceId || activeWorkspaceId || "";
+  const { tenantId } = useWorkspace();
   const queryClient = useQueryClient();
 
-  const [showForm, setShowForm] = useState(false);
   const [search, setSearch] = useState("");
-  const [name, setName] = useState("");
-  const [description, setDescription] = useState("");
-  const [priority, setPriority] = useState<TaskPriority>(TaskPriority.Medium);
-  const [checklistInput, setChecklistInput] = useState("");
-  const [checklistItems, setChecklistItems] = useState<string[]>([]);
+  const [activeCategory, setActiveCategory] = useState("All");
+  const [selectedTemplate, setSelectedTemplate] =
+    useState<ProjectTemplateCard | null>(null);
+  const [projectName, setProjectName] = useState("");
+  const [creatingId, setCreatingId] = useState<string | null>(null);
 
-  const { data: templates = [], isLoading } = useQuery<TaskTemplate[]>({
-    queryKey: ["taskTemplates", tenantId, effectiveWorkspaceId],
-    queryFn: async () => {
-      if (!actor) return [];
-      return actor.listTaskTemplates(tenantId, effectiveWorkspaceId);
-    },
-    enabled: !!actor && !isFetching,
+  const filtered = PROJECT_TEMPLATES.filter((t) => {
+    const matchCategory =
+      activeCategory === "All" || t.category === activeCategory;
+    const matchSearch =
+      !search.trim() ||
+      t.name.toLowerCase().includes(search.toLowerCase()) ||
+      t.description.toLowerCase().includes(search.toLowerCase());
+    return matchCategory && matchSearch;
   });
-
-  const projectTemplates = templates.filter(
-    (t) => !t.projectId || t.projectId === projectId,
-  );
-
-  const filteredBuiltIn = useMemo(() => {
-    if (!search.trim()) return BUILT_IN_TASK_TEMPLATES;
-    const q = search.toLowerCase();
-    return BUILT_IN_TASK_TEMPLATES.filter(
-      (t) =>
-        t.name.toLowerCase().includes(q) ||
-        t.description.toLowerCase().includes(q),
-    );
-  }, [search]);
-
-  const filteredCustom = useMemo(() => {
-    if (!search.trim()) return projectTemplates;
-    const q = search.toLowerCase();
-    return projectTemplates.filter(
-      (t) =>
-        t.name.toLowerCase().includes(q) ||
-        t.description.toLowerCase().includes(q),
-    );
-  }, [search, projectTemplates]);
 
   const createMutation = useMutation({
-    mutationFn: async () => {
+    mutationFn: async ({
+      template,
+      name,
+    }: { template: ProjectTemplateCard; name: string }) => {
       if (!actor) throw new Error("Not connected");
-      const r = await actor.createTaskTemplate(tenantId, effectiveWorkspaceId, {
-        name: name.trim(),
-        description: description.trim(),
-        projectId,
-        checklistItems,
-        defaultPriority: priority,
-      });
-      if (r.__kind__ === "err") throw new Error(r.err);
-      return r.ok;
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({
-        queryKey: ["taskTemplates", tenantId, effectiveWorkspaceId],
-      });
-      setShowForm(false);
-      setName("");
-      setDescription("");
-      setChecklistItems([]);
-      setChecklistInput("");
-      toast.success("Template created");
-    },
-    onError: (e: Error) => toast.error(e.message),
-  });
-
-  const useTaskTemplateMutation = useMutation({
-    mutationFn: async (template: TaskTemplate) => {
-      if (!actor) throw new Error("Not connected");
-      const r = await actor.createTask(tenantId, effectiveWorkspaceId, {
-        title: template.name,
-        description: template.description,
-        projectId,
-        priority: template.defaultPriority,
-        crossLinks: [],
-      });
-      if (r.__kind__ === "err") throw new Error(r.err);
-      return r.ok;
-    },
-    onSuccess: (task) => {
-      queryClient.invalidateQueries({
-        queryKey: ["tasks", tenantId, effectiveWorkspaceId, projectId],
-      });
-      toast.success("Task created from template");
-      navigate({
-        to: "/app/$workspaceId/projects/$projectId/tasks/$taskId",
-        params: {
-          workspaceId: effectiveWorkspaceId,
-          projectId,
-          taskId: task.id,
-        },
-      });
-    },
-    onError: (e: Error) => toast.error(e.message),
-  });
-
-  const useBuiltInTemplateMutation = useMutation({
-    mutationFn: async (template: BuiltInTaskTemplate) => {
-      if (!actor) throw new Error("Not connected");
-      const r = await actor.createTask(tenantId, effectiveWorkspaceId, {
-        title: template.name,
-        description: template.description,
-        projectId,
-        priority: template.defaultPriority,
-        crossLinks: [],
-      });
-      if (r.__kind__ === "err") throw new Error(r.err);
-      return r.ok;
-    },
-    onSuccess: (task) => {
-      queryClient.invalidateQueries({
-        queryKey: ["tasks", tenantId, effectiveWorkspaceId, projectId],
-      });
-      toast.success("Task created from template");
-      navigate({
-        to: "/app/$workspaceId/projects/$projectId/tasks/$taskId",
-        params: {
-          workspaceId: effectiveWorkspaceId,
-          projectId,
-          taskId: task.id,
-        },
-      });
-    },
-    onError: (e: Error) => toast.error(e.message),
-  });
-
-  const deleteMutation = useMutation({
-    mutationFn: async (id: string) => {
-      if (!actor) throw new Error("Not connected");
-      const r = await actor.deleteTaskTemplate(
+      setCreatingId(template.id);
+      const result = await actor.createProjectFromTemplate(
         tenantId,
-        effectiveWorkspaceId,
-        id,
+        workspaceId,
+        template.id,
+        name.trim() || template.name,
+        template.description,
       );
-      if (r.__kind__ === "err") throw new Error(r.err);
+      if (result.__kind__ === "err") throw new Error(result.err);
+      return result.ok;
     },
-    onSuccess: () => {
+    onSuccess: (projectId) => {
       queryClient.invalidateQueries({
-        queryKey: ["taskTemplates", tenantId, effectiveWorkspaceId],
+        queryKey: ["projects", tenantId, workspaceId],
       });
-      toast.success("Template deleted");
+      toast.success("Project created with all tasks and milestones!");
+      setCreatingId(null);
+      setSelectedTemplate(null);
+      navigate({
+        to: "/app/$workspaceId/projects/$projectId",
+        params: { workspaceId, projectId },
+      });
     },
-    onError: (e: Error) => toast.error(e.message),
+    onError: (err: Error) => {
+      setCreatingId(null);
+      toast.error(err.message || "Failed to create project from template");
+    },
   });
+
+  function handleUseTemplate(template: ProjectTemplateCard) {
+    setSelectedTemplate(template);
+    setProjectName(template.name);
+  }
+
+  function handleConfirmCreate() {
+    if (!selectedTemplate) return;
+    createMutation.mutate({ template: selectedTemplate, name: projectName });
+  }
 
   return (
-    <div className="flex flex-col h-full min-h-0 overflow-y-auto">
+    <div className="flex flex-col h-full min-h-0 overflow-y-auto pb-20 md:pb-0">
       {/* Header */}
-      <div className="px-4 sm:px-6 md:px-8 pt-4 pb-4 border-b border-border/60 bg-card/80 sticky top-0 z-10 backdrop-blur-subtle">
-        <div className="flex items-center gap-3">
+      <div className="px-4 sm:px-6 md:px-8 pt-4 pb-4 border-b border-border/60 bg-card/80 sticky top-0 z-10 backdrop-blur-sm">
+        <div className="flex items-center gap-3 max-w-6xl mx-auto">
           <Button
             variant="ghost"
             size="icon"
-            className="h-8 w-8"
+            className="h-9 w-9 min-h-[44px] min-w-[44px] shrink-0"
             onClick={() =>
               navigate({
-                to: "/app/$workspaceId/projects/$projectId",
-                params: { workspaceId: effectiveWorkspaceId, projectId },
+                to: "/app/$workspaceId/projects",
+                params: { workspaceId },
               })
             }
-            aria-label="Back"
+            aria-label="Back to Projects"
           >
             <ArrowLeft className="h-4 w-4" />
           </Button>
-          <div className="flex items-center gap-1.5 text-xs text-muted-foreground min-w-0">
-            <Link
-              to="/app/$workspaceId/projects"
-              params={{ workspaceId: effectiveWorkspaceId }}
-              className="hover:text-foreground transition-colors"
-            >
-              Projects
-            </Link>
-            <span>/</span>
-            <Link
-              to="/app/$workspaceId/projects/$projectId"
-              params={{ workspaceId: effectiveWorkspaceId, projectId }}
-              className="hover:text-foreground transition-colors"
-            >
-              Project
-            </Link>
-            <span>/</span>
-            <span className="text-foreground font-medium">Templates</span>
+          <div className="flex items-center gap-2.5 min-w-0">
+            <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-orange-500/10 shrink-0">
+              <FolderKanban className="h-3.5 w-3.5 text-orange-500" />
+            </div>
+            <div className="min-w-0">
+              <h1 className="font-display text-base sm:text-lg font-bold text-foreground tracking-tight">
+                Project Templates
+              </h1>
+              <p className="text-xs text-muted-foreground hidden sm:block">
+                {PROJECT_TEMPLATES.length} templates — each pre-loaded with real
+                tasks, milestones, and priorities
+              </p>
+            </div>
           </div>
-          <div className="ml-auto">
+          <div className="ml-auto shrink-0">
             <Button
               size="sm"
-              className="gap-1.5 h-8 text-xs active-press"
-              onClick={() => setShowForm(true)}
-              data-ocid="create-template-btn"
+              variant="outline"
+              asChild
+              className="gap-1.5 h-9 text-xs min-h-[44px]"
+              data-ocid="new-blank-project-btn"
             >
-              <Plus className="h-3.5 w-3.5" /> New Template
+              <Link
+                to="/app/$workspaceId/projects/new"
+                params={{ workspaceId }}
+              >
+                <FolderKanban className="h-3.5 w-3.5" />
+                <span className="hidden sm:inline">Blank Project</span>
+              </Link>
             </Button>
           </div>
         </div>
       </div>
 
-      <div className="px-4 sm:px-6 md:px-8 py-6 space-y-6">
-        {/* Search */}
-        <div className="relative">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
-          <Input
-            placeholder="Search templates…"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="pl-9"
-            data-ocid="template-search-input"
-          />
+      <div className="px-4 sm:px-6 md:px-8 py-5 max-w-6xl mx-auto w-full space-y-5">
+        {/* Search + category filters */}
+        <div className="flex flex-col sm:flex-row gap-3">
+          <div className="relative flex-1">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
+            <Input
+              placeholder="Search templates…"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="pl-9 h-9"
+              data-ocid="template-search"
+            />
+          </div>
+          <div className="flex gap-1.5 overflow-x-auto scrollbar-none pb-0.5">
+            {CATEGORIES.map((cat) => (
+              <button
+                key={cat}
+                type="button"
+                onClick={() => setActiveCategory(cat)}
+                className={`shrink-0 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors min-h-[36px] whitespace-nowrap ${
+                  activeCategory === cat
+                    ? "bg-primary text-primary-foreground"
+                    : "bg-muted/50 text-muted-foreground hover:text-foreground hover:bg-muted"
+                }`}
+                data-ocid={`cat-filter-${cat}`}
+              >
+                {cat}
+              </button>
+            ))}
+          </div>
         </div>
 
-        {/* Create form */}
-        {showForm && (
+        {/* Confirm dialog */}
+        {selectedTemplate && (
           <div
-            className="rounded-2xl border border-primary/30 bg-card p-5 space-y-4"
-            data-ocid="template-create-form"
+            className="rounded-2xl border border-primary/30 bg-card p-5 space-y-4 shadow-lg"
+            data-ocid="template-confirm-panel"
           >
-            <div className="flex items-center justify-between">
-              <h3 className="font-display text-sm font-bold text-foreground">
-                New Template
-              </h3>
-              <Button
+            <div className="flex items-start justify-between gap-3">
+              <div className="flex items-start gap-3">
+                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
+                  {selectedTemplate.icon}
+                </div>
+                <div>
+                  <h3 className="font-display text-sm font-bold text-foreground">
+                    Use "{selectedTemplate.name}" Template
+                  </h3>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    Creates a new project with {selectedTemplate.taskCount}{" "}
+                    pre-built tasks
+                    {selectedTemplate.createWhiteboard
+                      ? " + 1 planning whiteboard"
+                      : ""}
+                  </p>
+                </div>
+              </div>
+              <button
                 type="button"
-                variant="ghost"
-                size="icon"
-                className="h-7 w-7"
-                onClick={() => setShowForm(false)}
+                aria-label="Close"
+                onClick={() => setSelectedTemplate(null)}
+                className="h-7 w-7 flex items-center justify-center rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors shrink-0"
               >
                 <X className="h-4 w-4" />
-              </Button>
+              </button>
             </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div className="space-y-1.5">
-                <Label className="text-xs">Template Name *</Label>
-                <Input
-                  placeholder="e.g. Bug Report"
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  className="h-8 text-sm"
-                  data-ocid="template-name-input"
-                />
-              </div>
-              <div className="space-y-1.5">
-                <Label className="text-xs">Default Priority</Label>
-                <select
-                  value={priority}
-                  onChange={(e) => setPriority(e.target.value as TaskPriority)}
-                  className="h-8 w-full rounded-md border border-input bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
-                  data-ocid="template-priority-select"
-                >
-                  {Object.values(TaskPriority).map((p) => (
-                    <option key={p} value={p}>
-                      {p}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div className="space-y-1.5 sm:col-span-2">
-                <Label className="text-xs">Description</Label>
-                <Textarea
-                  placeholder="Task description..."
-                  value={description}
-                  onChange={(e) => setDescription(e.target.value)}
-                  className="text-sm resize-none"
-                  rows={2}
-                  data-ocid="template-desc-input"
-                />
-              </div>
-              <div className="space-y-1.5 sm:col-span-2">
-                <Label className="text-xs">Checklist Items</Label>
-                <div className="flex gap-2">
-                  <Input
-                    placeholder="Add checklist item…"
-                    value={checklistInput}
-                    onChange={(e) => setChecklistInput(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter" && checklistInput.trim()) {
-                        setChecklistItems((prev) => [
-                          ...prev,
-                          checklistInput.trim(),
-                        ]);
-                        setChecklistInput("");
-                      }
-                    }}
-                    className="h-8 text-sm"
-                    data-ocid="template-checklist-input"
-                  />
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    className="h-8 px-3 text-xs shrink-0"
-                    onClick={() => {
-                      if (checklistInput.trim()) {
-                        setChecklistItems((prev) => [
-                          ...prev,
-                          checklistInput.trim(),
-                        ]);
-                        setChecklistInput("");
-                      }
-                    }}
-                  >
-                    Add
-                  </Button>
-                </div>
-                {checklistItems.length > 0 && (
-                  <div className="space-y-1 mt-2">
-                    {checklistItems.map((item) => (
-                      <div
-                        key={item}
-                        className="flex items-center gap-2 text-xs text-muted-foreground"
-                      >
-                        <CheckSquare className="h-3.5 w-3.5 text-primary" />
-                        <span className="flex-1">{item}</span>
-                        <button
-                          type="button"
-                          aria-label="Remove"
-                          onClick={() =>
-                            setChecklistItems((prev) =>
-                              prev.filter((i) => i !== item),
-                            )
-                          }
-                          className="text-muted-foreground hover:text-destructive transition-colors"
-                        >
-                          <X className="h-3 w-3" />
-                        </button>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            </div>
-            <div className="flex gap-2 pt-1">
-              <Button
-                type="button"
-                size="sm"
-                className="gap-1.5 text-xs h-8"
-                disabled={!name.trim() || createMutation.isPending}
-                onClick={() => createMutation.mutate()}
-                data-ocid="template-save-btn"
+            <div className="space-y-1.5">
+              <label
+                className="text-xs font-medium text-muted-foreground"
+                htmlFor="confirm-project-name"
               >
-                {createMutation.isPending && (
-                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                Project Name
+              </label>
+              <Input
+                id="confirm-project-name"
+                value={projectName}
+                onChange={(e) => setProjectName(e.target.value)}
+                placeholder={selectedTemplate.name}
+                className="h-9 text-sm"
+                data-ocid="confirm-project-name-input"
+              />
+            </div>
+            <div className="flex gap-2">
+              <Button
+                size="sm"
+                onClick={handleConfirmCreate}
+                disabled={createMutation.isPending || isFetching}
+                className="gap-1.5 text-xs min-h-[44px]"
+                data-ocid="confirm-create-btn"
+              >
+                {createMutation.isPending ? (
+                  <>
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    Creating project…
+                  </>
+                ) : (
+                  <>
+                    <CheckCircle2 className="h-3.5 w-3.5" />
+                    Create Project
+                  </>
                 )}
-                Create Template
               </Button>
               <Button
-                type="button"
-                variant="ghost"
                 size="sm"
-                className="text-xs h-8"
-                onClick={() => setShowForm(false)}
+                variant="ghost"
+                onClick={() => setSelectedTemplate(null)}
+                className="text-xs min-h-[44px]"
               >
                 Cancel
               </Button>
@@ -683,193 +712,166 @@ export default function ProjectTemplatesPage() {
           </div>
         )}
 
-        {/* Built-in templates section */}
-        <section>
-          <h2 className="font-display text-sm font-bold text-foreground mb-3 flex items-center gap-2">
-            <Star className="h-4 w-4 text-primary" />
-            Built-in Templates
-            <Badge variant="secondary" className="text-xs font-normal">
-              {filteredBuiltIn.length}
-            </Badge>
-          </h2>
-          {filteredBuiltIn.length === 0 ? (
-            <p className="text-sm text-muted-foreground py-4 text-center">
-              No built-in templates match your search.
+        {/* Template grid */}
+        {filtered.length === 0 ? (
+          <div
+            className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-border py-16 gap-4"
+            data-ocid="templates-empty"
+          >
+            <FolderKanban className="h-10 w-10 text-muted-foreground/30" />
+            <p className="text-sm text-muted-foreground">
+              No templates match your search.
             </p>
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={() => {
+                setSearch("");
+                setActiveCategory("All");
+              }}
+            >
+              Clear filters
+            </Button>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            {filtered.map((template) => {
+              const isCreating = creatingId === template.id;
+              return (
+                <TemplateCard
+                  key={template.id}
+                  template={template}
+                  isCreating={isCreating}
+                  isSelected={selectedTemplate?.id === template.id}
+                  onSelect={() => handleUseTemplate(template)}
+                />
+              );
+            })}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ─── Template Card ────────────────────────────────────────────────────────────
+
+function TemplateCard({
+  template,
+  isCreating,
+  isSelected,
+  onSelect,
+}: {
+  template: ProjectTemplateCard;
+  isCreating: boolean;
+  isSelected: boolean;
+  onSelect: () => void;
+}) {
+  const [expanded, setExpanded] = useState(false);
+
+  return (
+    <div
+      className={`flex flex-col rounded-2xl border bg-card overflow-hidden transition-all duration-150 hover:shadow-md ${
+        isSelected
+          ? "border-primary ring-1 ring-primary/20"
+          : "border-border/50 hover:border-primary/30"
+      }`}
+      data-ocid={`template-card-${template.id}`}
+    >
+      {/* Header */}
+      <div className="p-4 pb-3 flex items-start gap-3">
+        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-muted/50 text-foreground">
+          {template.icon}
+        </div>
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2 flex-wrap">
+            <h3 className="font-display font-bold text-foreground text-sm">
+              {template.name}
+            </h3>
+            <Badge
+              variant="outline"
+              className={`text-[10px] px-1.5 py-0 h-4 font-medium shrink-0 ${template.categoryColor}`}
+            >
+              {template.category}
+            </Badge>
+          </div>
+          <p className="text-xs text-muted-foreground mt-1 line-clamp-2 leading-relaxed">
+            {template.description}
+          </p>
+        </div>
+      </div>
+
+      {/* Stats row */}
+      <div className="px-4 pb-3 flex items-center gap-3 text-xs text-muted-foreground">
+        <span className="flex items-center gap-1">
+          <div className="h-1.5 w-1.5 rounded-full bg-primary/50" />
+          {template.taskCount} tasks
+        </span>
+        {template.createWhiteboard && (
+          <span className="flex items-center gap-1">
+            <div className="h-1.5 w-1.5 rounded-full bg-secondary/60" />1
+            whiteboard
+          </span>
+        )}
+      </div>
+
+      {/* Preview tasks */}
+      <div className="px-4 pb-3 space-y-1.5">
+        {(expanded ? template.fullTaskList : template.previewTasks).map(
+          (task) => (
+            <div
+              key={task}
+              className="flex items-center gap-2 text-xs text-muted-foreground"
+            >
+              <div className="h-1 w-1 rounded-full bg-muted-foreground/40 shrink-0" />
+              <span className="truncate">{task}</span>
+            </div>
+          ),
+        )}
+        <button
+          type="button"
+          onClick={() => setExpanded((v) => !v)}
+          className="flex items-center gap-1 text-[11px] text-primary hover:underline mt-1"
+          data-ocid={`toggle-tasks-${template.id}`}
+        >
+          {expanded ? (
+            <>Show fewer tasks</>
           ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-              {filteredBuiltIn.map((t) => (
-                <div
-                  key={t.id}
-                  className="rounded-2xl border border-border bg-card p-5 flex flex-col gap-3 hover:shadow-sm transition-smooth"
-                  data-ocid={`builtin-template-card-${t.id}`}
-                >
-                  <div className="flex items-start gap-3">
-                    <span className="text-2xl">{t.icon}</span>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <h3 className="font-display font-bold text-foreground text-sm truncate">
-                          {t.name}
-                        </h3>
-                        <Badge variant="secondary" className="text-xs shrink-0">
-                          <Star className="h-2.5 w-2.5 mr-1" />
-                          Built-in
-                        </Badge>
-                      </div>
-                      <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">
-                        {t.description}
-                      </p>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <Badge
-                      variant="outline"
-                      className={`text-xs ${PRIORITY_COLOR[t.defaultPriority]}`}
-                    >
-                      {t.defaultPriority}
-                    </Badge>
-                    {t.checklistItems.length > 0 && (
-                      <span className="text-xs text-muted-foreground flex items-center gap-1">
-                        <CheckSquare className="h-3 w-3" />
-                        {t.checklistItems.length} items
-                      </span>
-                    )}
-                  </div>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    className="w-full gap-1.5 text-xs h-8 mt-auto"
-                    onClick={() => useBuiltInTemplateMutation.mutate(t)}
-                    disabled={useBuiltInTemplateMutation.isPending}
-                    data-ocid={`use-builtin-template-${t.id}`}
-                  >
-                    <Plus className="h-3.5 w-3.5" />
-                    Use Template
-                  </Button>
-                </div>
-              ))}
-            </div>
+            <>
+              <ChevronRight className="h-3 w-3" />+
+              {template.fullTaskList.length - template.previewTasks.length} more
+              tasks
+            </>
           )}
-        </section>
+        </button>
+      </div>
 
-        {/* Custom templates section */}
-        <section>
-          <h2 className="font-display text-sm font-bold text-foreground mb-3 flex items-center gap-2">
-            Your Templates
-            <Badge variant="secondary" className="text-xs font-normal">
-              {filteredCustom.length}
-            </Badge>
-          </h2>
-
-          {isLoading && (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-              {[1, 2, 3].map((n) => (
-                <Skeleton key={n} className="h-40 w-full rounded-2xl" />
-              ))}
-            </div>
+      {/* Action */}
+      <div className="mt-auto px-4 pb-4 pt-1">
+        <Button
+          size="sm"
+          className="w-full gap-1.5 text-xs h-9 min-h-[44px]"
+          onClick={onSelect}
+          disabled={isCreating}
+          data-ocid={`use-template-btn-${template.id}`}
+        >
+          {isCreating ? (
+            <>
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              Creating…
+            </>
+          ) : isSelected ? (
+            <>
+              <CheckCircle2 className="h-3.5 w-3.5" />
+              Selected
+            </>
+          ) : (
+            <>
+              <FolderKanban className="h-3.5 w-3.5" />
+              Use Template
+            </>
           )}
-
-          {!isLoading &&
-            filteredCustom.length === 0 &&
-            !search.trim() &&
-            !showForm && (
-              <div
-                className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-border py-12 gap-4"
-                data-ocid="templates-empty"
-              >
-                <div className="h-14 w-14 rounded-2xl bg-primary/10 flex items-center justify-center">
-                  <FileCode2 className="h-7 w-7 text-primary" />
-                </div>
-                <div className="text-center">
-                  <h3 className="font-display font-bold text-foreground">
-                    No custom templates yet
-                  </h3>
-                  <p className="text-sm text-muted-foreground mt-1 max-w-xs">
-                    Use a built-in template above, or create your own to speed
-                    up repetitive work.
-                  </p>
-                </div>
-                <Button
-                  size="sm"
-                  className="gap-1.5 text-xs"
-                  onClick={() => setShowForm(true)}
-                  data-ocid="create-first-template-btn"
-                >
-                  <Plus className="h-3.5 w-3.5" />
-                  Create Template
-                </Button>
-              </div>
-            )}
-
-          {!isLoading && filteredCustom.length === 0 && search.trim() && (
-            <p className="text-sm text-muted-foreground py-4 text-center">
-              No custom templates match your search.
-            </p>
-          )}
-
-          {filteredCustom.length > 0 && (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-              {filteredCustom.map((t) => (
-                <div
-                  key={t.id}
-                  className="rounded-2xl border border-border bg-card p-5 flex flex-col gap-3 hover:shadow-sm transition-smooth"
-                  data-ocid={`template-card-${t.id}`}
-                >
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="flex-1 min-w-0">
-                      <h3 className="font-display font-bold text-foreground truncate">
-                        {t.name}
-                      </h3>
-                      {t.description && (
-                        <p className="text-sm text-muted-foreground line-clamp-2 mt-0.5">
-                          {t.description}
-                        </p>
-                      )}
-                    </div>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="icon"
-                      className="h-7 w-7 shrink-0 text-muted-foreground hover:text-destructive"
-                      onClick={() => deleteMutation.mutate(t.id)}
-                      aria-label="Delete template"
-                      data-ocid={`delete-template-${t.id}`}
-                    >
-                      <Trash2 className="h-3.5 w-3.5" />
-                    </Button>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <Badge
-                      variant="outline"
-                      className={`text-xs ${PRIORITY_COLOR[t.defaultPriority]}`}
-                    >
-                      {t.defaultPriority}
-                    </Badge>
-                    {t.checklistItems.length > 0 && (
-                      <span className="text-xs text-muted-foreground flex items-center gap-1">
-                        <CheckSquare className="h-3 w-3" />
-                        {t.checklistItems.length} items
-                      </span>
-                    )}
-                  </div>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    className="w-full gap-1.5 text-xs h-8 mt-auto"
-                    onClick={() => useTaskTemplateMutation.mutate(t)}
-                    disabled={useTaskTemplateMutation.isPending}
-                    data-ocid={`use-template-${t.id}`}
-                  >
-                    <Plus className="h-3.5 w-3.5" />
-                    Use Template
-                  </Button>
-                </div>
-              ))}
-            </div>
-          )}
-        </section>
+        </Button>
       </div>
     </div>
   );

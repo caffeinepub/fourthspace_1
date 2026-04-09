@@ -2149,7 +2149,8 @@ export default function ProjectNewPage() {
             description: task.description,
             projectId: project.id,
             priority: toPriority(task.priority),
-            crossLinks: [] as never[],
+            crossLinks: [],
+            tags: [],
           });
           // Non-critical: if a task creation fails, continue with others
           if (taskResult.__kind__ === "err") {

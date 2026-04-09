@@ -10,8 +10,11 @@ import {
   AlertTriangle,
   ArrowLeft,
   CheckCircle2,
+  ChevronDown,
+  ChevronRight,
   Clock,
   Flag,
+  FolderKanban,
   Loader2,
   Plus,
   Trash2,
@@ -21,7 +24,12 @@ import { useState } from "react";
 import { toast } from "sonner";
 import { useBackend } from "../../hooks/useBackend";
 import { useWorkspace } from "../../hooks/useWorkspace";
-import { type Milestone, MilestoneStatus } from "../../types";
+import {
+  type Milestone,
+  MilestoneStatus,
+  type Task,
+  TaskStatus,
+} from "../../types";
 
 const STATUS_CONFIG: Record<
   MilestoneStatus,
@@ -42,6 +50,30 @@ const STATUS_CONFIG: Record<
     label: "Missed",
     color: "bg-destructive/10 text-destructive border-destructive/30",
     icon: <AlertTriangle className="h-3.5 w-3.5" />,
+  },
+};
+
+const TASK_STATUS_BADGE: Record<
+  TaskStatus,
+  { label: string; className: string }
+> = {
+  [TaskStatus.Todo]: {
+    label: "To Do",
+    className: "bg-muted text-muted-foreground border-border",
+  },
+  [TaskStatus.InProgress]: {
+    label: "In Progress",
+    className:
+      "bg-orange-500/10 text-orange-600 border-orange-200 dark:border-orange-800 dark:text-orange-400",
+  },
+  [TaskStatus.Done]: {
+    label: "Done",
+    className:
+      "bg-emerald-500/10 text-emerald-700 border-emerald-200 dark:border-emerald-800 dark:text-emerald-400",
+  },
+  [TaskStatus.Blocked]: {
+    label: "Blocked",
+    className: "bg-destructive/10 text-destructive border-destructive/30",
   },
 };
 
@@ -70,12 +102,24 @@ export default function MilestonesPage() {
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [dueDate, setDueDate] = useState("");
+  const [expandedMilestones, setExpandedMilestones] = useState<Set<string>>(
+    new Set(),
+  );
 
   const { data: milestones = [], isLoading } = useQuery<Milestone[]>({
     queryKey: ["milestones", tenantId, workspaceId, projectId],
     queryFn: async () => {
       if (!actor) return [];
       return actor.listMilestones(tenantId, workspaceId, projectId);
+    },
+    enabled: !!actor && !isFetching,
+  });
+
+  const { data: tasks = [] } = useQuery<Task[]>({
+    queryKey: ["tasks", tenantId, workspaceId, projectId],
+    queryFn: async () => {
+      if (!actor) return [];
+      return actor.listTasks(tenantId, workspaceId, projectId);
     },
     enabled: !!actor && !isFetching,
   });
@@ -144,6 +188,15 @@ export default function MilestonesPage() {
     onError: (e: Error) => toast.error(e.message),
   });
 
+  function toggleExpand(id: string) {
+    setExpandedMilestones((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
   const sorted = [...milestones].sort((a, b) => Number(a.dueDate - b.dueDate));
 
   return (
@@ -154,7 +207,7 @@ export default function MilestonesPage() {
           <Button
             variant="ghost"
             size="icon"
-            className="h-8 w-8"
+            className="h-8 w-8 min-h-[44px] min-w-[44px]"
             onClick={() =>
               navigate({
                 to: "/app/$workspaceId/projects/$projectId",
@@ -187,7 +240,7 @@ export default function MilestonesPage() {
           <div className="ml-auto">
             <Button
               size="sm"
-              className="gap-1.5 h-8 text-xs active-press"
+              className="gap-1.5 h-8 text-xs active-press min-h-[44px]"
               onClick={() => setShowForm(true)}
               data-ocid="create-milestone-btn"
             >
@@ -325,6 +378,19 @@ export default function MilestonesPage() {
               {sorted.map((m) => {
                 const cfg = STATUS_CONFIG[m.status];
                 const isUpcoming = m.status === MilestoneStatus.upcoming;
+                const isExpanded = expandedMilestones.has(m.id);
+                const linkedTasks = tasks.filter((t) =>
+                  m.linkedTaskIds.includes(t.id),
+                );
+                const linkedDone = linkedTasks.filter(
+                  (t) => t.status === TaskStatus.Done,
+                ).length;
+                const linkedTotal = linkedTasks.length;
+                const pct =
+                  linkedTotal > 0
+                    ? Math.round((linkedDone / linkedTotal) * 100)
+                    : 0;
+
                 return (
                   <div
                     key={m.id}
@@ -342,7 +408,13 @@ export default function MilestonesPage() {
                       aria-hidden
                     />
                     <div
-                      className={`flex-1 rounded-2xl border ${m.status === MilestoneStatus.reached ? "border-emerald-200 dark:border-emerald-800 bg-emerald-500/5" : m.status === MilestoneStatus.missed ? "border-destructive/30 bg-destructive/5" : "border-border bg-card"} p-4`}
+                      className={`flex-1 rounded-2xl border ${
+                        m.status === MilestoneStatus.reached
+                          ? "border-emerald-200 dark:border-emerald-800 bg-emerald-500/5"
+                          : m.status === MilestoneStatus.missed
+                            ? "border-destructive/30 bg-destructive/5"
+                            : "border-border bg-card"
+                      } p-4`}
                     >
                       <div className="flex items-start justify-between gap-2">
                         <div className="flex-1 min-w-0">
@@ -369,11 +441,54 @@ export default function MilestonesPage() {
                               Due {formatDate(m.dueDate)}
                             </span>
                             {m.linkedTaskIds.length > 0 && (
-                              <span>{m.linkedTaskIds.length} linked tasks</span>
+                              <span>
+                                {m.linkedTaskIds.length} linked task
+                                {m.linkedTaskIds.length !== 1 ? "s" : ""}
+                              </span>
                             )}
                           </div>
+
+                          {/* Progress bar */}
+                          {linkedTotal > 0 && (
+                            <div className="mt-3 space-y-1">
+                              <div className="flex items-center justify-between text-[11px] text-muted-foreground">
+                                <span>
+                                  {linkedDone}/{linkedTotal} tasks done
+                                </span>
+                                <span className="font-mono font-semibold text-foreground">
+                                  {pct}%
+                                </span>
+                              </div>
+                              <div className="h-1.5 w-full rounded-full bg-muted overflow-hidden">
+                                <div
+                                  className="h-full bg-primary rounded-full transition-all"
+                                  style={{ width: `${pct}%` }}
+                                />
+                              </div>
+                            </div>
+                          )}
                         </div>
                         <div className="flex items-center gap-2 shrink-0">
+                          {linkedTasks.length > 0 && (
+                            <button
+                              type="button"
+                              onClick={() => toggleExpand(m.id)}
+                              className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors min-h-[44px] px-1"
+                              aria-label={
+                                isExpanded ? "Collapse tasks" : "Show tasks"
+                              }
+                              data-ocid={`milestone-expand-${m.id}`}
+                            >
+                              {isExpanded ? (
+                                <ChevronDown className="h-4 w-4" />
+                              ) : (
+                                <ChevronRight className="h-4 w-4" />
+                              )}
+                              <span className="hidden sm:inline text-[11px]">
+                                {isExpanded ? "Hide" : "Tasks"}
+                              </span>
+                            </button>
+                          )}
                           {isUpcoming && (
                             <Button
                               type="button"
@@ -385,14 +500,16 @@ export default function MilestonesPage() {
                               data-ocid={`mark-reached-${m.id}`}
                             >
                               <CheckCircle2 className="h-3 w-3" />
-                              Mark Reached
+                              <span className="hidden sm:inline">
+                                Mark Reached
+                              </span>
                             </Button>
                           )}
                           <Button
                             type="button"
                             variant="ghost"
                             size="icon"
-                            className="h-7 w-7 text-muted-foreground hover:text-destructive"
+                            className="h-7 w-7 text-muted-foreground hover:text-destructive min-h-[44px] min-w-[44px]"
                             onClick={() => deleteMutation.mutate(m.id)}
                             aria-label="Delete milestone"
                             data-ocid={`delete-milestone-${m.id}`}
@@ -401,6 +518,43 @@ export default function MilestonesPage() {
                           </Button>
                         </div>
                       </div>
+
+                      {/* Linked tasks expandable list */}
+                      {isExpanded && linkedTasks.length > 0 && (
+                        <div className="mt-4 pt-4 border-t border-border/60 space-y-2">
+                          <p className="text-xs font-semibold text-foreground mb-2">
+                            Linked Tasks
+                          </p>
+                          {linkedTasks.map((t) => {
+                            const tb =
+                              TASK_STATUS_BADGE[t.status] ??
+                              TASK_STATUS_BADGE[TaskStatus.Todo];
+                            return (
+                              <Link
+                                key={t.id}
+                                to="/app/$workspaceId/projects/$projectId/tasks/$taskId"
+                                params={{
+                                  workspaceId,
+                                  projectId,
+                                  taskId: t.id,
+                                }}
+                                className="flex items-center gap-2 rounded-lg px-2 py-2 hover:bg-muted/50 transition-colors group"
+                                data-ocid={`milestone-task-${t.id}`}
+                              >
+                                <FolderKanban className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                                <span className="flex-1 text-sm text-foreground truncate group-hover:text-primary transition-colors">
+                                  {t.title}
+                                </span>
+                                <span
+                                  className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-medium border ${tb.className}`}
+                                >
+                                  {tb.label}
+                                </span>
+                              </Link>
+                            );
+                          })}
+                        </div>
+                      )}
                     </div>
                   </div>
                 );

@@ -10,6 +10,7 @@ import { Link, useNavigate, useParams } from "@tanstack/react-router";
 import {
   ArrowLeft,
   Bold,
+  ChevronUp,
   Code,
   CornerUpLeft,
   Download,
@@ -19,14 +20,16 @@ import {
   Italic,
   Link2,
   List,
+  Loader2,
   Lock,
+  MessageCircle,
   MessageSquare,
   Pin,
   Send,
   Users,
   X,
 } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { EmojiPicker } from "../../components/chat/EmojiPicker";
 import { useBackend } from "../../hooks/useBackend";
@@ -45,20 +48,7 @@ import {
   renderFormattedText,
 } from "../../utils/messageFormat";
 
-// ─── Formatted Content ──────────────────────────────────────────────────────
-
-function FormattedContent({ html }: { html: string }) {
-  return (
-    <p
-      className="text-sm text-foreground leading-relaxed"
-      ref={(el) => {
-        if (el) el.innerHTML = html;
-      }}
-    />
-  );
-}
-
-// ─── Helpers ───────────────────────────────────────────────────────────────
+// ─── Helpers ────────────────────────────────────────────────────────────────
 
 function senderInitials(id: { toString(): string }): string {
   return id.toString().slice(0, 2).toUpperCase();
@@ -71,6 +61,7 @@ const AVATAR_COLORS = [
   "bg-sky-500/20 text-sky-700 dark:text-sky-300",
   "bg-pink-500/20 text-pink-700 dark:text-pink-300",
 ];
+
 function avatarColor(id: { toString(): string }): string {
   let hash = 0;
   const s = id.toString();
@@ -96,7 +87,17 @@ function formatRelativeTime(createdAt: bigint): string {
   return d.toLocaleDateString([], { month: "short", day: "numeric" });
 }
 
-// ─── File Attachment Preview ────────────────────────────────────────────────
+function formatAbsoluteTime(createdAt: bigint): string {
+  const ms = Number(createdAt) / 1_000_000;
+  return new Date(ms).toLocaleString([], {
+    month: "short",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
+// ─── File Attachments ────────────────────────────────────────────────────────
 
 function FileAttachments({ content }: { content: string }) {
   const urls = extractUrls(content);
@@ -155,7 +156,20 @@ function FileAttachments({ content }: { content: string }) {
   );
 }
 
-// ─── Reaction Bar ──────────────────────────────────────────────────────────
+// ─── Formatted Content ───────────────────────────────────────────────────────
+
+function FormattedContent({ html }: { html: string }) {
+  return (
+    <p
+      className="text-sm text-foreground leading-relaxed"
+      ref={(el) => {
+        if (el) el.innerHTML = html;
+      }}
+    />
+  );
+}
+
+// ─── Reaction Bar ─────────────────────────────────────────────────────────────
 
 interface ReactionBarProps {
   reactions: Reaction[];
@@ -208,7 +222,7 @@ function ReactionBar({ reactions, myPrincipal, onToggle }: ReactionBarProps) {
   );
 }
 
-// ─── Message Bubble ─────────────────────────────────────────────────────────
+// ─── Message Bubble ──────────────────────────────────────────────────────────
 
 interface MessageBubbleProps {
   msg: Message;
@@ -221,6 +235,7 @@ interface MessageBubbleProps {
   isMention: boolean;
   workspaceId: string;
   isGrouped?: boolean;
+  memberDisplayName?: string;
 }
 
 export function MessageBubble({
@@ -234,8 +249,11 @@ export function MessageBubble({
   isMention,
   workspaceId,
   isGrouped = false,
+  memberDisplayName,
 }: MessageBubbleProps) {
   const formattedHtml = renderFormattedText(msg.content);
+  const senderLabel =
+    memberDisplayName ?? `${msg.senderId.toString().slice(0, 12)}…`;
 
   return (
     <div
@@ -250,7 +268,7 @@ export function MessageBubble({
     >
       {isGrouped ? (
         <div className="w-8 shrink-0 flex items-center justify-center">
-          <span className="text-[10px] text-muted-foreground/50 opacity-0 group-hover:opacity-100 transition-opacity">
+          <span className="text-[10px] text-muted-foreground/50 opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap">
             {formatRelativeTime(msg.createdAt).split(" ").slice(-1)[0]}
           </span>
         </div>
@@ -264,11 +282,14 @@ export function MessageBubble({
 
       <div className="flex-1 min-w-0 space-y-0.5">
         {!isGrouped && (
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
             <span className="text-xs font-semibold text-foreground">
-              {msg.senderId.toString().slice(0, 10)}…
+              {senderLabel}
             </span>
-            <span className="text-xs text-muted-foreground">
+            <span
+              className="text-xs text-muted-foreground cursor-default"
+              title={formatAbsoluteTime(msg.createdAt)}
+            >
               {formatRelativeTime(msg.createdAt)}
             </span>
             {isPinned && (
@@ -276,8 +297,7 @@ export function MessageBubble({
                 variant="outline"
                 className="text-[10px] py-0 gap-0.5 border-amber-500/40 text-amber-600 dark:text-amber-400"
               >
-                <Pin className="h-2.5 w-2.5" />
-                Pinned
+                <Pin className="h-2.5 w-2.5" /> Pinned
               </Badge>
             )}
           </div>
@@ -380,7 +400,7 @@ export function MessageBubble({
   );
 }
 
-// ─── Channel Info Panel ─────────────────────────────────────────────────────
+// ─── Channel Info Panel ──────────────────────────────────────────────────────
 
 export function ChannelInfoPanel({ channel }: { channel: Channel }) {
   return (
@@ -397,13 +417,11 @@ export function ChannelInfoPanel({ channel }: { channel: Channel }) {
             variant="outline"
             className="text-xs gap-1 border-teal-500/30 text-teal-600 dark:text-teal-400"
           >
-            <Globe className="h-2.5 w-2.5" />
-            Public
+            <Globe className="h-2.5 w-2.5" /> Public
           </Badge>
         ) : (
           <Badge variant="outline" className="text-xs gap-1">
-            <Lock className="h-2.5 w-2.5" />
-            Private
+            <Lock className="h-2.5 w-2.5" /> Private
           </Badge>
         )}
         {channel.description && (
@@ -457,7 +475,7 @@ export function ChannelInfoPanel({ channel }: { channel: Channel }) {
   );
 }
 
-// ─── Formatting Toolbar ─────────────────────────────────────────────────────
+// ─── Formatting Toolbar ──────────────────────────────────────────────────────
 
 interface FormattingToolbarProps {
   textareaRef: React.RefObject<HTMLTextAreaElement | null>;
@@ -537,7 +555,9 @@ function FormattingToolbar({
   );
 }
 
-// ─── Main Page ──────────────────────────────────────────────────────────────
+// ─── Main Page ───────────────────────────────────────────────────────────────
+
+const CHAR_WARN_THRESHOLD = 500;
 
 export default function ChannelPage() {
   const { workspaceId, channelId } = useParams({ strict: false }) as {
@@ -549,18 +569,20 @@ export default function ChannelPage() {
   const tenantId = getTenantId();
   const navigate = useNavigate();
   const { identity } = useInternetIdentity();
-
-  // CRITICAL: derive myPrincipal from Internet Identity — never hardcode this
   const myPrincipal = identity?.getPrincipal().toText() ?? "";
 
   const [messageText, setMessageText] = useState(() => getDraft(channelId));
   const [replyTo, setReplyTo] = useState<Message | null>(null);
-  const hasDraft = getDraft(channelId).length > 0;
+  const [olderMessages, setOlderMessages] = useState<Message[]>([]);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
+  const [hasMore, setHasMore] = useState(true);
+
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
   const bottomRef = useRef<HTMLDivElement | null>(null);
+  const topSentinelRef = useRef<HTMLDivElement | null>(null);
+  const markReadRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // ── Queries ──
-
+  // ── Channel query ──
   const { data: channel } = useQuery<Channel | null>({
     queryKey: ["channel", tenantId, workspaceId, channelId],
     queryFn: async () => {
@@ -571,7 +593,26 @@ export default function ChannelPage() {
     enabled: !!actor && !isFetching && !!workspaceId,
   });
 
-  const { data: messages, isLoading } = useQuery<Message[]>({
+  // ── Workspace members (for display names) ──
+  const { data: members } = useQuery({
+    queryKey: ["members", tenantId, workspaceId],
+    queryFn: async () => {
+      if (!actor) return [];
+      return actor.listWorkspaceMembers(tenantId, workspaceId);
+    },
+    enabled: !!actor && !isFetching,
+  });
+
+  const memberDisplayNames = new Map<string, string>();
+  if (members) {
+    for (const m of members) {
+      if (m.displayName)
+        memberDisplayNames.set(m.userId.toString(), m.displayName);
+    }
+  }
+
+  // ── Messages query (polls every 3s) ──
+  const { data: recentMessages, isLoading } = useQuery<Message[]>({
     queryKey: ["messages", tenantId, workspaceId, channelId],
     queryFn: async () => {
       if (!actor) return [];
@@ -587,31 +628,118 @@ export default function ChannelPage() {
     refetchInterval: 3000,
   });
 
-  // ── Mark read on mount and on channel change ──
+  // Combine older + recent, deduplicate by id
+  const allMessages = (() => {
+    const seen = new Set<string>();
+    const combined: Message[] = [];
+    for (const m of [...olderMessages, ...(recentMessages ?? [])]) {
+      if (!seen.has(m.id)) {
+        seen.add(m.id);
+        combined.push(m);
+      }
+    }
+    combined.sort((a, b) => (a.createdAt < b.createdAt ? -1 : 1));
+    return combined;
+  })();
+
+  // ── Mark read on mount ──
   useEffect(() => {
     if (!actor || !channelId || isFetching || !workspaceId) return;
     actor
       .markChannelRead(tenantId, workspaceId, channelId)
-      .then(() => {
+      .then(() =>
         queryClient.invalidateQueries({
           queryKey: ["unreadCounts", tenantId, workspaceId],
-        });
-      })
+        }),
+      )
       .catch(() => {});
   }, [actor, channelId, isFetching, tenantId, workspaceId, queryClient]);
+
+  // ── Mark read on scroll (IntersectionObserver) ──
+  const scheduleMarkRead = useCallback(() => {
+    if (markReadRef.current) clearTimeout(markReadRef.current);
+    markReadRef.current = setTimeout(() => {
+      if (!actor || isFetching) return;
+      actor
+        .markChannelRead(tenantId, workspaceId, channelId)
+        .then(() =>
+          queryClient.invalidateQueries({
+            queryKey: ["unreadCounts", tenantId, workspaceId],
+          }),
+        )
+        .catch(() => {});
+    }, 1000);
+  }, [actor, isFetching, tenantId, workspaceId, channelId, queryClient]);
+
+  useEffect(() => {
+    const el = bottomRef.current;
+    if (!el) return;
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting) scheduleMarkRead();
+      },
+      { threshold: 0.1 },
+    );
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [scheduleMarkRead]);
 
   // ── Auto-scroll to bottom on new messages ──
   const prevMsgCountRef = useRef(0);
   useEffect(() => {
-    const msgCount = messages?.length ?? 0;
-    if (msgCount !== prevMsgCountRef.current) {
-      prevMsgCountRef.current = msgCount;
+    const count = recentMessages?.length ?? 0;
+    if (count !== prevMsgCountRef.current) {
+      prevMsgCountRef.current = count;
       requestAnimationFrame(() => {
         bottomRef.current?.scrollIntoView({ behavior: "smooth" });
       });
     }
-  }, [messages]);
+  }, [recentMessages]);
 
+  // ── Load more (older) messages ──
+  async function handleLoadMore() {
+    if (!actor || isLoadingMore || !allMessages.length) return;
+    setIsLoadingMore(true);
+    const oldest = allMessages[0];
+    try {
+      const older = await actor.getMessages(
+        tenantId,
+        workspaceId,
+        channelId,
+        BigInt(50),
+        oldest.createdAt,
+      );
+      if (older.length < 50) setHasMore(false);
+      if (older.length > 0) {
+        setOlderMessages((prev) => {
+          const ids = new Set(prev.map((m) => m.id));
+          return [...older.filter((m) => !ids.has(m.id)), ...prev];
+        });
+      } else {
+        setHasMore(false);
+      }
+    } catch {
+      toast.error("Failed to load older messages");
+    } finally {
+      setIsLoadingMore(false);
+    }
+  }
+
+  // ── Detect DM channel ──
+  const isDM = channel?.name.startsWith("dm:") ?? false;
+  let dmOtherUserId: string | null = null;
+  if (isDM && channel?.name) {
+    const parts = channel.name.split(":");
+    const pA = parts[1];
+    const pB = parts[2];
+    if (pA && pB) dmOtherUserId = pA === myPrincipal ? pB : pA;
+  }
+  const dmOtherName = dmOtherUserId
+    ? (memberDisplayNames.get(dmOtherUserId) ??
+      `${dmOtherUserId.slice(0, 12)}…`)
+    : null;
+
+  // ── Formatting helpers ──
   function handleTextChange(v: string) {
     setMessageText(v);
     saveDraft(channelId, v);
@@ -652,8 +780,6 @@ export default function ChannelPage() {
   }
 
   // ── Mutations ──
-
-  // Capture pending send content to avoid closure issues with optimistic updates
   const pendingSendRef = useRef<{ content: string; replyToId?: string } | null>(
     null,
   );
@@ -702,9 +828,9 @@ export default function ChannelPage() {
         ["messages", tenantId, workspaceId, channelId],
         (old) => [...(old ?? []), optimistic],
       );
-      requestAnimationFrame(() => {
-        bottomRef.current?.scrollIntoView({ behavior: "smooth" });
-      });
+      requestAnimationFrame(() =>
+        bottomRef.current?.scrollIntoView({ behavior: "smooth" }),
+      );
       return { previous };
     },
     onSuccess: () => {
@@ -789,17 +915,16 @@ export default function ChannelPage() {
     onError: (err: Error) => toast.error(err.message),
   });
 
-  // ── Derived data ──
-
+  // ── Derived ──
   const messageMap = new Map<string, Message>(
-    messages?.map((m) => [m.id, m]) ?? [],
+    allMessages.map((m) => [m.id, m]),
   );
   const pinnedIds = new Set(channel?.pinnedMessageIds ?? []);
 
   function isGrouped(idx: number): boolean {
-    if (!messages || idx === 0) return false;
-    const prev = messages[idx - 1];
-    const curr = messages[idx];
+    if (idx === 0) return false;
+    const prev = allMessages[idx - 1];
+    const curr = allMessages[idx];
     if (prev.senderId.toString() !== curr.senderId.toString()) return false;
     const timeDiff = Number(curr.createdAt - prev.createdAt) / 1_000_000_000;
     return timeDiff < 300;
@@ -810,8 +935,8 @@ export default function ChannelPage() {
   );
   const unreadCount = myUnreadEntry ? Number(myUnreadEntry.count) : 0;
   const unreadBoundaryIndex =
-    messages && unreadCount > 0
-      ? Math.max(0, messages.length - unreadCount)
+    allMessages.length > 0 && unreadCount > 0
+      ? Math.max(0, allMessages.length - unreadCount)
       : -1;
 
   function handleSend() {
@@ -826,15 +951,16 @@ export default function ChannelPage() {
     sendMutation.mutate();
   }
 
-  // ── Render ──
+  const charCount = messageText.length;
+  const showCharCount = charCount > CHAR_WARN_THRESHOLD;
 
   return (
     <div className="flex h-full overflow-hidden pb-16 md:pb-0">
-      {channel && <ChannelInfoPanel channel={channel} />}
+      {channel && !isDM && <ChannelInfoPanel channel={channel} />}
 
       <div className="flex flex-1 flex-col overflow-hidden min-w-0">
-        {/* Top bar */}
-        <div className="flex h-auto min-h-14 flex-col justify-center border-b border-border/60 bg-card/90 backdrop-blur-subtle px-4 py-2 shrink-0">
+        {/* ── Top bar ── */}
+        <div className="flex h-auto min-h-14 flex-col justify-center border-b border-border/60 bg-card/90 backdrop-blur-sm px-4 py-2 shrink-0">
           <div className="flex items-center gap-3">
             <Button
               variant="ghost"
@@ -848,45 +974,99 @@ export default function ChannelPage() {
                 <ArrowLeft className="h-4 w-4" />
               </Link>
             </Button>
-            <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-teal-500/10 shrink-0">
-              <Hash className="h-3.5 w-3.5 text-teal-500" />
-            </div>
-            <div className="flex-1 min-w-0">
-              <p className="font-semibold text-foreground text-sm truncate tracking-tight">
-                {channel?.name ?? "Channel"}
-              </p>
-              <p className="text-xs text-muted-foreground">
-                {channel?.memberIds.length ?? 0} members
-              </p>
-            </div>
-            <div className="flex items-center gap-1 text-muted-foreground lg:hidden">
-              <Users className="h-3 w-3" />
-              <span className="text-xs">{channel?.memberIds.length ?? 0}</span>
-            </div>
-            <Button
-              variant="ghost"
-              size="sm"
-              className="text-xs text-muted-foreground h-7 px-2.5"
-              onClick={() =>
-                navigate({
-                  to: "/app/$workspaceId/chat/$channelId/settings",
-                  params: { workspaceId, channelId },
-                })
-              }
-              data-ocid="channel-settings-link"
-            >
-              Settings
-            </Button>
+            {isDM ? (
+              <>
+                <div
+                  className={`flex h-8 w-8 items-center justify-center rounded-full text-xs font-bold shrink-0 ${dmOtherUserId ? avatarColor({ toString: () => dmOtherUserId! }) : "bg-primary/10 text-primary"}`}
+                >
+                  {dmOtherUserId
+                    ? senderInitials({ toString: () => dmOtherUserId! })
+                    : "DM"}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="font-semibold text-foreground text-sm truncate tracking-tight flex items-center gap-1.5">
+                    <MessageCircle className="h-3.5 w-3.5 text-primary shrink-0" />
+                    {dmOtherName}
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    Direct message
+                  </p>
+                </div>
+              </>
+            ) : (
+              <>
+                <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-teal-500/10 shrink-0">
+                  <Hash className="h-3.5 w-3.5 text-teal-500" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="font-semibold text-foreground text-sm truncate tracking-tight">
+                    {channel?.name ?? "Channel"}
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    {channel?.memberIds.length ?? 0} members
+                  </p>
+                </div>
+                <div className="flex items-center gap-1 text-muted-foreground lg:hidden">
+                  <Users className="h-3 w-3" />
+                  <span className="text-xs">
+                    {channel?.memberIds.length ?? 0}
+                  </span>
+                </div>
+                {!isDM && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="text-xs text-muted-foreground h-7 px-2.5 hidden sm:flex"
+                    onClick={() =>
+                      navigate({
+                        to: "/app/$workspaceId/chat/$channelId/settings",
+                        params: { workspaceId, channelId },
+                      })
+                    }
+                    data-ocid="channel-settings-link"
+                  >
+                    Settings
+                  </Button>
+                )}
+              </>
+            )}
           </div>
-          {channel?.topic && (
+          {!isDM && channel?.topic && (
             <p className="text-xs text-teal-600 dark:text-teal-400 italic ml-11 mt-0.5 truncate">
               📌 {channel.topic}
             </p>
           )}
         </div>
 
-        {/* Messages */}
+        {/* ── Messages ── */}
         <ScrollArea className="flex-1 py-2" data-ocid="messages-list">
+          {/* Load more button */}
+          {!isLoading && allMessages.length > 0 && hasMore && (
+            <div
+              className="flex justify-center px-4 pt-3 pb-1"
+              ref={topSentinelRef}
+            >
+              <Button
+                variant="outline"
+                size="sm"
+                className="gap-1.5 text-xs h-8 border-dashed"
+                onClick={handleLoadMore}
+                disabled={isLoadingMore}
+                data-ocid="load-more-btn"
+              >
+                {isLoadingMore ? (
+                  <>
+                    <Loader2 className="h-3 w-3 animate-spin" /> Loading…
+                  </>
+                ) : (
+                  <>
+                    <ChevronUp className="h-3 w-3" /> Load older messages
+                  </>
+                )}
+              </Button>
+            </div>
+          )}
+
           {isLoading ? (
             <div className="space-y-3 px-4 py-4">
               {[1, 2, 3, 4].map((n) => (
@@ -899,9 +1079,9 @@ export default function ChannelPage() {
                 </div>
               ))}
             </div>
-          ) : messages && messages.length > 0 ? (
+          ) : allMessages.length > 0 ? (
             <div className="py-2">
-              {messages.map((msg, idx) => (
+              {allMessages.map((msg, idx) => (
                 <div key={msg.id}>
                   {idx === unreadBoundaryIndex && (
                     <div
@@ -938,6 +1118,9 @@ export default function ChannelPage() {
                     }
                     workspaceId={workspaceId}
                     isGrouped={isGrouped(idx)}
+                    memberDisplayName={memberDisplayNames.get(
+                      msg.senderId.toString(),
+                    )}
                   />
                 </div>
               ))}
@@ -949,20 +1132,27 @@ export default function ChannelPage() {
               data-ocid="messages-empty"
             >
               <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-teal-500/10 mb-3">
-                <Hash className="h-6 w-6 text-teal-500" />
+                {isDM ? (
+                  <MessageCircle className="h-6 w-6 text-teal-500" />
+                ) : (
+                  <Hash className="h-6 w-6 text-teal-500" />
+                )}
               </div>
               <p className="font-semibold text-foreground text-sm">
-                Welcome to #{channel?.name}!
+                {isDM
+                  ? `Start a conversation with ${dmOtherName}`
+                  : `Welcome to #${channel?.name}!`}
               </p>
               <p className="mt-1 text-xs text-muted-foreground max-w-xs">
-                This is the beginning of the channel. Send a message to get the
-                conversation started.
+                {isDM
+                  ? "This is the beginning of your direct message history."
+                  : "This is the beginning of the channel. Send a message to get the conversation started."}
               </p>
             </div>
           )}
         </ScrollArea>
 
-        {/* Input bar */}
+        {/* ── Input bar ── */}
         <div
           className="border-t border-border bg-card px-4 py-3 space-y-1.5 shrink-0"
           data-ocid="message-input-area"
@@ -994,11 +1184,7 @@ export default function ChannelPage() {
             <div className="flex items-end gap-2">
               <Textarea
                 ref={textareaRef}
-                placeholder={
-                  hasDraft && messageText
-                    ? "(draft) Continue message…"
-                    : `Message #${channel?.name ?? "channel"}…`
-                }
+                placeholder={`Message ${isDM ? dmOtherName : `#${channel?.name ?? "channel"}`}…`}
                 value={messageText}
                 onChange={(e) => handleTextChange(e.target.value)}
                 onKeyDown={handleKeyDown}
@@ -1018,9 +1204,19 @@ export default function ChannelPage() {
               </Button>
             </div>
           </div>
-          <p className="text-[10px] text-muted-foreground">
-            Enter to send · Shift+Enter for new line · Cmd+B bold · Cmd+I italic
-          </p>
+          <div className="flex items-center justify-between">
+            <p className="text-[10px] text-muted-foreground">
+              Enter to send · Shift+Enter for new line · Cmd+B bold · Cmd+I
+              italic
+            </p>
+            {showCharCount && (
+              <span
+                className={`text-[10px] font-medium ${charCount > 2000 ? "text-destructive" : "text-amber-500"}`}
+              >
+                {charCount}/2000
+              </span>
+            )}
+          </div>
         </div>
       </div>
     </div>

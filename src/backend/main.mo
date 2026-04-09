@@ -56,9 +56,26 @@ import DashboardLib "lib/dashboard";
 
 
 
+
+
 actor self {
-  let workspacesRef = { var val : [(Common.EntityId, WTypes.Workspace)] = [] };
-  let profilesRef   = { var val : [(Common.UserId, WTypes.UserProfile)] = [] };
+  // ── Stable backing stores for workspaces and profiles ────────────────────────
+  // workspacesRef/profilesRef use mutable wrapper objects so the mixin pattern works.
+  // The actual data lives in stable vars (workspacesStable / profilesStable) and is
+  // synced in/out of the wrappers via system pre/post upgrade hooks.
+  stable var workspacesStable : [(Common.EntityId, WTypes.Workspace)] = [];
+  stable var profilesStable   : [(Common.UserId, WTypes.UserProfile)] = [];
+  let workspacesRef = { var val : [(Common.EntityId, WTypes.Workspace)] = workspacesStable };
+  let profilesRef   = { var val : [(Common.UserId, WTypes.UserProfile)] = profilesStable };
+
+  system func preupgrade() {
+    workspacesStable := workspacesRef.val;
+    profilesStable   := profilesRef.val;
+  };
+  system func postupgrade() {
+    workspacesRef.val := workspacesStable;
+    profilesRef.val   := profilesStable;
+  };
   stable var notes            : [(Common.EntityId, NTypes.Note)]               = [];
   stable var projects         : [(Common.EntityId, PTypes.Project)]             = [];
   stable var tasks            : [(Common.EntityId, PTypes.Task)]                = [];
@@ -123,8 +140,80 @@ actor self {
   stable var threadNotifications : [(Text, CTypes.ThreadNotification)]            = [];
   stable var notePresenceStore : [(Text, NTypes.NotePresenceEntry)]               = [];
   stable var noteLastEditStore : [(Text, NTypes.NoteLastEditEntry)]               = [];
+  stable var userSettingsStore : [(Text, UserSettingsEntry)]                       = [];
 
   include WorkspaceApi(workspacesRef, profilesRef);
+
+  // ── Inline User Settings type (stored per principal as a key in userSettingsStore) ──
+  type UserSettingsEntry = {
+    userId : Text;
+    displayName : Text;
+    email : Text;
+    accentColor : Text;
+    defaultModule : Text;
+    sidebarLayout : Text;
+    dateFormat : Text;
+    timeFormat : Text;
+    language : Text;
+    notifyTaskAssigned : Bool;
+    notifyMentions : Bool;
+    notifyEscrow : Bool;
+    notifyPayroll : Bool;
+    notifyGoals : Bool;
+    updatedAt : Int;
+  };
+
+  /// Returns the caller's saved settings. Returns null if no settings exist yet.
+  public shared query ({ caller }) func getUserSettings() : async ?UserSettingsEntry {
+    let key = caller.toText();
+    switch (userSettingsStore.find(func((k, _)) { k == key })) {
+      case (?(_, s)) ?s;
+      case null null;
+    }
+  };
+
+  /// Saves the caller's settings. Upserts on every call.
+  public shared ({ caller }) func saveUserSettings(
+    displayName : Text,
+    email : Text,
+    accentColor : Text,
+    defaultModule : Text,
+    sidebarLayout : Text,
+    dateFormat : Text,
+    timeFormat : Text,
+    language : Text,
+    notifyTaskAssigned : Bool,
+    notifyMentions : Bool,
+    notifyEscrow : Bool,
+    notifyPayroll : Bool,
+    notifyGoals : Bool,
+  ) : async { #ok : UserSettingsEntry; #err : Text } {
+    if (caller.isAnonymous()) {
+      return #err("Unauthorized: must be authenticated to save settings");
+    };
+    let key = caller.toText();
+    let entry : UserSettingsEntry = {
+      userId = key;
+      displayName;
+      email;
+      accentColor;
+      defaultModule;
+      sidebarLayout;
+      dateFormat;
+      timeFormat;
+      language;
+      notifyTaskAssigned;
+      notifyMentions;
+      notifyEscrow;
+      notifyPayroll;
+      notifyGoals;
+      updatedAt = Time.now();
+    };
+    // Upsert: remove old entry then add new one
+    let filtered = userSettingsStore.filter(func((k, _)) { k != key });
+    userSettingsStore := filtered.concat([(key, entry)]);
+    #ok entry
+  };
 
   // Notes
   public shared ({ caller }) func createNote(tenantId : Common.TenantId, workspaceId : Common.WorkspaceId, input : NTypes.NoteInput) : async { #ok : NTypes.Note; #err : Text } { let r = NotesApi.createNote(notes, tenantId, workspaceId, caller, input); notes := r.store; r.result };
@@ -143,8 +232,9 @@ actor self {
   };
   public shared ({ caller }) func deleteNote(tenantId : Common.TenantId, workspaceId : Common.WorkspaceId, id : Common.EntityId) : async { #ok : Bool; #err : Text } { let r = NotesApi.deleteNote(notes, tenantId, workspaceId, id, caller); notes := r.store; r.result };
   public shared query ({ caller }) func searchNotes(tenantId : Common.TenantId, workspaceId : Common.WorkspaceId, searchQuery : Text) : async [NTypes.Note] { NotesApi.searchNotes(notes, tenantId, workspaceId, searchQuery) };
-  public shared ({ caller }) func updateNotePresence(tenantId : Common.TenantId, workspaceId : Common.WorkspaceId, noteId : Common.EntityId, displayName : Text) : async () { notePresenceStore := NotesApi.updateNotePresence(notePresenceStore, noteId, tenantId, workspaceId, caller, displayName) };
+  public shared ({ caller }) func updateNotePresence(tenantId : Common.TenantId, workspaceId : Common.WorkspaceId, noteId : Common.EntityId, displayName : Text, isEditing : Bool) : async () { notePresenceStore := NotesApi.updateNotePresence(notePresenceStore, noteId, tenantId, workspaceId, caller, displayName, isEditing) };
   public shared query ({ caller }) func getNoteActiveEditors(tenantId : Common.TenantId, workspaceId : Common.WorkspaceId, noteId : Common.EntityId) : async [NTypes.NoteEditorPresence] { NotesApi.getNoteActiveEditors(notePresenceStore, noteId, tenantId, workspaceId) };
+  public shared query ({ caller }) func getNotePresence(tenantId : Common.TenantId, workspaceId : Common.WorkspaceId, noteId : Common.EntityId) : async [NTypes.NoteEditorPresence] { NotesApi.getNotePresence(notePresenceStore, noteId, tenantId, workspaceId) };
   public shared query ({ caller }) func getLastNoteEdit(tenantId : Common.TenantId, workspaceId : Common.WorkspaceId, noteId : Common.EntityId) : async ?NTypes.NoteLastEdit { NotesApi.getLastNoteEdit(noteLastEditStore, noteId, tenantId, workspaceId) };
 
   // Projects
@@ -200,6 +290,24 @@ actor self {
   public shared ({ caller }) func markChannelRead(tenantId : Common.TenantId, workspaceId : Common.WorkspaceId, channelId : Common.EntityId) : async { #ok : Bool; #err : Text } { let (res, s) = ChatApi.markChannelRead(channels, tenantId, workspaceId, channelId, caller); channels := s; res };
   public shared query ({ caller }) func getUnreadCounts(tenantId : Common.TenantId, workspaceId : Common.WorkspaceId) : async [(Text, Nat)] { ChatApi.getUnreadCounts(channels, tenantId, workspaceId, caller) };
   public shared ({ caller }) func createOrGetDMChannel(tenantId : Common.TenantId, workspaceId : Common.WorkspaceId, targetUserId : Common.UserId) : async { #ok : CTypes.Channel; #err : Text } { let (res, s) = ChatApi.createOrGetDMChannel(channels, tenantId, workspaceId, caller, targetUserId); channels := s; res };
+
+  /// Returns workspace members (userId + displayName + email) for DM channel creation.
+  /// Reads directly from workspacesRef to avoid depending on a separate store.
+  public shared query ({ caller }) func getUsersInWorkspace(tenantId : Common.TenantId, workspaceId : Common.WorkspaceId) : async [{ userId : Common.UserId; displayName : Text; email : Text }] {
+    switch (workspacesRef.val.find(func(entry : (Common.EntityId, WTypes.Workspace)) : Bool {
+      let (id, ws) = entry; id == workspaceId and ws.tenantId == tenantId
+    })) {
+      case (?(_, ws)) {
+        ws.members.map<(Common.UserId, WTypes.WorkspaceMember), { userId : Common.UserId; displayName : Text; email : Text }>(
+          func(entry : (Common.UserId, WTypes.WorkspaceMember)) : { userId : Common.UserId; displayName : Text; email : Text } {
+            let (uid, m) = entry;
+            { userId = uid; displayName = m.displayName; email = m.email }
+          }
+        )
+      };
+      case null [];
+    }
+  };
 
   // Calendar
   public shared ({ caller }) func createEvent(tenantId : Common.TenantId, workspaceId : Common.WorkspaceId, input : CalTypes.EventInput) : async { #ok : CalTypes.Event; #err : Text } { let (res, s) = CalApi.createEvent(events, tenantId, workspaceId, caller, input); events := s; res };
@@ -269,7 +377,7 @@ actor self {
       Nat.fromNat64(bal.e8s)
     } catch (_) { 0 };
     if (treasuryBalance.toFloat() < input.amount) {
-      return #err("Insufficient treasury balance. Please fund your workspace wallet before processing contractor payments.");
+      return #err("Insufficient treasury balance. Please fund the workspace treasury before processing contractor payments.");
     };
     switch (PayApi.addContractorPayment(contractorPayments, idCounter, tenantId, workspaceId, input)) { case (#err e) #err e; case (#ok(v, s, n)) { contractorPayments := s; idCounter := n; #ok v } }
   };
@@ -292,7 +400,7 @@ actor self {
       Nat.fromNat64(bal.e8s)
     } catch (_) { 0 };
     if (treasuryBalance == 0) {
-      return #err("Insufficient treasury balance. Please fund your workspace wallet before creating off-cycle payments.");
+      return #err("Insufficient treasury balance. Please fund the workspace treasury before creating off-cycle payments.");
     };
     if (input.processImmediately and treasuryBalance.toFloat() < input.amount) {
       return #err("Insufficient treasury balance to process this off-cycle payment immediately.");
@@ -318,7 +426,7 @@ actor self {
       }
     } catch (_) { 0 };
     if (callerBalance == 0) {
-      return #err("Insufficient balance. Please fund your wallet before creating an escrow.");
+      return #err("Insufficient wallet balance. Please fund your wallet before creating an escrow.");
     };
     switch (EscApi.createEscrow(escrowContracts, idCounter, tenantId, workspaceId, caller, input)) { case (#err e) #err e; case (#ok(v, s, n)) { escrowContracts := s; idCounter := n; #ok v } }
   };
@@ -963,7 +1071,34 @@ actor self {
     }) -> async { status : Nat; headers : [{ name : Text; value : Text }]; body : Blob };
   };
 
-  public shared ({ caller }) func saveAIConfig(tenantId : Common.TenantId, workspaceId : Common.WorkspaceId, input : AITypes.AIConfigInput) : async { #ok : AITypes.AIConfig; #err : Text } { let r = AIApi.saveAIConfig(aiConfigs, tenantId, workspaceId, caller, input); aiConfigs := r.store; r.result };
+  /// Save AI configuration — restricted to the workspace owner (super admin) only.
+  public shared ({ caller }) func saveAIConfig(tenantId : Common.TenantId, workspaceId : Common.WorkspaceId, input : AITypes.AIConfigInput) : async { #ok : AITypes.AIConfig; #err : Text } {
+    // Role check: only the workspace owner (super admin) may configure AI settings
+    let isOwner = switch (workspacesRef.val.find(func((id, ws) : (Common.EntityId, WTypes.Workspace)) : Bool {
+      id == workspaceId and ws.tenantId == tenantId
+    })) {
+      case (?(_, ws)) ws.ownerId == caller;
+      case null false;
+    };
+    if (not isOwner) {
+      return #err("Forbidden: only the workspace owner can configure AI settings.");
+    };
+    let r = AIApi.saveAIConfig(aiConfigs, tenantId, workspaceId, caller, input);
+    aiConfigs := r.store;
+    r.result
+  };
+
+  /// Returns true if the caller is the owner (super admin) of the given workspace.
+  /// Used by the frontend to show or hide AI settings configuration.
+  public shared query ({ caller }) func isWorkspaceOwner(tenantId : Common.TenantId, workspaceId : Common.WorkspaceId) : async Bool {
+    switch (workspacesRef.val.find(func((id, ws) : (Common.EntityId, WTypes.Workspace)) : Bool {
+      id == workspaceId and ws.tenantId == tenantId
+    })) {
+      case (?(_, ws)) ws.ownerId == caller;
+      case null false;
+    }
+  };
+
   public shared query ({ caller }) func getAIConfig(tenantId : Common.TenantId, workspaceId : Common.WorkspaceId) : async ?AITypes.AIConfig { AIApi.getAIConfig(aiConfigs, tenantId, workspaceId) };
 
   public shared ({ caller }) func submitAIPrompt(tenantId : Common.TenantId, workspaceId : Common.WorkspaceId, input : AITypes.AIPromptInput) : async { #ok : AITypes.AIResponse; #err : Text } {
@@ -1071,7 +1206,7 @@ actor self {
       case null {};
       case (?ti) {
         let sub = switch (r.result) { case (#ok s) s; case (#err _) { return r.result } };
-        let taskIn : PTypes.TaskInput = { projectId = ti.projectId; title = ti.title; description = ti.description; priority = #Medium; assigneeId = ti.assigneeId; dueDate = null; crossLinks = [] };
+        let taskIn : PTypes.TaskInput = { projectId = ti.projectId; title = ti.title; description = ti.description; priority = #Medium; assigneeId = ti.assigneeId; dueDate = null; tags = []; crossLinks = [] };
         let tr = ProjApi.createTask(tasks, sub.tenantId, sub.workspaceId, caller, taskIn);
         tasks := tr.store;
       };
@@ -1094,7 +1229,7 @@ actor self {
       case (#err e) { #err e };
       case (#ok(wb, tProjectId, tTitle, tDesc, tAssignee)) {
         whiteboards := r.store;
-        let taskIn : PTypes.TaskInput = { projectId = tProjectId; title = tTitle; description = tDesc; priority = #Medium; assigneeId = tAssignee; dueDate = null; crossLinks = [] };
+        let taskIn : PTypes.TaskInput = { projectId = tProjectId; title = tTitle; description = tDesc; priority = #Medium; assigneeId = tAssignee; dueDate = null; tags = []; crossLinks = [] };
         let tr = ProjApi.createTask(tasks, tenantId, workspaceId, caller, taskIn);
         tasks := tr.store;
         let createdTaskId = switch (tr.result) { case (#ok t) t.id; case (#err _) "" };
@@ -1123,6 +1258,11 @@ actor self {
   public shared query ({ caller }) func listSubtasks(tenantId : Common.TenantId, workspaceId : Common.WorkspaceId, parentTaskId : Common.EntityId) : async [PTypes.Subtask] { PAdvApi.listSubtasks(subtasks, tenantId, workspaceId, parentTaskId) };
   public shared ({ caller }) func updateSubtask(tenantId : Common.TenantId, workspaceId : Common.WorkspaceId, subtaskId : Common.EntityId, title : Text, status : PTypes.TaskStatus) : async { #ok : PTypes.Subtask; #err : Text } { let r = PAdvApi.updateSubtask(subtasks, tenantId, workspaceId, subtaskId, title, status); subtasks := r.store; r.result };
   public shared ({ caller }) func deleteSubtask(tenantId : Common.TenantId, workspaceId : Common.WorkspaceId, subtaskId : Common.EntityId) : async { #ok : Bool; #err : Text } { let r = PAdvApi.deleteSubtask(subtasks, tenantId, workspaceId, subtaskId); subtasks := r.store; r.result };
+  public shared ({ caller }) func toggleSubtask(tenantId : Common.TenantId, workspaceId : Common.WorkspaceId, subtaskId : Common.EntityId) : async { #ok : PTypes.Subtask; #err : Text } {
+    let r = PAdvApi.toggleSubtask(subtasks, tenantId, workspaceId, subtaskId);
+    subtasks := r.store;
+    r.result
+  };
   public shared ({ caller }) func createSprint(tenantId : Common.TenantId, workspaceId : Common.WorkspaceId, input : PTypes.SprintInput) : async { #ok : PTypes.Sprint; #err : Text } { let r = PAdvApi.createSprint(sprints, tenantId, workspaceId, input); sprints := r.store; r.result };
   public shared query ({ caller }) func getSprint(tenantId : Common.TenantId, workspaceId : Common.WorkspaceId, sprintId : Common.EntityId) : async { #ok : PTypes.Sprint; #err : Text } { PAdvApi.getSprint(sprints, tenantId, workspaceId, sprintId) };
   public shared query ({ caller }) func listSprints(tenantId : Common.TenantId, workspaceId : Common.WorkspaceId, projectId : Common.EntityId) : async [PTypes.Sprint] { PAdvApi.listSprints(sprints, tenantId, workspaceId, projectId) };

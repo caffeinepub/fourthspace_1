@@ -1,3 +1,4 @@
+// Event Detail Page — clean rebuild v2
 import {
   AlertDialog,
   AlertDialogAction,

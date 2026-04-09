@@ -135,6 +135,24 @@ type UserStatus =
    tenantId: TenantId;
    workspaceId: WorkspaceId;
  };
+type UserSettingsEntry = 
+ record {
+   accentColor: text;
+   dateFormat: text;
+   defaultModule: text;
+   displayName: text;
+   email: text;
+   language: text;
+   notifyEscrow: bool;
+   notifyGoals: bool;
+   notifyMentions: bool;
+   notifyPayroll: bool;
+   notifyTaskAssigned: bool;
+   sidebarLayout: text;
+   timeFormat: text;
+   updatedAt: int;
+   userId: text;
+ };
 type UserProfileInput = 
  record {
    displayName: text;
@@ -314,6 +332,7 @@ type TaskInput =
    dueDate: opt Timestamp;
    priority: TaskPriority;
    projectId: EntityId;
+   tags: vec text;
    title: text;
  };
 type TaskCommentInput = 
@@ -344,6 +363,7 @@ type Task =
    priority: TaskPriority;
    projectId: EntityId;
    status: TaskStatus;
+   tags: vec text;
    tenantId: TenantId;
    title: text;
    updatedAt: Timestamp;
@@ -701,6 +721,7 @@ type NoteInput =
 type NoteEditorPresence = 
  record {
    displayName: text;
+   isEditing: bool;
    lastSeen: int;
    userId: UserId;
  };
@@ -1975,7 +1996,14 @@ service : {
   createWorkspace: (tenantId: TenantId, input: WorkspaceInput,
    ownerDisplayName: text, ownerEmail: text) ->
    (variant {
-      err: text;
+      err:
+       variant {
+         canisterUnavailable: text;
+         invalidName: text;
+         unauthorized: text;
+         unknown: text;
+         workspaceExists: text;
+       };
       ok: Workspace;
     });
   createWorkspaceTreasury: (tenantId: TenantId, workspaceId: WorkspaceId) ->
@@ -2225,6 +2253,8 @@ service : {
     }) query;
   getNoteActiveEditors: (tenantId: TenantId, workspaceId: WorkspaceId,
    noteId: EntityId) -> (vec NoteEditorPresence) query;
+  getNotePresence: (tenantId: TenantId, workspaceId: WorkspaceId, noteId:
+   EntityId) -> (vec NoteEditorPresence) query;
   getOrCreateWorkspaceShareToken: (workspaceId: WorkspaceId, tenantId:
    TenantId) -> (text);
   getPage: (tenantId: TenantId, workspaceId: WorkspaceId, pageId:
@@ -2284,10 +2314,20 @@ service : {
           text;
           nat;
         }) query;
+  /// Returns the caller's saved settings. Returns null if no settings exist yet.
+  getUserSettings: () -> (opt UserSettingsEntry) query;
   getUserStatus: (tenantId: TenantId, workspaceId: WorkspaceId, userId:
    principal) -> (opt UserStatus) query;
   getUserTimeEntries: (tenantId: TenantId, workspaceId: WorkspaceId, userId:
    UserId) -> (vec TimeEntry) query;
+  /// Returns workspace members (userId + displayName + email) for DM channel creation.
+  /// Reads directly from workspacesRef to avoid depending on a separate store.
+  getUsersInWorkspace: (tenantId: TenantId, workspaceId: WorkspaceId) ->
+   (vec record {
+          displayName: text;
+          email: text;
+          userId: UserId;
+        }) query;
   getWalletAccount: (tenantId: TenantId, workspaceId: WorkspaceId, id:
    EntityId) -> (variant {
                    err: text;
@@ -2330,6 +2370,10 @@ service : {
    (opt WalletAccount);
   isWatching: (tenantId: TenantId, workspaceId: WorkspaceId, taskId:
    EntityId, userId: UserId) -> (bool) query;
+  /// Returns true if the caller is the owner (super admin) of the given workspace.
+  /// Used by the frontend to show or hide AI settings configuration.
+  isWorkspaceOwner: (tenantId: TenantId, workspaceId: WorkspaceId) ->
+   (bool) query;
   joinChannel: (tenantId: TenantId, workspaceId: WorkspaceId, id:
    EntityId) -> (variant {
                    err: text;
@@ -2561,6 +2605,7 @@ service : {
                          err: text;
                          ok: EventRsvp;
                        });
+  /// Save AI configuration — restricted to the workspace owner (super admin) only.
   saveAIConfig: (tenantId: TenantId, workspaceId: WorkspaceId, input:
    AIConfigInput) -> (variant {
                         err: text;
@@ -2571,6 +2616,15 @@ service : {
                            err: text;
                            ok: Integration;
                          });
+  /// Saves the caller's settings. Upserts on every call.
+  saveUserSettings: (displayName: text, email: text, accentColor: text,
+   defaultModule: text, sidebarLayout: text, dateFormat: text, timeFormat:
+   text, language: text, notifyTaskAssigned: bool, notifyMentions: bool,
+   notifyEscrow: bool, notifyPayroll: bool, notifyGoals: bool) ->
+   (variant {
+      err: text;
+      ok: UserSettingsEntry;
+    });
   searchMessages: (tenantId: TenantId, workspaceId: WorkspaceId, searchQuery:
    text, channelId: opt EntityId, senderId: opt principal, fromTime: 
    opt int, toTime: opt int) -> (vec Message) query;
@@ -2625,6 +2679,11 @@ service : {
    TenantId) -> (variant {
                    err: text;
                    ok: Goal;
+                 });
+  toggleSubtask: (tenantId: TenantId, workspaceId: WorkspaceId, subtaskId:
+   EntityId) -> (variant {
+                   err: text;
+                   ok: Subtask;
                  });
   unlinkTaskFromKR: (tenantId: TenantId, workspaceId: WorkspaceId, krId:
    EntityId, taskId: EntityId) -> (variant {
@@ -2725,7 +2784,7 @@ service : {
                            ok: Note;
                          });
   updateNotePresence: (tenantId: TenantId, workspaceId: WorkspaceId, noteId:
-   EntityId, displayName: text) -> ();
+   EntityId, displayName: text, isEditing: bool) -> ();
   updatePage: (tenantId: TenantId, workspaceId: WorkspaceId, pageId:
    EntityId, title: text, icon: text, coverUrl: opt text, blocks:
    vec Block) -> (variant {

@@ -33,27 +33,28 @@ module {
   };
 
   /// Internal helper — create a wallet account with an explicit subaccount blob.
-  /// subaccount = null  → personal wallet (default all-zeros subaccount)
-  /// subaccount = ?blob → treasury (non-zero subaccount derived from workspace)
+  /// subaccount = null  → personal wallet (default all-zeros subaccount, user's principal)
+  /// subaccount = ?blob → treasury (non-zero subaccount derived from workspace, canister's principal)
   func createAccountInternal(
     accounts : [(Common.EntityId, Types.WalletAccount)],
     tenantId : Common.TenantId,
     workspaceId : Common.WorkspaceId,
-    caller : Common.UserId,
+    ownerPrincipal : Principal,
+    createdByUserId : Common.UserId,
     displayName : Text,
     accountType : Types.AccountType,
     subaccount : ?Blob,
   ) : (Types.WalletAccount, [(Common.EntityId, Types.WalletAccount)]) {
-    let principalId = caller.toText();
+    let principalId = ownerPrincipal.toText();
     // Derive canonical ICP account ID using SHA-224 + CRC32, with the given subaccount
-    let accountIdBlob = Ledger.deriveAccountId(caller, subaccount);
+    let accountIdBlob = Ledger.deriveAccountId(ownerPrincipal, subaccount);
     let accountId = Ledger.accountIdToHex(accountIdBlob);
     // ICRC-1 format: "principal" for default subaccount, "principal.subhex" for treasury
     let icrc1Account = switch (subaccount) {
-      case null { Ledger.formatIcrc1Account(caller, null) };
+      case null { Ledger.formatIcrc1Account(ownerPrincipal, null) };
       case (?sub) {
         let subBytes = sub.toArray();
-        Ledger.formatIcrc1Account(caller, ?subBytes)
+        Ledger.formatIcrc1Account(ownerPrincipal, ?subBytes)
       };
     };
     let id = genId("wallet-" # principalId # debug_show(accountType));
@@ -62,7 +63,7 @@ module {
       id;
       tenantId;
       workspaceId;
-      userId = caller;
+      userId = createdByUserId;
       displayName;
       principalId;
       accountId;
@@ -90,8 +91,8 @@ module {
     displayName : Text,
     accountType : Types.AccountType,
   ) : (Types.WalletAccount, [(Common.EntityId, Types.WalletAccount)]) {
-    // Personal wallet always uses default (null) subaccount — all-zeros
-    createAccountInternal(accounts, tenantId, workspaceId, caller, displayName, accountType, null)
+    // Personal wallet always uses caller as the owner and null (all-zeros) subaccount
+    createAccountInternal(accounts, tenantId, workspaceId, caller, caller, displayName, accountType, null)
   };
 
   /// Create a workspace treasury account with a workspace-derived subaccount.
@@ -117,31 +118,7 @@ module {
     // Treasury uses a workspace-derived subaccount AND the canister's own principal.
     // This guarantees a different address from any user personal wallet.
     let sub = workspaceSubaccount(workspaceId);
-    // Derive account ID from canister principal (not caller) so treasury != personal wallet
-    let accountIdBlob = Ledger.deriveAccountId(canisterPrincipal, ?sub);
-    let accountId = Ledger.accountIdToHex(accountIdBlob);
-    let subBytes = sub.toArray();
-    let icrc1Account = Ledger.formatIcrc1Account(canisterPrincipal, ?subBytes);
-    let principalId = canisterPrincipal.toText();
-    let id = genId("wallet-" # principalId # debug_show(#treasury : Types.AccountType));
-    let now = timeNow();
-    let account : Types.WalletAccount = {
-      id;
-      tenantId;
-      workspaceId;
-      userId = caller;        // who created/manages the treasury
-      displayName;
-      principalId;            // canister principal text (the receiving address owner)
-      accountId;              // 64-char hex ICP account ID (canister + workspace subaccount)
-      icrc1Account;           // ICRC-1 format: "canisterPrincipal.subhex"
-      accountType = #treasury;
-      icpBalance = 0;
-      btcBalance = 0;
-      createdAt = now;
-      updatedAt = now;
-    };
-    let updated = accounts.concat([(id, account)]);
-    (account, updated)
+    createAccountInternal(accounts, tenantId, workspaceId, canisterPrincipal, caller, displayName, #treasury, ?sub)
   };
 
   public func getWalletAccount(

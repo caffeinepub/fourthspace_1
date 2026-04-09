@@ -1,3 +1,4 @@
+// Dashboard Page — clean rebuild v2
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -587,7 +588,7 @@ export default function DashboardPage() {
                   )}
                   <p className="text-[10px] text-muted-foreground">
                     {payrollList.length > 0
-                      ? `${payrollList.length} record${payrollList.length !== 1 ? "s" : ""}`
+                      ? pl(payrollList.length, "record", "records")
                       : "No payroll records"}
                   </p>
                 </CardContent>
@@ -627,7 +628,11 @@ export default function DashboardPage() {
                   )}
                   <p className="text-[10px] text-muted-foreground">
                     {escrowList.length > 0
-                      ? `${escrowList.length} total agreements`
+                      ? pl(
+                          escrowList.length,
+                          "total agreement",
+                          "total agreements",
+                        )
                       : "No escrow agreements"}
                   </p>
                 </CardContent>

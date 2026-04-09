@@ -262,6 +262,7 @@ const TYPE_TO_CLASS: Record<BlockType, string> = {
   bulletList:
     "text-base text-foreground before:content-['•'] before:mr-2 before:text-primary pl-5",
   numberedList: "text-base text-foreground pl-5 list-decimal",
+  todo: "text-base text-foreground",
   toggle: "text-base font-medium text-foreground",
   callout: "text-sm text-foreground",
   code: "text-sm font-mono text-foreground",

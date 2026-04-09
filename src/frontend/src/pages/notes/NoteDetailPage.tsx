@@ -24,8 +24,10 @@ import {
   Bold,
   Calendar,
   Check,
+  CheckSquare,
   ChevronDown,
   Code,
+  Copy,
   GripVertical,
   Hash,
   Image as ImageIcon,
@@ -36,7 +38,9 @@ import {
   Loader2,
   MessageSquare,
   Minus,
+  MoreHorizontal,
   Quote,
+  RefreshCw,
   Trash2,
   Type,
   Underline,
@@ -132,6 +136,25 @@ const COMMON_EMOJIS = [
   "🐬",
 ];
 
+const CODE_LANGUAGES = [
+  "plaintext",
+  "javascript",
+  "typescript",
+  "python",
+  "motoko",
+  "rust",
+  "go",
+  "java",
+  "c",
+  "cpp",
+  "css",
+  "html",
+  "json",
+  "bash",
+  "sql",
+  "markdown",
+];
+
 // ── Block types ──────────────────────────────────────────────────────────────
 interface EditorBlock {
   id: string;
@@ -140,6 +163,8 @@ interface EditorBlock {
   checked?: boolean;
   expanded?: boolean;
   calloutIcon?: string;
+  language?: string;
+  children?: EditorBlock[];
 }
 
 const BLOCK_TYPES: Array<{
@@ -158,14 +183,14 @@ const BLOCK_TYPES: Array<{
   {
     type: "heading1",
     label: "Heading 1",
-    description: "Large heading",
+    description: "Large section heading",
     icon: <Hash className="h-3.5 w-3.5" />,
     shortcut: "# ",
   },
   {
     type: "heading2",
     label: "Heading 2",
-    description: "Medium heading",
+    description: "Medium section heading",
     icon: <Hash className="h-3 w-3" />,
     shortcut: "## ",
   },
@@ -179,16 +204,23 @@ const BLOCK_TYPES: Array<{
   {
     type: "bulletList",
     label: "Bullet List",
-    description: "Unordered list",
+    description: "Unordered list item",
     icon: <List className="h-3.5 w-3.5" />,
     shortcut: "- ",
   },
   {
     type: "numberedList",
     label: "Numbered List",
-    description: "Ordered list",
+    description: "Ordered list item",
     icon: <ListOrdered className="h-3.5 w-3.5" />,
     shortcut: "1. ",
+  },
+  {
+    type: "todo",
+    label: "To-do",
+    description: "Checkbox item",
+    icon: <CheckSquare className="h-3.5 w-3.5" />,
+    shortcut: "[] ",
   },
   {
     type: "toggle",
@@ -199,67 +231,72 @@ const BLOCK_TYPES: Array<{
   {
     type: "callout",
     label: "Callout",
-    description: "Highlight a note",
+    description: "Highlighted info box",
     icon: <MessageSquare className="h-3.5 w-3.5" />,
   },
   {
     type: "code",
     label: "Code",
-    description: "Code block",
+    description: "Code block with syntax",
     icon: <Code className="h-3.5 w-3.5" />,
     shortcut: "```",
   },
   {
     type: "quote",
     label: "Quote",
-    description: "Blockquote",
+    description: "Block quotation",
     icon: <Quote className="h-3.5 w-3.5" />,
   },
   {
     type: "divider",
     label: "Divider",
-    description: "Horizontal rule",
+    description: "Horizontal separator",
     icon: <Minus className="h-3.5 w-3.5" />,
     shortcut: "---",
   },
 ];
 
+// ── Block type labels map (for "turn into" ───────────────────────────────────
+const BLOCK_TYPE_LABELS: Partial<Record<BlockType, string>> = {
+  paragraph: "Text",
+  heading1: "Heading 1",
+  heading2: "Heading 2",
+  heading3: "Heading 3",
+  bulletList: "Bullet List",
+  numberedList: "Numbered List",
+  todo: "To-do",
+  callout: "Callout",
+  code: "Code",
+  quote: "Quote",
+};
+
+// ── JSON storage helpers ─────────────────────────────────────────────────────
 function generateId() {
   return Math.random().toString(36).slice(2, 10);
 }
 
-function serializeBlocks(blocks: EditorBlock[]): string {
-  return blocks
-    .map((b) => {
-      switch (b.type) {
-        case "heading1":
-          return `# ${b.content}`;
-        case "heading2":
-          return `## ${b.content}`;
-        case "heading3":
-          return `### ${b.content}`;
-        case "bulletList":
-          return `- ${b.content}`;
-        case "numberedList":
-          return `1. ${b.content}`;
-        case "toggle":
-          return `> toggle: ${b.content}`;
-        case "callout":
-          return `> callout(${b.calloutIcon ?? "💡"}): ${b.content}`;
-        case "code":
-          return `\`\`\`\n${b.content}\n\`\`\``;
-        case "quote":
-          return `> ${b.content}`;
-        case "divider":
-          return "---";
-        default:
-          return b.content;
-      }
-    })
-    .join("\n\n");
+function blocksToJson(blocks: EditorBlock[]): string {
+  return JSON.stringify(blocks);
 }
 
-function deserializeBlocks(content: string): EditorBlock[] {
+function jsonToBlocks(raw: string): EditorBlock[] {
+  if (!raw || !raw.trim()) {
+    return [{ id: generateId(), type: "paragraph", content: "" }];
+  }
+  // Try JSON first (new format)
+  try {
+    const parsed = JSON.parse(raw);
+    if (Array.isArray(parsed) && parsed.length > 0) {
+      return parsed as EditorBlock[];
+    }
+  } catch {
+    // Fall through to markdown parser for legacy content
+  }
+  // Legacy markdown fallback parser
+  return parseLegacyMarkdown(raw);
+}
+
+function parseLegacyMarkdown(content: string): EditorBlock[] {
   if (!content.trim())
     return [{ id: generateId(), type: "paragraph", content: "" }];
   const parts = content.split(/\n\n/);
@@ -291,7 +328,7 @@ function deserializeBlocks(content: string): EditorBlock[] {
         type: "heading1",
         content: line.slice(2),
       });
-    } else if (line.startsWith("- ")) {
+    } else if (line.startsWith("- ") || line.startsWith("* ")) {
       blocks.push({
         id: generateId(),
         type: "bulletList",
@@ -319,10 +356,9 @@ function deserializeBlocks(content: string): EditorBlock[] {
         calloutIcon: m ? m[1] : "💡",
       });
     } else if (line.startsWith("```")) {
-      // Consume multi-line code block
       const codeLines: string[] = [];
-      const rest = line.slice(3);
-      if (rest && rest !== "") codeLines.push(rest);
+      const langLine = line.slice(3).trim();
+      const language = langLine && langLine !== "" ? langLine : "plaintext";
       i++;
       while (i < parts.length && !parts[i].trim().startsWith("```")) {
         codeLines.push(parts[i]);
@@ -332,9 +368,22 @@ function deserializeBlocks(content: string): EditorBlock[] {
         id: generateId(),
         type: "code",
         content: codeLines.join("\n\n"),
+        language,
       });
     } else if (line.startsWith("> ")) {
       blocks.push({ id: generateId(), type: "quote", content: line.slice(2) });
+    } else if (
+      line.startsWith("- [ ] ") ||
+      line.startsWith("- [x] ") ||
+      line.startsWith("- [X] ")
+    ) {
+      const checked = line.startsWith("- [x] ") || line.startsWith("- [X] ");
+      blocks.push({
+        id: generateId(),
+        type: "todo",
+        content: line.slice(6),
+        checked,
+      });
     } else {
       blocks.push({ id: generateId(), type: "paragraph", content: line });
     }
@@ -398,21 +447,34 @@ function SaveIndicator({ status }: { status: SaveStatus }) {
 
 function PresenceBar({ editors }: { editors: NoteEditorPresence[] }) {
   if (editors.length === 0) return null;
+  const active = editors.filter((e) => e.isEditing);
   const shown = editors.slice(0, 3);
   const overflow = editors.length - 3;
   return (
     <div className="flex items-center gap-2 py-1" data-ocid="note-presence-bar">
+      {active.length > 0 && (
+        <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-accent/10 border border-accent/20">
+          <span className="h-1.5 w-1.5 rounded-full bg-accent animate-pulse" />
+          <span className="text-xs text-accent font-medium">
+            {active.length === 1
+              ? `${active[0].displayName} is editing`
+              : `${active.length} people editing`}
+          </span>
+        </div>
+      )}
       <div className="flex -space-x-1.5">
         {shown.map((ed) => (
           <div
             key={ed.userId.toString()}
-            title={`${ed.displayName} is viewing`}
+            title={`${ed.displayName} is ${ed.isEditing ? "editing" : "viewing"}`}
             className="relative h-6 w-6 rounded-full bg-primary/20 border-2 border-background flex items-center justify-center"
           >
             <span className="text-[9px] font-bold text-primary leading-none">
               {getInitials(ed.displayName)}
             </span>
-            <span className="absolute -bottom-0.5 -right-0.5 h-2 w-2 rounded-full bg-accent border border-background" />
+            <span
+              className={`absolute -bottom-0.5 -right-0.5 h-2 w-2 rounded-full border border-background ${ed.isEditing ? "bg-accent" : "bg-muted-foreground/40"}`}
+            />
           </div>
         ))}
         {overflow > 0 && (
@@ -468,6 +530,13 @@ function SlashMenu({ query, position, onSelect, onClose }: SlashMenuProps) {
     return () => document.removeEventListener("keydown", onKey);
   }, [filtered, selected, onSelect, onClose]);
 
+  // Reset highlighted index when query changes
+  const prevQuery = useRef(query);
+  if (prevQuery.current !== query) {
+    prevQuery.current = query;
+    setSelected(0);
+  }
+
   if (filtered.length === 0) return null;
 
   return (
@@ -476,7 +545,7 @@ function SlashMenu({ query, position, onSelect, onClose }: SlashMenuProps) {
       style={{ top: position.top, left: position.left }}
       data-ocid="slash-menu"
     >
-      <div className="p-1.5">
+      <div className="p-1.5 max-h-72 overflow-y-auto">
         <p className="px-2 py-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
           Block types
         </p>
@@ -497,6 +566,11 @@ function SlashMenu({ query, position, onSelect, onClose }: SlashMenuProps) {
                 {bt.description}
               </p>
             </div>
+            {bt.shortcut && (
+              <span className="ml-auto text-[10px] text-muted-foreground/60 font-mono shrink-0">
+                {bt.shortcut}
+              </span>
+            )}
           </button>
         ))}
       </div>
@@ -566,176 +640,120 @@ function InlineToolbar({ position, onFormat }: InlineToolbarProps) {
   );
 }
 
-// ── Block Renderer ───────────────────────────────────────────────────────────
-interface BlockProps {
-  block: EditorBlock;
-  idx: number;
-  isActive: boolean;
-  onChange: (id: string, content: string) => void;
-  onKeyDown: (e: React.KeyboardEvent<HTMLTextAreaElement>, id: string) => void;
-  onFocus: (id: string, el: HTMLTextAreaElement) => void;
-  onDragStart: (idx: number) => void;
-  onDrop: (idx: number) => void;
-  onToggleExpand: (id: string) => void;
-  onSelection: (el: HTMLTextAreaElement) => void;
+// ── Block Actions Menu ────────────────────────────────────────────────────────
+interface BlockActionsMenuProps {
+  blockId: string;
+  blockType: BlockType;
+  position: { top: number; left: number };
+  onTurnInto: (type: BlockType) => void;
+  onDuplicate: () => void;
+  onDelete: () => void;
+  onClose: () => void;
 }
 
-function BlockEditor({
-  block,
-  idx,
-  isActive: _isActive,
-  onChange,
-  onKeyDown,
-  onFocus,
-  onDragStart,
-  onDrop,
-  onToggleExpand,
-  onSelection,
-}: BlockProps) {
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
+function BlockActionsMenu({
+  blockId: _blockId,
+  blockType,
+  position,
+  onTurnInto,
+  onDuplicate,
+  onDelete,
+  onClose,
+}: BlockActionsMenuProps) {
+  const [showTurnInto, setShowTurnInto] = useState(false);
+  const turnIntoTypes: BlockType[] = [
+    "paragraph",
+    "heading1",
+    "heading2",
+    "heading3",
+    "bulletList",
+    "numberedList",
+    "todo",
+    "callout",
+    "code",
+    "quote",
+  ];
 
-  // Auto-resize textarea
   useEffect(() => {
-    const el = textareaRef.current;
-    if (!el) return;
-    el.style.height = "auto";
-    el.style.height = `${el.scrollHeight}px`;
-  });
-
-  if (block.type === "divider") {
-    return (
-      <div
-        className="group relative flex items-center gap-2 py-2 cursor-pointer"
-        draggable
-        onDragStart={() => onDragStart(idx)}
-        onDrop={() => onDrop(idx)}
-        onDragOver={(e) => e.preventDefault()}
-        data-ocid={`block-divider-${block.id}`}
-      >
-        <button
-          type="button"
-          className="absolute -left-6 opacity-0 group-hover:opacity-100 transition-opacity cursor-grab text-muted-foreground"
-          title="Drag to reorder"
-          aria-label="Drag block"
-        >
-          <GripVertical className="h-3.5 w-3.5" />
-        </button>
-        <hr className="flex-1 border-border" />
-      </div>
-    );
-  }
-
-  const typeStyles: Record<BlockType, string> = {
-    heading1: "text-2xl font-bold font-display tracking-tight",
-    heading2: "text-xl font-bold font-display tracking-tight",
-    heading3: "text-base font-semibold font-display",
-    paragraph: "text-sm leading-relaxed",
-    bulletList: "text-sm leading-relaxed pl-4",
-    numberedList: "text-sm leading-relaxed pl-4",
-    toggle: "text-sm leading-relaxed font-medium",
-    callout: "text-sm leading-relaxed",
-    code: "text-xs font-mono leading-relaxed",
-    quote: "text-sm leading-relaxed italic",
-    divider: "",
-    table: "text-sm",
-    image: "text-sm",
-  };
-
-  const wrapperStyles: Partial<Record<BlockType, string>> = {
-    callout: "bg-primary/5 border border-primary/20 rounded-lg px-4 py-2",
-    code: "bg-muted/60 border border-border rounded-lg px-4 py-2",
-    quote: "border-l-4 border-primary/50 pl-4",
-    toggle: "",
-  };
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") onClose();
+    }
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [onClose]);
 
   return (
     <div
-      className="group relative"
-      draggable
-      onDragStart={() => onDragStart(idx)}
-      onDrop={() => onDrop(idx)}
-      onDragOver={(e) => e.preventDefault()}
-      data-ocid={`block-${block.id}`}
+      className="fixed z-50 w-52 rounded-xl border border-border bg-popover shadow-xl overflow-hidden"
+      style={{ top: position.top, left: position.left }}
+      data-ocid="block-actions-menu"
     >
-      <button
-        type="button"
-        className="absolute -left-6 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 transition-opacity cursor-grab text-muted-foreground"
-        title="Drag to reorder"
-        aria-label="Drag block"
-      >
-        <GripVertical className="h-3.5 w-3.5" />
-      </button>
-
-      {block.type === "toggle" && (
-        <button
-          type="button"
-          onClick={() => onToggleExpand(block.id)}
-          className="absolute -left-1 top-1 text-muted-foreground hover:text-foreground transition-colors"
-          aria-label={block.expanded ? "Collapse" : "Expand"}
-        >
-          <ChevronDown
-            className={`h-3.5 w-3.5 transition-transform ${block.expanded ? "" : "-rotate-90"}`}
-          />
-        </button>
-      )}
-
-      {block.type === "callout" && (
-        <span className="absolute left-2 top-2 text-base">
-          {block.calloutIcon ?? "💡"}
-        </span>
-      )}
-
-      <div className={wrapperStyles[block.type] ?? ""}>
-        {block.type === "bulletList" && (
-          <span className="absolute left-0 top-1/2 -translate-y-1/2 h-1.5 w-1.5 rounded-full bg-foreground/50" />
-        )}
-
-        {block.type === "toggle" && !block.expanded ? (
+      {showTurnInto ? (
+        <div className="p-1.5 max-h-64 overflow-y-auto">
           <button
             type="button"
-            className={`${typeStyles.toggle} text-foreground/70 cursor-pointer pl-4 w-full text-left`}
-            onClick={() => onToggleExpand(block.id)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter" || e.key === " ") onToggleExpand(block.id);
-            }}
+            onClick={() => setShowTurnInto(false)}
+            className="flex items-center gap-1.5 w-full px-2 py-1.5 text-xs text-muted-foreground hover:text-foreground hover:bg-muted rounded-md mb-1"
           >
-            {block.content || (
-              <span className="text-muted-foreground/50">Toggle block…</span>
-            )}
+            <ArrowLeft className="h-3 w-3" /> Back
           </button>
-        ) : (
-          <textarea
-            ref={textareaRef}
-            value={block.content}
-            onChange={(e) => onChange(block.id, e.target.value)}
-            onKeyDown={(e) => onKeyDown(e, block.id)}
-            onFocus={(e) => onFocus(block.id, e.currentTarget)}
-            onSelect={(e) => onSelection(e.currentTarget)}
-            className={`w-full resize-none bg-transparent outline-none placeholder:text-muted-foreground/40 ${typeStyles[block.type] ?? "text-sm"} ${block.type === "callout" ? "pl-8" : ""} ${block.type === "numberedList" ? "pl-6" : ""}`}
-            placeholder={
-              block.type === "heading1"
-                ? "Heading 1"
-                : block.type === "heading2"
-                  ? "Heading 2"
-                  : block.type === "heading3"
-                    ? "Heading 3"
-                    : block.type === "callout"
-                      ? "Callout note…"
-                      : block.type === "code"
-                        ? "Code…"
-                        : block.type === "quote"
-                          ? "Quote…"
-                          : block.type === "toggle"
-                            ? "Toggle title…"
-                            : "Type something, or / for blocks"
-            }
-            rows={1}
-            data-block-id={block.id}
-            data-ocid={`block-input-${block.id}`}
-            spellCheck={block.type !== "code"}
-          />
-        )}
-      </div>
+          <p className="px-2 py-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+            Turn into
+          </p>
+          {turnIntoTypes
+            .filter((t) => t !== blockType)
+            .map((t) => (
+              <button
+                key={t}
+                type="button"
+                onClick={() => {
+                  onTurnInto(t);
+                  onClose();
+                }}
+                className="flex w-full items-center gap-2.5 px-2.5 py-2 text-sm hover:bg-muted rounded-lg text-foreground transition-colors"
+              >
+                <span className="text-xs font-medium">
+                  {BLOCK_TYPE_LABELS[t] ?? t}
+                </span>
+              </button>
+            ))}
+        </div>
+      ) : (
+        <div className="p-1.5">
+          <button
+            type="button"
+            onClick={() => setShowTurnInto(true)}
+            className="flex w-full items-center gap-2.5 px-2.5 py-2 text-sm hover:bg-muted rounded-lg text-foreground transition-colors"
+            data-ocid="block-action-turn-into"
+          >
+            <RefreshCw className="h-3.5 w-3.5 text-muted-foreground" /> Turn
+            into
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              onDuplicate();
+              onClose();
+            }}
+            className="flex w-full items-center gap-2.5 px-2.5 py-2 text-sm hover:bg-muted rounded-lg text-foreground transition-colors"
+            data-ocid="block-action-duplicate"
+          >
+            <Copy className="h-3.5 w-3.5 text-muted-foreground" /> Duplicate
+          </button>
+          <hr className="my-1 border-border/60" />
+          <button
+            type="button"
+            onClick={() => {
+              onDelete();
+              onClose();
+            }}
+            className="flex w-full items-center gap-2.5 px-2.5 py-2 text-sm hover:bg-destructive/10 rounded-lg text-destructive transition-colors"
+            data-ocid="block-action-delete"
+          >
+            <Trash2 className="h-3.5 w-3.5" /> Delete block
+          </button>
+        </div>
+      )}
     </div>
   );
 }
@@ -805,6 +823,245 @@ function MentionPicker({
   );
 }
 
+// ── Block Renderer ───────────────────────────────────────────────────────────
+interface BlockProps {
+  block: EditorBlock;
+  idx: number;
+  isActive: boolean;
+  onChange: (id: string, content: string) => void;
+  onKeyDown: (e: React.KeyboardEvent<HTMLTextAreaElement>, id: string) => void;
+  onFocus: (id: string, el: HTMLTextAreaElement) => void;
+  onDragStart: (idx: number) => void;
+  onDrop: (idx: number) => void;
+  onToggleExpand: (id: string) => void;
+  onSelection: (el: HTMLTextAreaElement) => void;
+  onToggleCheck: (id: string) => void;
+  onOpenActions: (id: string, pos: { top: number; left: number }) => void;
+  onLanguageChange: (id: string, lang: string) => void;
+}
+
+function BlockEditor({
+  block,
+  idx,
+  isActive: _isActive,
+  onChange,
+  onKeyDown,
+  onFocus,
+  onDragStart,
+  onDrop,
+  onToggleExpand,
+  onSelection,
+  onToggleCheck,
+  onOpenActions,
+  onLanguageChange,
+}: BlockProps) {
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  useEffect(() => {
+    const el = textareaRef.current;
+    if (!el) return;
+    el.style.height = "auto";
+    el.style.height = `${el.scrollHeight}px`;
+  });
+
+  const typeStyles: Record<string, string> = {
+    heading1: "text-2xl font-bold font-display tracking-tight",
+    heading2: "text-xl font-bold font-display tracking-tight",
+    heading3: "text-base font-semibold font-display",
+    paragraph: "text-sm leading-relaxed",
+    bulletList: "text-sm leading-relaxed pl-4",
+    numberedList: "text-sm leading-relaxed pl-4",
+    todo: "text-sm leading-relaxed",
+    toggle: "text-sm leading-relaxed font-medium pl-5",
+    callout: "text-sm leading-relaxed pl-8",
+    code: "text-xs font-mono leading-relaxed",
+    quote: "text-sm leading-relaxed italic",
+  };
+
+  if (block.type === "divider") {
+    return (
+      <div
+        className="group relative flex items-center gap-2 py-2 cursor-pointer"
+        draggable
+        onDragStart={() => onDragStart(idx)}
+        onDrop={() => onDrop(idx)}
+        onDragOver={(e) => e.preventDefault()}
+        data-ocid={`block-divider-${block.id}`}
+      >
+        <button
+          type="button"
+          className="absolute -left-6 opacity-0 group-hover:opacity-100 transition-opacity cursor-grab text-muted-foreground"
+          title="Drag"
+          aria-label="Drag block"
+        >
+          <GripVertical className="h-3.5 w-3.5" />
+        </button>
+        <hr className="flex-1 border-border" />
+        <button
+          type="button"
+          className="absolute -right-6 opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground"
+          aria-label="Block options"
+          onClick={(e) => {
+            const r = e.currentTarget.getBoundingClientRect();
+            onOpenActions(block.id, { top: r.bottom + 4, left: r.left });
+          }}
+          data-ocid={`block-menu-${block.id}`}
+        >
+          <MoreHorizontal className="h-3 w-3" />
+        </button>
+      </div>
+    );
+  }
+
+  const wrapperClass =
+    block.type === "callout"
+      ? "bg-primary/5 border border-primary/20 rounded-lg px-4 py-2.5 relative"
+      : block.type === "code"
+        ? "bg-muted/60 border border-border rounded-lg px-4 py-2 relative"
+        : block.type === "quote"
+          ? "border-l-4 border-primary/50 pl-4 py-0.5"
+          : "";
+
+  return (
+    <div
+      className="group relative"
+      draggable
+      onDragStart={() => onDragStart(idx)}
+      onDrop={() => onDrop(idx)}
+      onDragOver={(e) => e.preventDefault()}
+      data-ocid={`block-${block.id}`}
+    >
+      {/* Drag handle */}
+      <button
+        type="button"
+        className="absolute -left-6 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 transition-opacity cursor-grab text-muted-foreground z-10"
+        title="Drag"
+        aria-label="Drag block"
+      >
+        <GripVertical className="h-3.5 w-3.5" />
+      </button>
+
+      {/* Block actions button */}
+      <button
+        type="button"
+        className="absolute -right-6 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground z-10 hover:text-foreground"
+        aria-label="Block options"
+        onClick={(e) => {
+          const r = e.currentTarget.getBoundingClientRect();
+          onOpenActions(block.id, { top: r.bottom + 4, left: r.left - 200 });
+        }}
+        data-ocid={`block-menu-${block.id}`}
+      >
+        <MoreHorizontal className="h-3.5 w-3.5" />
+      </button>
+
+      {/* Toggle arrow */}
+      {block.type === "toggle" && (
+        <button
+          type="button"
+          onClick={() => onToggleExpand(block.id)}
+          className="absolute left-0 top-1 text-muted-foreground hover:text-foreground transition-colors"
+          aria-label={block.expanded ? "Collapse" : "Expand"}
+        >
+          <ChevronDown
+            className={`h-3.5 w-3.5 transition-transform ${block.expanded ? "" : "-rotate-90"}`}
+          />
+        </button>
+      )}
+
+      {/* Callout icon */}
+      {block.type === "callout" && (
+        <span className="absolute left-3 top-3 text-base select-none">
+          {block.calloutIcon ?? "💡"}
+        </span>
+      )}
+
+      {/* Bullet dot */}
+      {block.type === "bulletList" && (
+        <span className="absolute left-1 top-2.5 h-1.5 w-1.5 rounded-full bg-foreground/50" />
+      )}
+
+      {/* Todo checkbox */}
+      {block.type === "todo" && (
+        <button
+          type="button"
+          onClick={() => onToggleCheck(block.id)}
+          className="absolute left-0 top-1 h-4 w-4 rounded border border-border/70 flex items-center justify-center hover:border-primary transition-colors bg-background"
+          aria-label={block.checked ? "Uncheck" : "Check"}
+          data-ocid={`todo-check-${block.id}`}
+        >
+          {block.checked && <Check className="h-2.5 w-2.5 text-primary" />}
+        </button>
+      )}
+
+      <div className={wrapperClass}>
+        {/* Code language selector */}
+        {block.type === "code" && (
+          <div className="absolute top-2 right-2 z-10">
+            <select
+              value={block.language ?? "plaintext"}
+              onChange={(e) => onLanguageChange(block.id, e.target.value)}
+              className="text-[10px] font-mono text-muted-foreground bg-transparent border-0 outline-none cursor-pointer hover:text-foreground transition-colors"
+              data-ocid={`code-lang-${block.id}`}
+            >
+              {CODE_LANGUAGES.map((lang) => (
+                <option key={lang} value={lang}>
+                  {lang}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
+
+        {block.type === "toggle" && !block.expanded ? (
+          <button
+            type="button"
+            className={`${typeStyles.toggle} text-foreground/70 cursor-pointer w-full text-left`}
+            onClick={() => onToggleExpand(block.id)}
+          >
+            {block.content || (
+              <span className="text-muted-foreground/50">Toggle block…</span>
+            )}
+          </button>
+        ) : (
+          <textarea
+            ref={textareaRef}
+            value={block.content}
+            onChange={(e) => onChange(block.id, e.target.value)}
+            onKeyDown={(e) => onKeyDown(e, block.id)}
+            onFocus={(e) => onFocus(block.id, e.currentTarget)}
+            onSelect={(e) => onSelection(e.currentTarget)}
+            className={`w-full resize-none bg-transparent outline-none placeholder:text-muted-foreground/40 ${typeStyles[block.type] ?? "text-sm"} ${block.checked ? "line-through text-muted-foreground" : ""} ${block.type === "code" ? "pt-5" : ""}`}
+            placeholder={
+              block.type === "heading1"
+                ? "Heading 1"
+                : block.type === "heading2"
+                  ? "Heading 2"
+                  : block.type === "heading3"
+                    ? "Heading 3"
+                    : block.type === "callout"
+                      ? "Add a callout…"
+                      : block.type === "code"
+                        ? "// Write code here…"
+                        : block.type === "quote"
+                          ? "Quote…"
+                          : block.type === "toggle"
+                            ? "Toggle title…"
+                            : block.type === "todo"
+                              ? "To-do item"
+                              : "Type something, or press / for blocks"
+            }
+            rows={1}
+            data-block-id={block.id}
+            data-ocid={`block-input-${block.id}`}
+            spellCheck={block.type !== "code"}
+          />
+        )}
+      </div>
+    </div>
+  );
+}
+
 // ── Main Page ─────────────────────────────────────────────────────────────────
 export default function NoteDetailPage() {
   const { workspaceId, noteId } = useParams({
@@ -815,7 +1072,6 @@ export default function NoteDetailPage() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
 
-  // Editor state
   const [editTitle, setEditTitle] = useState("");
   const [blocks, setBlocks] = useState<EditorBlock[]>([
     { id: generateId(), type: "paragraph", content: "" },
@@ -823,55 +1079,42 @@ export default function NoteDetailPage() {
   const [editTags, setEditTags] = useState<string[]>([]);
   const [editTagInput, setEditTagInput] = useState("");
   const [editCrossLinks, setEditCrossLinks] = useState<CrossLink[]>([]);
-
-  // Cover & icon
   const [cover, setCover] = useState("");
   const [icon, setIcon] = useState("");
   const [showCoverPicker, setShowCoverPicker] = useState(false);
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
-
-  // Save status
   const [saveStatus, setSaveStatus] = useState<SaveStatus>("idle");
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  // Presence
   const [activeEditors, setActiveEditors] = useState<NoteEditorPresence[]>([]);
   const [lastEdit, setLastEdit] = useState<{
     displayName: string;
     editedAt: bigint;
   } | null>(null);
-  const presenceIntervalRef = useRef<ReturnType<typeof setInterval> | null>(
-    null,
-  );
-
-  // Active block tracking
   const [activeBlockId, setActiveBlockId] = useState<string | null>(null);
   const [dragIdx, setDragIdx] = useState<number | null>(null);
-
-  // Slash menu
   const [slashMenu, setSlashMenu] = useState<{
     blockId: string;
     query: string;
     position: { top: number; left: number };
   } | null>(null);
-
-  // Inline toolbar
   const [inlineToolbar, setInlineToolbar] = useState<{
     position: { top: number; left: number };
     blockId: string;
   } | null>(null);
-
-  // Mention picker
   const [mentionMenu, setMentionMenu] = useState<{
     blockId: string;
     query: string;
     position: { top: number; left: number };
   } | null>(null);
+  const [blockActions, setBlockActions] = useState<{
+    blockId: string;
+    position: { top: number; left: number };
+  } | null>(null);
   const [members, setMembers] = useState<
     Array<{ id: string; displayName: string }>
   >([]);
+  const isEditingRef = useRef(false);
 
-  // Fetch note
   const {
     data: note,
     isLoading,
@@ -887,23 +1130,18 @@ export default function NoteDetailPage() {
     enabled: !!actor && !isFetching,
   });
 
-  // Seed editor from note
   useEffect(() => {
     if (note) {
       setEditTitle(note.title);
-      setBlocks(deserializeBlocks(note.content));
+      setBlocks(jsonToBlocks(note.content));
       setEditTags([...note.tags]);
       setEditCrossLinks([...note.crossLinks]);
-      const noteWithMeta = note as Note & {
-        coverGradient?: string;
-        iconEmoji?: string;
-      };
-      if (noteWithMeta.coverGradient) setCover(noteWithMeta.coverGradient);
-      if (noteWithMeta.iconEmoji) setIcon(noteWithMeta.iconEmoji);
+      const n = note as Note & { coverGradient?: string; iconEmoji?: string };
+      if (n.coverGradient) setCover(n.coverGradient);
+      if (n.iconEmoji) setIcon(n.iconEmoji);
     }
   }, [note]);
 
-  // Fetch last edit info
   useEffect(() => {
     if (!actor || !noteId || isFetching) return;
     actor
@@ -915,7 +1153,6 @@ export default function NoteDetailPage() {
       .catch(() => {});
   }, [actor, tenantId, workspaceId, noteId, isFetching]);
 
-  // Fetch workspace members for @mentions
   useEffect(() => {
     if (!actor || isFetching) return;
     actor
@@ -931,40 +1168,56 @@ export default function NoteDetailPage() {
       .catch(() => {});
   }, [actor, tenantId, workspaceId, isFetching]);
 
-  // Presence: update every 15s, poll every 8s
+  // Presence: update + poll every 5s
   useEffect(() => {
     if (!actor || !noteId || isFetching) return;
-    const updatePresence = async () => {
+    let cancelled = false;
+
+    const getDisplayName = async (): Promise<string> => {
       try {
         const profile = await actor.getMyProfile(tenantId);
-        const displayName = profile
-          ? `${(profile as { firstName?: string }).firstName ?? ""} ${(profile as { lastName?: string }).lastName ?? ""}`.trim() ||
-            "Anonymous"
-          : "Anonymous";
+        if (profile) {
+          const p = profile as { firstName?: string; lastName?: string };
+          return (
+            `${p.firstName ?? ""} ${p.lastName ?? ""}`.trim() || "Anonymous"
+          );
+        }
+      } catch {}
+      return "Anonymous";
+    };
+
+    const doUpdate = async () => {
+      if (cancelled) return;
+      try {
+        const name = await getDisplayName();
         await actor.updateNotePresence(
           tenantId,
           workspaceId,
           noteId,
-          displayName,
+          name,
+          isEditingRef.current,
         );
       } catch {}
     };
-    const pollEditors = async () => {
+
+    const doPoll = async () => {
+      if (cancelled) return;
       try {
         const editors = await actor.getNoteActiveEditors(
           tenantId,
           workspaceId,
           noteId,
         );
-        setActiveEditors(editors);
+        if (!cancelled) setActiveEditors(editors);
       } catch {}
     };
-    updatePresence();
-    pollEditors();
-    const presenceInterval = setInterval(updatePresence, 15_000);
-    const pollInterval = setInterval(pollEditors, 8_000);
-    presenceIntervalRef.current = presenceInterval;
+
+    doUpdate();
+    doPoll();
+    const presenceInterval = setInterval(doUpdate, 5000);
+    const pollInterval = setInterval(doPoll, 5000);
     return () => {
+      cancelled = true;
       clearInterval(presenceInterval);
       clearInterval(pollInterval);
     };
@@ -1028,13 +1281,10 @@ export default function NoteDetailPage() {
   });
 
   const handleSave = useCallback(() => {
-    if (!editTitle.trim()) {
-      toast.error("Title is required");
-      return;
-    }
+    if (!editTitle.trim()) return;
     const payload: NoteInput = {
       title: editTitle.trim(),
-      content: serializeBlocks(blocks),
+      content: blocksToJson(blocks),
       tags: editTags,
       crossLinks: editCrossLinks,
     };
@@ -1049,12 +1299,12 @@ export default function NoteDetailPage() {
     handleSaveRef.current = handleSave;
   }, [handleSave]);
 
-  // Autosave: fires 2s after last change to title, blocks, tags, cover, or icon
+  // Autosave debounce: 800ms
   const triggerAutoSave = useCallback(() => {
     if (debounceRef.current) clearTimeout(debounceRef.current);
     debounceRef.current = setTimeout(() => {
       if (editTitle.trim()) handleSaveRef.current();
-    }, 2000);
+    }, 800);
   }, [editTitle]);
 
   useEffect(() => {
@@ -1064,7 +1314,6 @@ export default function NoteDetailPage() {
     };
   }, [triggerAutoSave]);
 
-  // Also trigger save when blocks/tags/cover/icon change (not just title)
   const blocksRef = useRef(blocks);
   useEffect(() => {
     if (blocksRef.current !== blocks) {
@@ -1095,8 +1344,8 @@ export default function NoteDetailPage() {
       { prefix: "- ", type: "bulletList" },
       { prefix: "* ", type: "bulletList" },
       { prefix: "1. ", type: "numberedList" },
-      { prefix: "``` ", type: "code" },
-      { prefix: "```\n", type: "code" },
+      { prefix: "[] ", type: "todo" },
+      { prefix: "[ ] ", type: "todo" },
     ];
     for (const { prefix, type } of shortcuts) {
       if (value === prefix) {
@@ -1123,7 +1372,6 @@ export default function NoteDetailPage() {
     const { selectionStart, selectionEnd, value } = el;
     const blockIdx = blocks.findIndex((b) => b.id === blockId);
 
-    // Markdown shortcut check on Space key
     if (e.key === " ") {
       const withSpace = `${value.slice(0, selectionStart)} `;
       if (checkMarkdownShortcut(withSpace, blockId)) {
@@ -1172,6 +1420,32 @@ export default function NoteDetailPage() {
       }
     }
 
+    // Tab key moves focus to next block (or creates one)
+    if (e.key === "Tab" && !e.shiftKey && !slashMenu && !mentionMenu) {
+      e.preventDefault();
+      const nextBlock = blocks[blockIdx + 1];
+      if (nextBlock) {
+        const target = document.querySelector(
+          `[data-block-id="${nextBlock.id}"]`,
+        ) as HTMLTextAreaElement;
+        target?.focus();
+      } else {
+        const newBlock: EditorBlock = {
+          id: generateId(),
+          type: "paragraph",
+          content: "",
+        };
+        setBlocks((prev) => [...prev, newBlock]);
+        requestAnimationFrame(() => {
+          const target = document.querySelector(
+            `[data-block-id="${newBlock.id}"]`,
+          ) as HTMLTextAreaElement;
+          target?.focus();
+        });
+      }
+      return;
+    }
+
     // Enter: add new paragraph block below
     if (e.key === "Enter" && !e.shiftKey && !slashMenu && !mentionMenu) {
       const block = blocks[blockIdx];
@@ -1182,7 +1456,6 @@ export default function NoteDetailPage() {
       e.preventDefault();
       const before = value.slice(0, selectionStart);
       const after = value.slice(selectionEnd);
-      // Split content
       const newBlock: EditorBlock = {
         id: generateId(),
         type: "paragraph",
@@ -1194,7 +1467,6 @@ export default function NoteDetailPage() {
         newBlock,
         ...prev.slice(blockIdx + 1),
       ]);
-      // Focus new block
       requestAnimationFrame(() => {
         const target = document.querySelector(
           `[data-block-id="${newBlock.id}"]`,
@@ -1209,7 +1481,6 @@ export default function NoteDetailPage() {
     if (e.key === "Backspace" && value === "" && blocks.length > 1) {
       e.preventDefault();
       setBlocks((prev) => prev.filter((b) => b.id !== blockId));
-      // Focus previous block
       if (blockIdx > 0) {
         requestAnimationFrame(() => {
           const prevBlock = blocks[blockIdx - 1];
@@ -1225,7 +1496,7 @@ export default function NoteDetailPage() {
       return;
     }
 
-    // Arrow up/down to move between blocks
+    // Arrow navigation between blocks
     if (e.key === "ArrowUp" && selectionStart === 0 && blockIdx > 0) {
       e.preventDefault();
       const prevBlock = blocks[blockIdx - 1];
@@ -1292,7 +1563,7 @@ export default function NoteDetailPage() {
   function handleBlockFocus(id: string, el: HTMLTextAreaElement) {
     setActiveBlockId(id);
     setInlineToolbar(null);
-    // Check if there's a draft slash command
+    isEditingRef.current = true;
     if (el.value === "/") {
       const rect = el.getBoundingClientRect();
       setSlashMenu({
@@ -1308,12 +1579,11 @@ export default function NoteDetailPage() {
     if (selectionStart !== selectionEnd) {
       const rect = el.getBoundingClientRect();
       const blockId = el.dataset.blockId;
-      if (blockId) {
+      if (blockId)
         setInlineToolbar({
           position: { top: rect.top, left: rect.left + rect.width / 2 - 80 },
           blockId,
         });
-      }
     } else {
       setInlineToolbar(null);
     }
@@ -1333,7 +1603,17 @@ export default function NoteDetailPage() {
     if (!slashMenu) return;
     const { blockId } = slashMenu;
     setBlocks((prev) =>
-      prev.map((b) => (b.id === blockId ? { ...b, type, content: "" } : b)),
+      prev.map((b) =>
+        b.id === blockId
+          ? {
+              ...b,
+              type,
+              content: "",
+              calloutIcon: type === "callout" ? "💡" : undefined,
+              language: type === "code" ? "plaintext" : undefined,
+            }
+          : b,
+      ),
     );
     setSlashMenu(null);
     requestAnimationFrame(() => {
@@ -1377,7 +1657,32 @@ export default function NoteDetailPage() {
     setDragIdx(null);
   }
 
-  // Tag handlers
+  function handleBlockAction(
+    blockId: string,
+    action: "turnInto" | "duplicate" | "delete",
+    newType?: BlockType,
+  ) {
+    if (action === "turnInto" && newType) {
+      setBlocks((prev) =>
+        prev.map((b) => (b.id === blockId ? { ...b, type: newType } : b)),
+      );
+    } else if (action === "duplicate") {
+      const blockIdx = blocks.findIndex((b) => b.id === blockId);
+      if (blockIdx >= 0) {
+        const copy: EditorBlock = { ...blocks[blockIdx], id: generateId() };
+        setBlocks((prev) => [
+          ...prev.slice(0, blockIdx + 1),
+          copy,
+          ...prev.slice(blockIdx + 1),
+        ]);
+      }
+    } else if (action === "delete") {
+      if (blocks.length > 1) {
+        setBlocks((prev) => prev.filter((b) => b.id !== blockId));
+      }
+    }
+  }
+
   function handleTagKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
     if (e.key === "Enter" || e.key === ",") {
       e.preventDefault();
@@ -1390,7 +1695,7 @@ export default function NoteDetailPage() {
     }
   }
 
-  // Loading / error states
+  // Loading state
   if (isLoading) {
     return (
       <div className="p-4 sm:p-6 max-w-3xl space-y-5 pb-20 md:pb-6">
@@ -1439,19 +1744,35 @@ export default function NoteDetailPage() {
   }
 
   const activeCover = COVER_GRADIENTS.find((c) => c.id === cover);
+  const tocItems = blocks
+    .filter(
+      (b) =>
+        b.type === "heading1" || b.type === "heading2" || b.type === "heading3",
+    )
+    .map((b) => ({
+      id: b.id,
+      level: b.type === "heading1" ? 1 : b.type === "heading2" ? 2 : 3,
+      content: b.content || "(Untitled heading)",
+    }));
 
   return (
     <div
       className="animate-fade-in-up pb-20 md:pb-8"
       onClick={() => {
         setSlashMenu(null);
+        setBlockActions(null);
       }}
       onKeyDown={(e) => {
-        if (e.key === "Escape") setSlashMenu(null);
+        if (e.key === "Escape") {
+          setSlashMenu(null);
+          setBlockActions(null);
+        }
+      }}
+      onBlur={() => {
+        isEditingRef.current = false;
       }}
       role="presentation"
     >
-      {/* Slash menu */}
       {slashMenu && (
         <SlashMenu
           query={slashMenu.query}
@@ -1460,16 +1781,12 @@ export default function NoteDetailPage() {
           onClose={() => setSlashMenu(null)}
         />
       )}
-
-      {/* Inline toolbar */}
       {inlineToolbar && (
         <InlineToolbar
           position={inlineToolbar.position}
           onFormat={handleInlineFormat}
         />
       )}
-
-      {/* Mention picker */}
       {mentionMenu && (
         <MentionPicker
           query={mentionMenu.query}
@@ -1477,6 +1794,24 @@ export default function NoteDetailPage() {
           members={members}
           onSelect={handleMentionSelect}
           onClose={() => setMentionMenu(null)}
+        />
+      )}
+      {blockActions && (
+        <BlockActionsMenu
+          blockId={blockActions.blockId}
+          blockType={
+            blocks.find((b) => b.id === blockActions.blockId)?.type ??
+            "paragraph"
+          }
+          position={blockActions.position}
+          onTurnInto={(type) =>
+            handleBlockAction(blockActions.blockId, "turnInto", type)
+          }
+          onDuplicate={() =>
+            handleBlockAction(blockActions.blockId, "duplicate")
+          }
+          onDelete={() => handleBlockAction(blockActions.blockId, "delete")}
+          onClose={() => setBlockActions(null)}
         />
       )}
 
@@ -1511,298 +1846,365 @@ export default function NoteDetailPage() {
         </div>
       )}
 
-      <div className="p-4 sm:p-8 max-w-3xl">
-        {/* Top bar */}
-        <div className="flex items-center justify-between gap-3 mb-4">
-          <div className="flex items-center gap-2.5">
-            <Button
-              variant="ghost"
-              size="icon"
-              asChild
-              className="shrink-0 h-9 w-9 min-h-[44px] min-w-[44px]"
-            >
-              <Link
-                to="/app/$workspaceId/notes"
-                params={{ workspaceId }}
-                aria-label="Back to notes"
+      <div className="flex gap-0 relative">
+        {/* ToC sidebar — desktop only, 2+ headings */}
+        {tocItems.length > 1 && (
+          <aside
+            className="hidden xl:flex w-52 shrink-0 flex-col sticky top-4 self-start pt-16 pl-4 pr-2 space-y-0.5 max-h-[calc(100vh-4rem)] overflow-y-auto"
+            aria-label="Table of contents"
+            data-ocid="note-toc"
+          >
+            <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground mb-2 px-2">
+              Contents
+            </p>
+            {tocItems.map((item) => (
+              <button
+                key={item.id}
+                type="button"
+                onClick={() => {
+                  const el = document.querySelector(
+                    `[data-block-id="${item.id}"]`,
+                  ) as HTMLElement;
+                  if (el)
+                    el.scrollIntoView({ behavior: "smooth", block: "center" });
+                }}
+                className={`text-left rounded-md px-2 py-1 text-xs text-muted-foreground hover:text-foreground hover:bg-muted transition-colors truncate ${item.level === 1 ? "font-semibold" : item.level === 2 ? "pl-4 font-medium" : "pl-6"}`}
+                data-ocid={`toc-item-${item.id}`}
               >
-                <ArrowLeft className="h-4 w-4" />
-              </Link>
-            </Button>
-          </div>
+                {item.content}
+              </button>
+            ))}
+          </aside>
+        )}
 
-          <div className="flex items-center gap-2 shrink-0">
-            <SaveIndicator status={saveStatus} />
-
-            {!activeCover && (
-              <Popover open={showCoverPicker} onOpenChange={setShowCoverPicker}>
-                <PopoverTrigger asChild>
+        <div className="p-4 sm:p-8 max-w-3xl flex-1 min-w-0">
+          {/* Toolbar */}
+          <div className="flex items-center justify-between gap-3 mb-4">
+            <div className="flex items-center gap-2.5">
+              <Button
+                variant="ghost"
+                size="icon"
+                asChild
+                className="shrink-0 h-9 w-9 min-h-[44px] min-w-[44px]"
+              >
+                <Link
+                  to="/app/$workspaceId/notes"
+                  params={{ workspaceId }}
+                  aria-label="Back to notes"
+                >
+                  <ArrowLeft className="h-4 w-4" />
+                </Link>
+              </Button>
+            </div>
+            <div className="flex items-center gap-2 shrink-0">
+              <SaveIndicator status={saveStatus} />
+              {!activeCover && (
+                <Popover
+                  open={showCoverPicker}
+                  onOpenChange={setShowCoverPicker}
+                >
+                  <PopoverTrigger asChild>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className="h-8 text-xs text-muted-foreground gap-1.5"
+                      data-ocid="note-add-cover-btn"
+                    >
+                      <ImageIcon className="h-3 w-3" /> Cover
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-64 p-3" align="end">
+                    <p className="text-xs font-medium text-muted-foreground mb-2">
+                      Choose a gradient
+                    </p>
+                    <div className="grid grid-cols-3 gap-2">
+                      {COVER_GRADIENTS.map((g) => (
+                        <button
+                          key={g.id}
+                          type="button"
+                          onClick={() => {
+                            setCover(g.id);
+                            setShowCoverPicker(false);
+                          }}
+                          className={`h-10 rounded-lg bg-gradient-to-r ${g.value} hover:ring-2 hover:ring-primary/60 transition-all ${cover === g.id ? "ring-2 ring-primary" : ""}`}
+                          aria-label={g.label}
+                        />
+                      ))}
+                    </div>
+                  </PopoverContent>
+                </Popover>
+              )}
+              <AlertDialog>
+                <AlertDialogTrigger asChild>
                   <Button
                     size="sm"
                     variant="ghost"
-                    className="h-8 text-xs text-muted-foreground gap-1.5"
-                    data-ocid="note-add-cover-btn"
+                    className="h-8 text-destructive hover:text-destructive hover:bg-destructive/10"
+                    data-ocid="note-delete-btn"
+                    aria-label="Delete note"
                   >
-                    <ImageIcon className="h-3 w-3" /> Cover
+                    <Trash2 className="h-3.5 w-3.5" />
                   </Button>
-                </PopoverTrigger>
-                <PopoverContent className="w-64 p-3" align="end">
-                  <p className="text-xs font-medium text-muted-foreground mb-2">
-                    Choose a gradient
-                  </p>
-                  <div className="grid grid-cols-3 gap-2">
-                    {COVER_GRADIENTS.map((g) => (
-                      <button
-                        key={g.id}
-                        type="button"
-                        onClick={() => {
-                          setCover(g.id);
-                          setShowCoverPicker(false);
-                        }}
-                        className={`h-10 rounded-lg bg-gradient-to-r ${g.value} hover:ring-2 hover:ring-primary/60 transition-all ${cover === g.id ? "ring-2 ring-primary" : ""}`}
-                        aria-label={g.label}
-                      />
-                    ))}
-                  </div>
-                </PopoverContent>
-              </Popover>
-            )}
-
-            <AlertDialog>
-              <AlertDialogTrigger asChild>
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  className="h-8 text-destructive hover:text-destructive hover:bg-destructive/10"
-                  data-ocid="note-delete-btn"
-                  aria-label="Delete note"
-                >
-                  <Trash2 className="h-3.5 w-3.5" />
-                </Button>
-              </AlertDialogTrigger>
-              <AlertDialogContent className="mx-4 max-w-sm sm:max-w-md">
-                <AlertDialogHeader>
-                  <AlertDialogTitle>Delete this note?</AlertDialogTitle>
-                  <AlertDialogDescription>
-                    <strong>"{note.title}"</strong> will be permanently deleted.
-                  </AlertDialogDescription>
-                </AlertDialogHeader>
-                <AlertDialogFooter className="flex-col-reverse sm:flex-row gap-2">
-                  <AlertDialogCancel className="w-full sm:w-auto">
-                    Cancel
-                  </AlertDialogCancel>
-                  <AlertDialogAction
-                    onClick={() => deleteNote()}
-                    disabled={isDeleting}
-                    className="bg-destructive text-destructive-foreground hover:bg-destructive/90 w-full sm:w-auto"
-                    data-ocid="note-delete-confirm-btn"
-                  >
-                    {isDeleting && (
-                      <Loader2 className="h-4 w-4 animate-spin mr-2" />
-                    )}{" "}
-                    Delete
-                  </AlertDialogAction>
-                </AlertDialogFooter>
-              </AlertDialogContent>
-            </AlertDialog>
-          </div>
-        </div>
-
-        {/* Presence bar */}
-        <PresenceBar editors={activeEditors} />
-
-        {/* Note header: emoji icon + title */}
-        <div className="mb-6 space-y-2">
-          <div className="flex items-center gap-2">
-            <Popover open={showEmojiPicker} onOpenChange={setShowEmojiPicker}>
-              <PopoverTrigger asChild>
-                <button
-                  type="button"
-                  className="text-3xl h-10 w-10 flex items-center justify-center rounded-lg hover:bg-muted transition-colors"
-                  aria-label="Set note icon"
-                  data-ocid="note-icon-btn"
-                >
-                  {icon || (
-                    <span className="text-muted-foreground/30 text-base">
-                      +
-                    </span>
-                  )}
-                </button>
-              </PopoverTrigger>
-              <PopoverContent className="w-64 p-2" align="start">
-                <p className="text-xs font-medium text-muted-foreground mb-2 px-1">
-                  Pick an icon
-                </p>
-                <div className="grid grid-cols-10 gap-0.5">
-                  {COMMON_EMOJIS.map((emoji) => (
-                    <button
-                      key={emoji}
-                      type="button"
-                      onClick={() => {
-                        setIcon(emoji);
-                        setShowEmojiPicker(false);
-                      }}
-                      className="h-7 w-7 flex items-center justify-center rounded text-lg hover:bg-muted transition-colors"
+                </AlertDialogTrigger>
+                <AlertDialogContent className="mx-4 max-w-sm sm:max-w-md">
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>Delete this note?</AlertDialogTitle>
+                    <AlertDialogDescription>
+                      <strong>"{note.title}"</strong> will be permanently
+                      deleted.
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter className="flex-col-reverse sm:flex-row gap-2">
+                    <AlertDialogCancel className="w-full sm:w-auto">
+                      Cancel
+                    </AlertDialogCancel>
+                    <AlertDialogAction
+                      onClick={() => deleteNote()}
+                      disabled={isDeleting}
+                      className="bg-destructive text-destructive-foreground hover:bg-destructive/90 w-full sm:w-auto"
+                      data-ocid="note-delete-confirm-btn"
                     >
-                      {emoji}
-                    </button>
-                  ))}
-                </div>
-                {icon && (
+                      {isDeleting && (
+                        <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                      )}{" "}
+                      Delete
+                    </AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
+            </div>
+          </div>
+
+          {/* Presence bar */}
+          <PresenceBar editors={activeEditors} />
+
+          {/* Note header: icon + title */}
+          <div className="mb-6 space-y-2">
+            <div className="flex items-center gap-2">
+              <Popover open={showEmojiPicker} onOpenChange={setShowEmojiPicker}>
+                <PopoverTrigger asChild>
                   <button
                     type="button"
-                    onClick={() => {
-                      setIcon("");
-                      setShowEmojiPicker(false);
-                    }}
-                    className="mt-2 w-full text-xs text-muted-foreground hover:text-foreground text-center py-1"
+                    className="text-3xl h-10 w-10 flex items-center justify-center rounded-lg hover:bg-muted transition-colors"
+                    aria-label="Set note icon"
+                    data-ocid="note-icon-btn"
                   >
-                    Remove icon
+                    {icon || (
+                      <span className="text-muted-foreground/30 text-base">
+                        📄
+                      </span>
+                    )}
                   </button>
-                )}
-              </PopoverContent>
-            </Popover>
+                </PopoverTrigger>
+                <PopoverContent className="w-64 p-2" align="start">
+                  <p className="text-xs font-medium text-muted-foreground mb-2 px-1">
+                    Pick an icon
+                  </p>
+                  <div className="grid grid-cols-10 gap-0.5">
+                    {COMMON_EMOJIS.map((emoji) => (
+                      <button
+                        key={emoji}
+                        type="button"
+                        onClick={() => {
+                          setIcon(emoji);
+                          setShowEmojiPicker(false);
+                        }}
+                        className="h-7 w-7 flex items-center justify-center rounded text-lg hover:bg-muted transition-colors"
+                      >
+                        {emoji}
+                      </button>
+                    ))}
+                  </div>
+                  {icon && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIcon("");
+                        setShowEmojiPicker(false);
+                      }}
+                      className="mt-2 w-full text-xs text-muted-foreground hover:text-foreground text-center py-1"
+                    >
+                      Remove icon
+                    </button>
+                  )}
+                </PopoverContent>
+              </Popover>
+              <input
+                value={editTitle}
+                onChange={(e) => setEditTitle(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Tab") {
+                    e.preventDefault();
+                    const firstBlock = blocks[0];
+                    if (firstBlock) {
+                      const target = document.querySelector(
+                        `[data-block-id="${firstBlock.id}"]`,
+                      ) as HTMLTextAreaElement;
+                      target?.focus();
+                    }
+                  }
+                }}
+                className="flex-1 bg-transparent text-2xl sm:text-3xl font-bold font-display text-foreground outline-none placeholder:text-muted-foreground/30 tracking-tight"
+                placeholder="Untitled"
+                data-ocid="note-title-input"
+              />
+            </div>
 
-            <input
-              value={editTitle}
-              onChange={(e) => setEditTitle(e.target.value)}
-              className="flex-1 bg-transparent text-2xl sm:text-3xl font-bold font-display text-foreground outline-none placeholder:text-muted-foreground/30 tracking-tight"
-              placeholder="Untitled"
-              data-ocid="note-title-input"
+            <div className="flex items-center gap-3 text-xs text-muted-foreground">
+              <Calendar className="h-3 w-3 shrink-0" />
+              <span>
+                Created{" "}
+                {new Date(
+                  Number(note.createdAt) / 1_000_000,
+                ).toLocaleDateString("en-US", {
+                  month: "long",
+                  day: "numeric",
+                  year: "numeric",
+                })}
+              </span>
+              {lastEdit && (
+                <>
+                  <span className="text-muted-foreground/40">·</span>
+                  <span>
+                    Last edited by{" "}
+                    <span className="text-foreground font-medium">
+                      {lastEdit.displayName}
+                    </span>{" "}
+                    {formatRelativeTime(lastEdit.editedAt)}
+                  </span>
+                </>
+              )}
+            </div>
+          </div>
+
+          {/* Tags */}
+          <div className="flex flex-wrap gap-1.5 items-center mb-5">
+            {editTags.map((tag) => (
+              <span
+                key={tag}
+                className="inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-medium bg-primary/10 text-primary"
+              >
+                {tag}
+                <button
+                  type="button"
+                  onClick={() =>
+                    setEditTags((prev) => prev.filter((t) => t !== tag))
+                  }
+                  className="hover:text-destructive rounded-sm"
+                  aria-label={`Remove tag ${tag}`}
+                >
+                  <X className="h-2.5 w-2.5" />
+                </button>
+              </span>
+            ))}
+            <Input
+              placeholder="+ Add tag"
+              value={editTagInput}
+              onChange={(e) => setEditTagInput(e.target.value)}
+              onKeyDown={handleTagKeyDown}
+              onBlur={() => {
+                if (editTagInput.trim()) {
+                  const newTags = editTagInput
+                    .split(",")
+                    .map((t) => t.trim().toLowerCase())
+                    .filter((t) => t.length > 0 && !editTags.includes(t));
+                  if (newTags.length > 0)
+                    setEditTags((prev) => [...prev, ...newTags]);
+                  setEditTagInput("");
+                }
+              }}
+              className="h-7 w-24 border-0 px-2 shadow-none bg-transparent text-xs focus-visible:ring-0 text-muted-foreground placeholder:text-muted-foreground/40"
+              data-ocid="note-tag-input"
             />
           </div>
 
-          <div className="flex items-center gap-3 text-xs text-muted-foreground">
-            <Calendar className="h-3 w-3 shrink-0" />
-            <span>
-              Created{" "}
-              {new Date(Number(note.createdAt) / 1_000_000).toLocaleDateString(
-                "en-US",
-                { month: "long", day: "numeric", year: "numeric" },
-              )}
-            </span>
-            {lastEdit && (
-              <>
-                <span className="text-muted-foreground/40">·</span>
-                <span>
-                  Last edited by{" "}
-                  <span className="text-foreground font-medium">
-                    {lastEdit.displayName}
-                  </span>{" "}
-                  {formatRelativeTime(lastEdit.editedAt)}
-                </span>
-              </>
-            )}
-          </div>
-        </div>
+          {/* Block editor */}
+          <div
+            className="space-y-1 relative pl-6"
+            data-ocid="note-block-editor"
+          >
+            {blocks.map((block, idx) => (
+              <BlockEditor
+                key={block.id}
+                block={block}
+                idx={idx}
+                isActive={activeBlockId === block.id}
+                onChange={updateBlockContent}
+                onKeyDown={handleBlockKeyDown}
+                onFocus={handleBlockFocus}
+                onDragStart={(i) => setDragIdx(i)}
+                onDrop={(i) => dragIdx !== null && handleDragDrop(dragIdx, i)}
+                onToggleExpand={(id) =>
+                  setBlocks((prev) =>
+                    prev.map((b) =>
+                      b.id === id ? { ...b, expanded: !b.expanded } : b,
+                    ),
+                  )
+                }
+                onSelection={handleSelection}
+                onToggleCheck={(id) =>
+                  setBlocks((prev) =>
+                    prev.map((b) =>
+                      b.id === id ? { ...b, checked: !b.checked } : b,
+                    ),
+                  )
+                }
+                onOpenActions={(id, pos) => {
+                  setBlockActions({ blockId: id, position: pos });
+                }}
+                onLanguageChange={(id, lang) =>
+                  setBlocks((prev) =>
+                    prev.map((b) =>
+                      b.id === id ? { ...b, language: lang } : b,
+                    ),
+                  )
+                }
+              />
+            ))}
 
-        {/* Tags */}
-        <div className="flex flex-wrap gap-1.5 items-center mb-5">
-          {editTags.map((tag) => (
-            <span
-              key={tag}
-              className="inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-medium bg-primary/10 text-primary"
-            >
-              {tag}
+            {/* Add block hint */}
+            <div className="pt-6 pb-2">
               <button
                 type="button"
-                onClick={() =>
-                  setEditTags((prev) => prev.filter((t) => t !== tag))
-                }
-                className="hover:text-destructive rounded-sm"
-                aria-label={`Remove tag ${tag}`}
+                onClick={() => {
+                  const newBlock: EditorBlock = {
+                    id: generateId(),
+                    type: "paragraph",
+                    content: "",
+                  };
+                  setBlocks((prev) => [...prev, newBlock]);
+                  requestAnimationFrame(() => {
+                    const el = document.querySelector(
+                      `[data-block-id="${newBlock.id}"]`,
+                    ) as HTMLTextAreaElement;
+                    el?.focus();
+                  });
+                }}
+                className="text-xs text-muted-foreground/30 hover:text-muted-foreground/60 transition-colors"
+                data-ocid="note-add-block-btn"
               >
-                <X className="h-2.5 w-2.5" />
+                Start writing, or press / for commands
               </button>
-            </span>
-          ))}
-          <Input
-            placeholder="+ Add tag"
-            value={editTagInput}
-            onChange={(e) => setEditTagInput(e.target.value)}
-            onKeyDown={handleTagKeyDown}
-            onBlur={() => {
-              if (editTagInput.trim()) {
-                const newTags = editTagInput
-                  .split(",")
-                  .map((t) => t.trim().toLowerCase())
-                  .filter((t) => t.length > 0 && !editTags.includes(t));
-                if (newTags.length > 0)
-                  setEditTags((prev) => [...prev, ...newTags]);
-                setEditTagInput("");
-              }
-            }}
-            className="h-7 w-24 border-0 px-2 shadow-none bg-transparent text-xs focus-visible:ring-0 text-muted-foreground placeholder:text-muted-foreground/40"
-            data-ocid="note-tag-input"
-          />
-        </div>
-
-        {/* Block editor */}
-        <div className="space-y-1 relative pl-6" data-ocid="note-block-editor">
-          {blocks.map((block, idx) => (
-            <BlockEditor
-              key={block.id}
-              block={block}
-              idx={idx}
-              isActive={activeBlockId === block.id}
-              onChange={updateBlockContent}
-              onKeyDown={handleBlockKeyDown}
-              onFocus={handleBlockFocus}
-              onDragStart={(i) => setDragIdx(i)}
-              onDrop={(i) => dragIdx !== null && handleDragDrop(dragIdx, i)}
-              onToggleExpand={(id) =>
-                setBlocks((prev) =>
-                  prev.map((b) =>
-                    b.id === id ? { ...b, expanded: !b.expanded } : b,
-                  ),
-                )
-              }
-              onSelection={handleSelection}
-            />
-          ))}
-
-          {/* Add block hint */}
-          <div className="pt-4 pb-2">
-            <button
-              type="button"
-              onClick={() => {
-                const newBlock: EditorBlock = {
-                  id: generateId(),
-                  type: "paragraph",
-                  content: "",
-                };
-                setBlocks((prev) => [...prev, newBlock]);
-                requestAnimationFrame(() => {
-                  const el = document.querySelector(
-                    `[data-block-id="${newBlock.id}"]`,
-                  ) as HTMLTextAreaElement;
-                  el?.focus();
-                });
-              }}
-              className="text-xs text-muted-foreground/40 hover:text-muted-foreground transition-colors"
-              data-ocid="note-add-block-btn"
-            >
-              Click to add a block, or type / to pick a type
-            </button>
-          </div>
-        </div>
-
-        {/* Cross-links */}
-        {(note.crossLinks.length > 0 || editCrossLinks.length > 0) && (
-          <div className="mt-6 pt-5 border-t border-border/40 space-y-2">
-            <div className="flex items-center gap-1.5">
-              <Link2 className="h-3.5 w-3.5 text-muted-foreground" />
-              <h2 className="text-sm font-semibold text-foreground">
-                Cross-links
-              </h2>
             </div>
-            <CrossLinkPicker
-              tenantId={tenantId}
-              value={editCrossLinks}
-              onChange={setEditCrossLinks}
-            />
           </div>
-        )}
+
+          {/* Cross-links */}
+          {(note.crossLinks.length > 0 || editCrossLinks.length > 0) && (
+            <div className="mt-6 pt-5 border-t border-border/40 space-y-2">
+              <div className="flex items-center gap-1.5">
+                <Link2 className="h-3.5 w-3.5 text-muted-foreground" />
+                <h2 className="text-sm font-semibold text-foreground">
+                  Cross-links
+                </h2>
+              </div>
+              <CrossLinkPicker
+                tenantId={tenantId}
+                value={editCrossLinks}
+                onChange={setEditCrossLinks}
+              />
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );

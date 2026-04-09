@@ -1,113 +1,30 @@
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useQuery } from "@tanstack/react-query";
-import { useNavigate } from "@tanstack/react-router";
-import {
-  ArrowLeft,
-  Bitcoin,
-  CheckCircle2,
-  ClipboardCopy,
-  QrCode,
-  Wallet,
-} from "lucide-react";
+import { useNavigate, useParams } from "@tanstack/react-router";
+import { ArrowLeft, Bitcoin, Check, Copy, QrCode, Wallet } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 import { useBackend } from "../../hooks/useBackend";
-import { getTenantId, useWorkspace } from "../../hooks/useWorkspace";
+import { useWorkspace } from "../../hooks/useWorkspace";
 import type { WalletAccount } from "../../types";
 
-/** Deterministic QR-like grid based on actual address bytes */
-function QRCodeDisplay({ value }: { value: string }) {
-  const size = 14;
-  const encoded = value.split("").map((c) => c.charCodeAt(0));
-  const flatCells: { key: string; filled: boolean }[] = [];
-  for (let row = 0; row < size; row++) {
-    for (let col = 0; col < size; col++) {
-      const idx = (row * size + col) % (encoded.length || 1);
-      const filled = (encoded[idx] ^ (row * 7 + col * 13)) % 2 === 0;
-      flatCells.push({ key: `cell-${row * size + col}`, filled });
-    }
-  }
-  return (
-    <div
-      className="inline-block p-4 bg-card border-2 border-border rounded-2xl shadow-card"
-      aria-label="QR code for wallet address"
-    >
-      <div
-        className="grid gap-0.5"
-        style={{ gridTemplateColumns: `repeat(${size}, 1fr)` }}
-      >
-        {flatCells.map(({ key, filled }) => (
-          <div
-            key={key}
-            className={`h-4 w-4 rounded-sm ${filled ? "bg-foreground" : "bg-background"}`}
-          />
-        ))}
-      </div>
-    </div>
-  );
-}
-
-function AddressBox({
-  label,
-  sublabel,
-  value,
-  icon,
-}: { label: string; sublabel?: string; value: string; icon: React.ReactNode }) {
-  const [copied, setCopied] = useState(false);
-  const handleCopy = async () => {
-    await navigator.clipboard.writeText(value);
-    setCopied(true);
-    toast.success(`${label} copied to clipboard`);
-    setTimeout(() => setCopied(false), 2000);
-  };
-  return (
-    <div className="rounded-xl border border-border/50 bg-muted/20 p-4 space-y-2">
-      <div className="flex items-start justify-between gap-2">
-        <div>
-          <div className="flex items-center gap-1.5 text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-            {icon}
-            {label}
-          </div>
-          {sublabel && (
-            <p className="text-[10px] text-muted-foreground mt-0.5">
-              {sublabel}
-            </p>
-          )}
-        </div>
-        <button
-          type="button"
-          onClick={handleCopy}
-          aria-label={`Copy ${label}`}
-          data-ocid={`copy-${label.toLowerCase().replace(/\s+/g, "-")}`}
-          className={`shrink-0 flex h-8 w-8 items-center justify-center rounded-lg border transition-all ${copied ? "border-emerald-500 bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600" : "border-border bg-background hover:bg-muted text-muted-foreground"}`}
-        >
-          {copied ? (
-            <CheckCircle2 className="h-4 w-4" />
-          ) : (
-            <ClipboardCopy className="h-4 w-4" />
-          )}
-        </button>
-      </div>
-      <code className="block font-mono text-xs text-foreground break-all leading-relaxed">
-        {value}
-      </code>
-    </div>
-  );
-}
-
-type ReceiveTab = "icp" | "ckbtc";
+type TokenType = "ICP" | "ckBTC";
 
 export default function WalletReceivePage() {
+  const { workspaceId } = useParams({ strict: false }) as {
+    workspaceId: string;
+  };
+  const { tenantId } = useWorkspace();
   const { actor, isFetching } = useBackend();
-  const tenantId = getTenantId();
-  const { activeWorkspaceId } = useWorkspace();
-  const workspaceId = activeWorkspaceId ?? "";
   const navigate = useNavigate();
-  const [activeToken, setActiveToken] = useState<ReceiveTab>("icp");
+  const [copied, setCopied] = useState(false);
+  const [tokenType, setTokenType] = useState<TokenType>("ICP");
 
-  const { data: account, isLoading } = useQuery<WalletAccount | null>({
-    queryKey: ["walletAccount", tenantId, workspaceId],
+  const { data: wallet, isLoading } = useQuery<WalletAccount | null>({
+    queryKey: ["myWallet", tenantId, workspaceId],
     queryFn: async () => {
       if (!actor) return null;
       return actor.getMyWalletAccount(tenantId, workspaceId);
@@ -115,147 +32,166 @@ export default function WalletReceivePage() {
     enabled: !!actor && !isFetching && !!workspaceId,
   });
 
-  // ICP uses the 64-char hex accountId; ckBTC uses the ICRC-1 account format
-  const qrValue =
-    activeToken === "icp"
-      ? (account?.accountId ?? "")
-      : (account?.icrc1Account ?? "");
+  // For ICP: use 64-char hex account ID. For ICRC-1: use principal+subaccount
+  const displayAddress =
+    tokenType === "ICP"
+      ? (wallet?.accountId ?? "")
+      : (wallet?.icrc1Account ?? wallet?.principalId ?? "");
+
+  function handleCopy() {
+    if (!displayAddress) return;
+    void navigator.clipboard.writeText(displayAddress);
+    setCopied(true);
+    toast.success("Address copied to clipboard");
+    setTimeout(() => setCopied(false), 2000);
+  }
+
+  // Simple QR as SVG data URI (real apps would use a QR library; we show a placeholder pattern)
+  const qrDataUri = displayAddress
+    ? `data:image/svg+xml,${encodeURIComponent(`<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 200 200'><rect width='200' height='200' fill='white'/><text x='100' y='110' font-size='8' text-anchor='middle' font-family='monospace' fill='black'>${displayAddress.slice(0, 20)}…</text></svg>`)}`
+    : null;
 
   return (
-    <div className="animate-fade-in-up p-6 space-y-6 max-w-lg mx-auto">
+    <div className="flex flex-col gap-6 p-4 sm:p-6 max-w-lg mx-auto w-full">
       {/* Header */}
       <div className="flex items-center gap-3">
         <Button
           variant="ghost"
           size="icon"
-          onClick={() => navigate({ to: `/app/${workspaceId}/wallet` })}
-          aria-label="Back to wallet"
+          onClick={() => navigate({ to: `/app/${workspaceId}/wallet` as "/" })}
           data-ocid="receive-back-btn"
         >
-          <ArrowLeft className="h-5 w-5" />
+          <ArrowLeft className="w-4 h-4" />
         </Button>
-        <div>
-          <h1 className="font-display text-2xl font-bold tracking-tight text-foreground flex items-center gap-2">
-            <QrCode className="h-6 w-6 text-violet-500" />
-            Receive Assets
-          </h1>
-          <p className="text-sm text-muted-foreground">
-            Share your address to receive ICP or ckBTC
-          </p>
+        <div className="flex items-center gap-3">
+          <div className="w-9 h-9 rounded-lg bg-primary/10 flex items-center justify-center">
+            <QrCode className="w-5 h-5 text-primary" />
+          </div>
+          <div>
+            <h1 className="text-xl font-semibold font-display text-foreground">
+              Receive Tokens
+            </h1>
+            <p className="text-sm text-muted-foreground">
+              Share your address to receive funds
+            </p>
+          </div>
         </div>
       </div>
 
-      {isLoading ? (
-        <div className="space-y-4">
-          <Skeleton className="h-12 rounded-xl" />
-          <Skeleton className="h-64 rounded-2xl" />
-          <Skeleton className="h-24 rounded-xl" />
-          <Skeleton className="h-24 rounded-xl" />
-        </div>
-      ) : !account ? (
-        <div className="rounded-2xl border border-border/50 bg-card shadow-card p-8 text-center">
-          <Wallet className="mx-auto h-10 w-10 text-muted-foreground mb-3" />
-          <p className="text-sm text-muted-foreground">
-            No wallet account found. Create one from the Wallet page.
-          </p>
-          <Button
-            className="mt-4"
-            variant="outline"
-            onClick={() => navigate({ to: `/app/${workspaceId}/wallet` })}
+      {/* Token type selector */}
+      <div className="flex gap-2">
+        {(["ICP", "ckBTC"] as const).map((t) => (
+          <button
+            type="button"
+            key={t}
+            data-ocid={`receive-token-${t}`}
+            onClick={() => setTokenType(t)}
+            className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg border text-sm font-medium transition-colors ${
+              tokenType === t
+                ? "border-primary bg-primary/5 text-primary"
+                : "border-border text-muted-foreground hover:text-foreground hover:border-border/80"
+            }`}
           >
-            Back to Wallet
-          </Button>
-        </div>
-      ) : (
-        <>
-          {/* Token selector */}
-          <fieldset className="flex gap-1.5 p-1.5 rounded-xl bg-muted border-0">
-            <legend className="sr-only">Select token to receive</legend>
-            {(
-              [
-                {
-                  id: "icp" as ReceiveTab,
-                  label: "ICP",
-                  icon: <Wallet className="h-3.5 w-3.5" />,
-                },
-                {
-                  id: "ckbtc" as ReceiveTab,
-                  label: "ckBTC",
-                  icon: <Bitcoin className="h-3.5 w-3.5" />,
-                },
-              ] as const
-            ).map(({ id, label, icon }) => (
-              <button
-                key={id}
-                type="button"
-                onClick={() => setActiveToken(id)}
-                data-ocid={`receive-token-${id}`}
-                className={`flex-1 flex items-center justify-center gap-2 rounded-lg px-4 py-2.5 text-sm font-medium transition-all ${activeToken === id ? "bg-card shadow-sm text-foreground" : "text-muted-foreground hover:text-foreground"}`}
-              >
-                {icon}
-                {label}
-              </button>
-            ))}
-          </fieldset>
-
-          {/* QR Display */}
-          <div className="rounded-2xl border border-border/50 bg-card shadow-card p-6 flex flex-col items-center gap-5">
-            <div className="text-center">
-              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1">
-                Your {activeToken === "icp" ? "ICP" : "ckBTC"} Receive Address
-              </p>
-              <p className="text-xs text-muted-foreground">
-                Screenshot or copy the address below to share
-              </p>
-            </div>
-            <QRCodeDisplay value={qrValue} />
-          </div>
-
-          {/* Address fields */}
-          <div className="space-y-3">
-            {activeToken === "icp" ? (
-              <>
-                <AddressBox
-                  label="ICP Account Address"
-                  sublabel="Use this to receive ICP from any compatible wallet or exchange"
-                  value={account.accountId}
-                  icon={<Wallet className="h-3.5 w-3.5" />}
-                />
-                <AddressBox
-                  label="Principal ID"
-                  sublabel="Your Internet Identity principal"
-                  value={account.principalId}
-                  icon={<Wallet className="h-3.5 w-3.5" />}
-                />
-              </>
+            {t === "ckBTC" ? (
+              <Bitcoin className="w-4 h-4" />
             ) : (
-              <>
-                <AddressBox
-                  label="ICRC-1 Account (ckBTC)"
-                  sublabel="Use this to receive ckBTC and other ICRC-1 tokens"
-                  value={account.icrc1Account}
-                  icon={<Bitcoin className="h-3.5 w-3.5" />}
-                />
-                <AddressBox
-                  label="Principal ID"
-                  sublabel="Your Internet Identity principal"
-                  value={account.principalId}
-                  icon={<Wallet className="h-3.5 w-3.5" />}
-                />
-              </>
+              <Wallet className="w-4 h-4" />
             )}
-          </div>
+            {t}
+          </button>
+        ))}
+      </div>
 
-          {/* Info notice */}
-          <div className="rounded-xl bg-violet-500/5 border border-violet-500/20 px-4 py-3">
-            <p className="text-xs text-violet-700 dark:text-violet-400 leading-relaxed">
-              <strong>On-chain addresses:</strong>{" "}
-              {activeToken === "icp"
-                ? "Your ICP Account Address is derived from your principal ID and is permanent. Send it to anyone who wants to transfer ICP to you."
-                : "Your ICRC-1 Account is required for receiving ckBTC and other ICRC-1 tokens. Use this address when withdrawing from exchanges that support ckBTC."}
+      {/* Address card */}
+      {isLoading ? (
+        <Skeleton className="h-64 w-full rounded-xl" />
+      ) : !wallet ? (
+        <Card className="border-dashed">
+          <CardContent className="flex flex-col items-center justify-center py-12 gap-3 text-center">
+            <Wallet className="w-10 h-10 text-muted-foreground" />
+            <p className="text-muted-foreground text-sm">
+              No wallet found. Create one first.
             </p>
-          </div>
-        </>
+            <Button
+              onClick={() =>
+                navigate({ to: `/app/${workspaceId}/wallet` as "/" })
+              }
+            >
+              Go to Wallet
+            </Button>
+          </CardContent>
+        </Card>
+      ) : (
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="text-sm font-display flex items-center gap-2">
+              {tokenType === "ICP"
+                ? "ICP Account ID"
+                : "ICRC-1 Principal Address"}
+              <Badge variant="outline" className="text-xs">
+                {tokenType}
+              </Badge>
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="flex flex-col gap-5 items-center">
+            {/* QR Code */}
+            <div
+              data-ocid="receive-qr-code"
+              className="w-48 h-48 rounded-xl border border-border bg-card flex items-center justify-center overflow-hidden"
+            >
+              {qrDataUri ? (
+                <img src={qrDataUri} alt="QR Code" className="w-full h-full" />
+              ) : (
+                <QrCode className="w-20 h-20 text-muted-foreground" />
+              )}
+            </div>
+
+            {/* Address */}
+            <div className="w-full">
+              <p className="text-xs text-muted-foreground mb-2 text-center">
+                {tokenType === "ICP"
+                  ? "Share this 64-character hex address to receive ICP"
+                  : "Share this principal ID to receive ckBTC or other ICRC-1 tokens"}
+              </p>
+              <div
+                data-ocid="receive-address-display"
+                className="bg-muted/50 rounded-lg px-4 py-3 border border-border"
+              >
+                <p className="text-xs font-mono break-all text-foreground text-center leading-relaxed">
+                  {displayAddress || "—"}
+                </p>
+              </div>
+            </div>
+
+            {/* Copy button */}
+            <Button
+              data-ocid="receive-copy-btn"
+              onClick={handleCopy}
+              disabled={!displayAddress}
+              className="w-full gap-2"
+              variant={copied ? "outline" : "default"}
+            >
+              {copied ? (
+                <>
+                  <Check className="w-4 h-4" />
+                  Copied!
+                </>
+              ) : (
+                <>
+                  <Copy className="w-4 h-4" />
+                  Copy Address
+                </>
+              )}
+            </Button>
+
+            {/* Info note */}
+            <p className="text-xs text-muted-foreground text-center max-w-xs">
+              {tokenType === "ICP"
+                ? "This 64-character hex address is derived from your Internet Identity principal. It works with any ICP-compatible wallet or exchange."
+                : "ICRC-1 tokens (ckBTC, ckETH, etc.) use principal + subaccount format, not the 64-char hex account ID."}
+            </p>
+          </CardContent>
+        </Card>
       )}
     </div>
   );

@@ -178,6 +178,7 @@ module {
                 priority = #Medium;
                 assigneeId = null;
                 dueDate = null;
+                tags = [];
                 crossLinks = [];
               };
               // Mark element as converted (linkedTaskId will be set by caller after task creation)

@@ -11,6 +11,9 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
+import { Skeleton } from "@/components/ui/skeleton";
+import { useInternetIdentity } from "@caffeineai/core-infrastructure";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import {
   AlertCircle,
@@ -21,6 +24,7 @@ import {
   EyeOff,
   Key,
   Loader2,
+  Lock,
   Save,
   Settings2,
   Sparkles,
@@ -28,28 +32,21 @@ import {
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
-import { useWorkspace } from "../../hooks/useWorkspace";
-
-type AIProvider = "openai" | "anthropic";
-
-interface AIConfig {
-  provider: AIProvider;
-  apiKey: string;
-  model: string;
-  savedAt?: string;
-}
+import { AIProvider } from "../../backend";
+import { useBackend } from "../../hooks/useBackend";
+import { getTenantId, useWorkspace } from "../../hooks/useWorkspace";
 
 const MODELS: Record<
   AIProvider,
   { value: string; label: string; tier: string }[]
 > = {
-  openai: [
+  [AIProvider.OpenAI]: [
     { value: "gpt-4o-mini", label: "GPT-4o Mini", tier: "Fast · Affordable" },
     { value: "gpt-4o", label: "GPT-4o", tier: "Powerful · Latest" },
     { value: "gpt-4-turbo", label: "GPT-4 Turbo", tier: "High Performance" },
     { value: "gpt-3.5-turbo", label: "GPT-3.5 Turbo", tier: "Legacy · Budget" },
   ],
-  anthropic: [
+  [AIProvider.Anthropic]: [
     {
       value: "claude-3-5-haiku-20241022",
       label: "Claude 3.5 Haiku",
@@ -69,19 +66,9 @@ const MODELS: Record<
 };
 
 const DEFAULT_MODELS: Record<AIProvider, string> = {
-  openai: "gpt-4o-mini",
-  anthropic: "claude-3-5-haiku-20241022",
+  [AIProvider.OpenAI]: "gpt-4o-mini",
+  [AIProvider.Anthropic]: "claude-3-5-haiku-20241022",
 };
-const STORAGE_KEY = "fourthspace_ai_config";
-
-function loadConfig(): AIConfig | null {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    return raw ? (JSON.parse(raw) as AIConfig) : null;
-  } catch {
-    return null;
-  }
-}
 
 function maskApiKey(key: string): string {
   if (key.length <= 8) return "••••••••";
@@ -89,84 +76,200 @@ function maskApiKey(key: string): string {
 }
 
 export default function AISettingsPage() {
-  const { activeWorkspaceId } = useWorkspace();
+  const { activeWorkspace, activeWorkspaceId } = useWorkspace();
+  const { actor, isFetching } = useBackend();
+  const { identity } = useInternetIdentity();
+  const queryClient = useQueryClient();
+  const tenantId = getTenantId();
   const workspaceId = activeWorkspaceId ?? "";
-  const saved = loadConfig();
-  const [provider, setProvider] = useState<AIProvider>(
-    saved?.provider ?? "openai",
-  );
-  const [apiKey, setApiKey] = useState(saved?.apiKey ?? "");
-  const [model, setModel] = useState(
-    saved?.model ?? DEFAULT_MODELS[saved?.provider ?? "openai"],
-  );
+
+  // Determine if current user is the workspace owner (super admin)
+  const myPrincipal = identity?.getPrincipal().toText() ?? "";
+  const isOwner =
+    !!activeWorkspace &&
+    !!myPrincipal &&
+    activeWorkspace.ownerId.toString() === myPrincipal;
+  const ownerCheckDone = !!myPrincipal && !!activeWorkspace;
+
+  // Load AI config from backend
+  const { data: savedConfig, isLoading: loadingConfig } = useQuery({
+    queryKey: ["aiConfig", tenantId, workspaceId],
+    queryFn: async () => {
+      if (!actor) return null;
+      return actor.getAIConfig(tenantId, workspaceId);
+    },
+    enabled: !!actor && !isFetching && !!workspaceId && isOwner,
+  });
+
+  const [provider, setProvider] = useState<AIProvider>(AIProvider.OpenAI);
+  const [apiKey, setApiKey] = useState("");
+  const [model, setModel] = useState(DEFAULT_MODELS[AIProvider.OpenAI]);
   const [showKey, setShowKey] = useState(false);
-  const [saving, setSaving] = useState(false);
-  const [testing, setTesting] = useState(false);
   const [testResult, setTestResult] = useState<"idle" | "ok" | "error">("idle");
-  const [savedConfig, setSavedConfig] = useState<AIConfig | null>(saved);
+
+  // Hydrate form from backend config
+  useEffect(() => {
+    if (savedConfig) {
+      setProvider(savedConfig.provider);
+      setApiKey(savedConfig.apiKey ?? "");
+      setModel(savedConfig.model ?? DEFAULT_MODELS[savedConfig.provider]);
+    }
+  }, [savedConfig]);
 
   useEffect(() => {
     const currentModels = MODELS[provider].map((m) => m.value);
     if (!currentModels.includes(model)) setModel(DEFAULT_MODELS[provider]);
   }, [provider, model]);
 
-  const handleSave = async () => {
-    if (!apiKey.trim()) {
-      toast.error("API key is required.");
-      return;
-    }
-    setSaving(true);
-    await new Promise((r) => setTimeout(r, 600));
-    const config: AIConfig = {
-      provider,
-      apiKey,
-      model,
-      savedAt: new Date().toISOString(),
-    };
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(config));
-    setSavedConfig(config);
-    setSaving(false);
-    setTestResult("idle");
-    toast.success("AI configuration saved successfully.");
-  };
+  // Save mutation — calls backend
+  const saveMutation = useMutation({
+    mutationFn: async () => {
+      if (!actor) throw new Error("Not connected");
+      if (!apiKey.trim()) throw new Error("API key is required");
+      const result = await actor.saveAIConfig(tenantId, workspaceId, {
+        provider,
+        apiKey: apiKey.trim(),
+        model,
+      });
+      if (result.__kind__ === "err") throw new Error(result.err);
+      return result.ok;
+    },
+    onSuccess: () => {
+      toast.success("AI configuration saved successfully.");
+      setTestResult("idle");
+      void queryClient.invalidateQueries({
+        queryKey: ["aiConfig", tenantId, workspaceId],
+      });
+    },
+    onError: (err: Error) => toast.error(err.message),
+  });
+
+  // Clear mutation — saves empty config to backend to clear
+  const clearMutation = useMutation({
+    mutationFn: async () => {
+      if (!actor) throw new Error("Not connected");
+      const result = await actor.saveAIConfig(tenantId, workspaceId, {
+        provider: AIProvider.OpenAI,
+        apiKey: "",
+        model: DEFAULT_MODELS[AIProvider.OpenAI],
+      });
+      if (result.__kind__ === "err") throw new Error(result.err);
+      return result.ok;
+    },
+    onSuccess: () => {
+      toast.info("AI configuration cleared.");
+      setApiKey("");
+      setProvider(AIProvider.OpenAI);
+      setModel(DEFAULT_MODELS[AIProvider.OpenAI]);
+      setTestResult("idle");
+      void queryClient.invalidateQueries({
+        queryKey: ["aiConfig", tenantId, workspaceId],
+      });
+    },
+    onError: (err: Error) => toast.error(err.message),
+  });
 
   const handleTest = async () => {
     if (!apiKey.trim()) {
       toast.error("Enter and save your API key before testing.");
       return;
     }
-    setTesting(true);
     setTestResult("idle");
-    await new Promise((r) => setTimeout(r, 1500));
+    // Brief delay for UX
+    await new Promise((r) => setTimeout(r, 800));
     const isValidFormat =
-      provider === "openai"
+      provider === AIProvider.OpenAI
         ? apiKey.startsWith("sk-")
         : apiKey.startsWith("sk-ant-");
     setTestResult(isValidFormat ? "ok" : "error");
-    setTesting(false);
     if (isValidFormat)
       toast.success("Connection test passed! API key format looks valid.");
     else
       toast.error(
-        provider === "openai"
+        provider === AIProvider.OpenAI
           ? "OpenAI keys start with 'sk-'."
           : "Anthropic keys start with 'sk-ant-'.",
       );
   };
 
-  const handleClear = () => {
-    localStorage.removeItem(STORAGE_KEY);
-    setSavedConfig(null);
-    setApiKey("");
-    setProvider("openai");
-    setModel(DEFAULT_MODELS.openai);
-    setTestResult("idle");
-    toast.info("AI configuration cleared.");
-  };
-
   const currentModels = MODELS[provider];
   const isConfigured = !!savedConfig?.apiKey;
 
+  // Loading state — waiting for identity + workspace
+  if (!ownerCheckDone || loadingConfig) {
+    return (
+      <div className="animate-fade-in-up p-6 space-y-6 max-w-3xl mx-auto">
+        <div className="flex items-center gap-3">
+          <Button variant="ghost" size="icon" asChild>
+            <Link to={`/app/${workspaceId}/ai` as "/"}>
+              <ArrowLeft className="h-4 w-4" />
+            </Link>
+          </Button>
+          <div>
+            <h1 className="text-2xl font-display font-bold tracking-tight text-foreground">
+              AI Settings
+            </h1>
+            <p className="text-sm text-muted-foreground">
+              Configure your AI provider to enable real AI features
+            </p>
+          </div>
+        </div>
+        <Skeleton className="h-32 w-full rounded-xl" />
+        <Skeleton className="h-64 w-full rounded-xl" />
+      </div>
+    );
+  }
+
+  // Non-owner view — show locked message
+  if (!isOwner) {
+    return (
+      <div
+        className="animate-fade-in-up p-6 space-y-6 max-w-3xl mx-auto"
+        data-ocid="ai-settings-page"
+      >
+        <div className="flex items-center gap-3">
+          <Button variant="ghost" size="icon" asChild>
+            <Link to={`/app/${workspaceId}/ai` as "/"}>
+              <ArrowLeft className="h-4 w-4" />
+            </Link>
+          </Button>
+          <div>
+            <h1 className="text-2xl font-display font-bold tracking-tight text-foreground">
+              AI Settings
+            </h1>
+            <p className="text-sm text-muted-foreground">
+              Configure your AI provider to enable real AI features
+            </p>
+          </div>
+        </div>
+
+        <Card className="border-border/50 bg-card">
+          <CardContent className="flex flex-col items-center justify-center py-14 gap-4 text-center">
+            <div className="w-14 h-14 rounded-2xl bg-muted/50 flex items-center justify-center">
+              <Lock className="w-7 h-7 text-muted-foreground" />
+            </div>
+            <div>
+              <p className="font-display font-semibold text-foreground text-base">
+                Owner-only setting
+              </p>
+              <p className="text-sm text-muted-foreground mt-1 max-w-sm leading-relaxed">
+                Only the workspace owner can configure AI settings and API keys.
+                Contact your workspace owner to enable AI features.
+              </p>
+            </div>
+            <Button variant="outline" size="sm" asChild className="mt-1">
+              <Link to={`/app/${workspaceId}/ai` as "/"}>
+                <ArrowLeft className="h-3.5 w-3.5 mr-1.5" />
+                Back to AI Tools
+              </Link>
+            </Button>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
+  // Owner view — full configuration UI
   return (
     <div
       className="animate-fade-in-up p-6 space-y-6 max-w-3xl mx-auto"
@@ -196,7 +299,7 @@ export default function AISettingsPage() {
       </div>
 
       {/* Current Config Banner */}
-      {savedConfig && (
+      {isConfigured && savedConfig && (
         <Card className="shadow-card rounded-xl border border-emerald-200 dark:border-emerald-800 bg-emerald-500/5">
           <CardContent className="py-4">
             <div className="flex items-start gap-3">
@@ -211,7 +314,7 @@ export default function AISettingsPage() {
                   <span className="text-xs text-muted-foreground">
                     Provider:{" "}
                     <span className="font-medium text-foreground capitalize">
-                      {savedConfig.provider === "openai"
+                      {savedConfig.provider === AIProvider.OpenAI
                         ? "OpenAI"
                         : "Anthropic"}
                     </span>
@@ -229,24 +332,16 @@ export default function AISettingsPage() {
                     </span>
                   </span>
                 </div>
-                {savedConfig.savedAt && (
-                  <p className="text-xs text-muted-foreground mt-1">
-                    Saved{" "}
-                    {new Date(savedConfig.savedAt).toLocaleString("en-US", {
-                      dateStyle: "medium",
-                      timeStyle: "short",
-                    })}
-                  </p>
-                )}
               </div>
               <Button
                 variant="ghost"
                 size="sm"
-                onClick={handleClear}
+                onClick={() => clearMutation.mutate()}
+                disabled={clearMutation.isPending}
                 className="text-muted-foreground hover:text-destructive shrink-0"
                 data-ocid="ai-settings-clear"
               >
-                Clear
+                {clearMutation.isPending ? "Clearing…" : "Clear"}
               </Button>
             </div>
           </CardContent>
@@ -286,13 +381,13 @@ export default function AISettingsPage() {
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="openai">
+                <SelectItem value={AIProvider.OpenAI}>
                   <div className="flex items-center gap-2">
                     <Bot className="w-4 h-4 text-emerald-500" />
                     OpenAI
                   </div>
                 </SelectItem>
-                <SelectItem value="anthropic">
+                <SelectItem value={AIProvider.Anthropic}>
                   <div className="flex items-center gap-2">
                     <Sparkles className="w-4 h-4 text-orange-500" />
                     Anthropic (Claude)
@@ -314,7 +409,9 @@ export default function AISettingsPage() {
               <Input
                 id="api-key"
                 type={showKey ? "text" : "password"}
-                placeholder={provider === "openai" ? "sk-..." : "sk-ant-..."}
+                placeholder={
+                  provider === AIProvider.OpenAI ? "sk-..." : "sk-ant-..."
+                }
                 value={apiKey}
                 onChange={(e) => {
                   setApiKey(e.target.value);
@@ -337,7 +434,7 @@ export default function AISettingsPage() {
               </button>
             </div>
             <p className="text-xs text-muted-foreground">
-              {provider === "openai" ? (
+              {provider === AIProvider.OpenAI ? (
                 <>
                   Get your key at{" "}
                   <a
@@ -410,12 +507,12 @@ export default function AISettingsPage() {
 
           <div className="flex flex-wrap gap-3">
             <Button
-              onClick={handleSave}
-              disabled={saving || !apiKey.trim()}
+              onClick={() => saveMutation.mutate()}
+              disabled={saveMutation.isPending || !apiKey.trim()}
               className="bg-primary hover:bg-primary/90 text-primary-foreground active-press"
               data-ocid="ai-settings-save"
             >
-              {saving ? (
+              {saveMutation.isPending ? (
                 <>
                   <Loader2 className="w-4 h-4 mr-2 animate-spin" />
                   Saving...
@@ -430,20 +527,11 @@ export default function AISettingsPage() {
             <Button
               variant="outline"
               onClick={handleTest}
-              disabled={testing || !apiKey.trim()}
+              disabled={!apiKey.trim()}
               data-ocid="ai-settings-test"
             >
-              {testing ? (
-                <>
-                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                  Testing...
-                </>
-              ) : (
-                <>
-                  <Zap className="w-4 h-4 mr-2" />
-                  Test Connection
-                </>
-              )}
+              <Zap className="w-4 h-4 mr-2" />
+              Test Connection
             </Button>
           </div>
         </CardContent>
@@ -455,7 +543,7 @@ export default function AISettingsPage() {
           {
             icon: Key,
             title: "Key Security",
-            desc: "Your API key is stored locally in your browser. It is never sent to Fourthspace servers — only directly to your chosen AI provider.",
+            desc: "Your API key is stored securely in the workspace. It is only accessible to the workspace owner and is sent directly to your chosen AI provider.",
             color: "text-amber-500 bg-amber-500/10",
           },
           {

@@ -1,4 +1,5 @@
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useNavigate, useParams } from "@tanstack/react-router";
@@ -18,10 +19,12 @@ import {
   GanttChartSquare,
   LayoutDashboard,
   LayoutList,
+  Loader2,
   Plus,
   Table2,
   Trash2,
   Users,
+  X,
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
@@ -38,6 +41,7 @@ import {
   type Project,
   ProjectStatus,
   type Task,
+  type TaskInput,
   TaskPriority,
   TaskStatus,
   type WorkspaceMember,
@@ -194,12 +198,12 @@ function TaskCard({
       <Link
         to="/app/$workspaceId/projects/$projectId/tasks/$taskId"
         params={{ workspaceId, projectId, taskId: task.id }}
-        className="absolute inset-0 rounded-xl z-0"
-        aria-hidden
-        tabIndex={-1}
-        onClick={(e) => e.stopPropagation()}
+        className="absolute inset-0 rounded-xl z-10"
+        aria-label={task.title}
+        tabIndex={0}
+        data-ocid={`task-card-link-${task.id}`}
       />
-      <div className="relative z-10 pointer-events-none">
+      <div className="relative z-0 pointer-events-none">
         <div className="flex items-start justify-between gap-2 mb-1.5">
           <div className="flex items-start gap-1.5 min-w-0">
             {isMilestone && (
@@ -220,6 +224,25 @@ function TaskCard({
           <p className="text-[11px] text-muted-foreground line-clamp-1 mb-1.5">
             {task.description}
           </p>
+        )}
+
+        {/* Tags */}
+        {task.tags && task.tags.length > 0 && (
+          <div className="flex flex-wrap gap-1 mb-1.5">
+            {task.tags.slice(0, 3).map((tag) => (
+              <span
+                key={tag}
+                className="rounded-full px-1.5 py-0.5 text-[10px] bg-primary/10 text-primary border border-primary/20 font-medium"
+              >
+                {tag}
+              </span>
+            ))}
+            {task.tags.length > 3 && (
+              <span className="text-[10px] text-muted-foreground">
+                +{task.tags.length - 3}
+              </span>
+            )}
+          </div>
         )}
 
         {/* Subtask progress bar */}
@@ -267,15 +290,6 @@ function TaskCard({
           )}
         </div>
       </div>
-
-      <Link
-        to="/app/$workspaceId/projects/$projectId/tasks/$taskId"
-        params={{ workspaceId, projectId, taskId: task.id }}
-        className="absolute inset-0 rounded-xl z-0"
-        tabIndex={0}
-        data-ocid={`task-card-link-${task.id}`}
-        onClick={(e) => e.stopPropagation()}
-      />
     </div>
   );
 }
@@ -297,6 +311,7 @@ function KanbanColumn({
   onDragLeave,
   onDrop,
   onDragStart,
+  onAddTask,
 }: {
   status: TaskStatus;
   label: string;
@@ -314,7 +329,31 @@ function KanbanColumn({
   onDragLeave: () => void;
   onDrop: (status: TaskStatus) => void;
   onDragStart: (task: Task) => void;
+  onAddTask: (title: string, status: TaskStatus) => Promise<void>;
 }) {
+  const [showInlineForm, setShowInlineForm] = useState(false);
+  const [inlineTitle, setInlineTitle] = useState("");
+  const [isCreating, setIsCreating] = useState(false);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (showInlineForm) {
+      setTimeout(() => inputRef.current?.focus(), 50);
+    }
+  }, [showInlineForm]);
+
+  async function handleInlineCreate() {
+    if (!inlineTitle.trim()) return;
+    setIsCreating(true);
+    try {
+      await onAddTask(inlineTitle.trim(), status);
+      setInlineTitle("");
+      setShowInlineForm(false);
+    } finally {
+      setIsCreating(false);
+    }
+  }
+
   return (
     <div className="flex flex-col w-[260px] sm:w-[280px] shrink-0">
       <div className="flex items-center justify-between mb-3 px-1">
@@ -326,21 +365,15 @@ function KanbanColumn({
             {tasks.length}
           </span>
         </div>
-        <Button
-          variant="ghost"
-          size="icon"
-          className="h-6 w-6 text-muted-foreground hover:text-foreground"
-          asChild
+        <button
+          type="button"
+          className="flex h-6 w-6 items-center justify-center rounded-md text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors min-h-[44px] min-w-[44px]"
           aria-label={`Add task to ${label}`}
           data-ocid={`add-task-col-${status}`}
+          onClick={() => setShowInlineForm(true)}
         >
-          <Link
-            to="/app/$workspaceId/projects/$projectId/tasks/$taskId"
-            params={{ workspaceId, projectId, taskId: "new" }}
-          >
-            <Plus className="h-3.5 w-3.5" />
-          </Link>
-        </Button>
+          <Plus className="h-3.5 w-3.5" />
+        </button>
       </div>
       <div
         className={`flex flex-col gap-2 rounded-2xl border ${border} ${bg} p-2 flex-1 min-h-[200px] transition-all duration-150 ${
@@ -354,11 +387,9 @@ function KanbanColumn({
         data-column-status={status}
         data-ocid={`kanban-col-${status}`}
       >
-        {tasks.length === 0 && !isDragOver && (
+        {tasks.length === 0 && !isDragOver && !showInlineForm && (
           <div className="flex flex-col items-center justify-center py-10 opacity-40">
-            <p className="text-xs text-muted-foreground">
-              {isDragOver ? "Drop here" : "No tasks"}
-            </p>
+            <p className="text-xs text-muted-foreground">No tasks</p>
           </div>
         )}
         {isDragOver && tasks.length === 0 && (
@@ -377,20 +408,60 @@ function KanbanColumn({
             onDragStart={onDragStart}
           />
         ))}
-        <Button
-          variant="ghost"
-          size="sm"
-          className="w-full justify-start gap-1.5 text-muted-foreground text-xs h-8 hover:text-foreground mt-auto"
-          asChild
-          data-ocid={`add-task-btn-${status}`}
-        >
-          <Link
-            to="/app/$workspaceId/projects/$projectId/tasks/$taskId"
-            params={{ workspaceId, projectId, taskId: "new" }}
+
+        {/* Inline task creation form */}
+        {showInlineForm ? (
+          <div className="rounded-xl border border-primary/30 bg-card p-2.5 space-y-2">
+            <Input
+              ref={inputRef}
+              placeholder="Task title…"
+              value={inlineTitle}
+              onChange={(e) => setInlineTitle(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  void handleInlineCreate();
+                }
+                if (e.key === "Escape") {
+                  setShowInlineForm(false);
+                  setInlineTitle("");
+                }
+              }}
+              className="h-7 text-xs px-2 border-0 focus-visible:ring-0 bg-transparent"
+              data-ocid={`inline-task-input-${status}`}
+            />
+            <div className="flex items-center gap-1">
+              <button
+                type="button"
+                onClick={() => void handleInlineCreate()}
+                disabled={isCreating || !inlineTitle.trim()}
+                className="flex h-6 items-center gap-1 rounded-md bg-primary px-2 text-[11px] font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-50 transition-colors"
+              >
+                {isCreating && <Loader2 className="h-2.5 w-2.5 animate-spin" />}
+                Add
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setShowInlineForm(false);
+                  setInlineTitle("");
+                }}
+                className="flex h-6 w-6 items-center justify-center rounded-md text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors"
+                aria-label="Cancel"
+              >
+                <X className="h-3 w-3" />
+              </button>
+            </div>
+          </div>
+        ) : (
+          <button
+            type="button"
+            className="w-full flex items-center justify-start gap-1.5 text-muted-foreground text-xs h-8 hover:text-foreground mt-auto px-1 rounded-lg hover:bg-muted/30 transition-colors min-h-[44px]"
+            onClick={() => setShowInlineForm(true)}
+            data-ocid={`add-task-btn-${status}`}
           >
             <Plus className="h-3.5 w-3.5" /> Add Task
-          </Link>
-        </Button>
+          </button>
+        )}
       </div>
     </div>
   );
@@ -542,7 +613,6 @@ export default function ProjectDetailPage() {
     status: localStatuses[t.id] ?? t.status,
   }));
 
-  // Subtask counts per task — Task type has no subtask fields, so hide progress bars gracefully
   const subtaskCounts = useMemo<
     Record<string, { done: number; total: number }>
   >(() => ({}), []);
@@ -597,6 +667,53 @@ export default function ProjectDetailPage() {
       toast.error(err.message || "Failed to update task status");
     },
   });
+
+  const createTaskMutation = useMutation({
+    mutationFn: async ({
+      input,
+      targetStatus,
+    }: { input: TaskInput; targetStatus: TaskStatus }) => {
+      if (!actor) throw new Error("Not connected");
+      const result = await actor.createTask(tenantId, workspaceId, input);
+      if (result.__kind__ === "err") throw new Error(result.err);
+      const created = result.ok;
+      // If status is not Todo, update it immediately
+      if (targetStatus !== TaskStatus.Todo) {
+        await actor.updateTaskStatus(
+          tenantId,
+          workspaceId,
+          created.id,
+          targetStatus,
+        );
+      }
+      return created;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({
+        queryKey: ["tasks", tenantId, workspaceId, projectId],
+      });
+      toast.success("Task created");
+    },
+    onError: (err: Error) =>
+      toast.error(err.message || "Failed to create task"),
+  });
+
+  const handleAddTask = useCallback(
+    async (title: string, targetStatus: TaskStatus) => {
+      await createTaskMutation.mutateAsync({
+        input: {
+          title,
+          description: "",
+          projectId,
+          priority: TaskPriority.Medium,
+          crossLinks: [],
+          tags: [],
+        },
+        targetStatus,
+      });
+    },
+    [createTaskMutation, projectId],
+  );
 
   const handleDragStart = useCallback((task: Task) => {
     setDraggingTask(task);
@@ -849,28 +966,44 @@ export default function ProjectDetailPage() {
 
       {/* View Content */}
       <div
-        className={`px-4 sm:px-6 md:px-8 pt-5 pb-5 ${view === "kanban" ? "md:overflow-x-auto" : ""}`}
+        className={`px-4 sm:px-6 md:px-8 pt-5 pb-5 ${view === "kanban" ? "overflow-x-auto" : ""}`}
       >
         {view === "kanban" && (
           <>
-            {/* Mobile: vertical list view */}
-            <div className="md:hidden space-y-4 pb-4">
+            {/* Mobile: horizontal snap scroll kanban */}
+            <div
+              className="md:hidden flex gap-3 overflow-x-auto snap-x snap-mandatory pb-4 scrollbar-none"
+              style={{ scrollPaddingLeft: "1rem" }}
+            >
               {COLUMNS.map((col) => {
                 const colTasks = tasksWithStatus.filter(
                   (t) => t.status === col.status,
                 );
-                if (colTasks.length === 0) return null;
                 return (
-                  <div key={col.status}>
-                    <div
-                      className={`flex items-center gap-1.5 font-semibold text-sm mb-2 ${col.color}`}
-                    >
-                      {col.icon} {col.label}
-                      <span className="ml-1 text-xs text-muted-foreground bg-muted px-1.5 py-0.5 rounded-full font-normal">
-                        {colTasks.length}
-                      </span>
+                  <div
+                    key={col.status}
+                    className="snap-start shrink-0 w-[85vw] max-w-xs flex flex-col"
+                  >
+                    <div className="flex items-center justify-between mb-3 px-1">
+                      <div
+                        className={`flex items-center gap-1.5 font-semibold text-sm ${col.color}`}
+                      >
+                        {col.icon} {col.label}
+                        <span className="ml-1 text-xs text-muted-foreground bg-muted px-1.5 py-0.5 rounded-full font-normal">
+                          {colTasks.length}
+                        </span>
+                      </div>
                     </div>
-                    <div className="space-y-2">
+                    <div
+                      className={`flex flex-col gap-2 rounded-2xl border ${col.border} ${col.bg} p-2 flex-1 min-h-[200px]`}
+                    >
+                      {colTasks.length === 0 && (
+                        <div className="flex flex-col items-center justify-center py-10 opacity-40">
+                          <p className="text-xs text-muted-foreground">
+                            No tasks
+                          </p>
+                        </div>
+                      )}
                       {colTasks.map((task) => (
                         <TaskCard
                           key={task.id}
@@ -882,24 +1015,20 @@ export default function ProjectDetailPage() {
                           onDragStart={handleDragStart}
                         />
                       ))}
+                      <Link
+                        to="/app/$workspaceId/projects/$projectId/tasks/$taskId"
+                        params={{ workspaceId, projectId, taskId: "new" }}
+                        className="w-full flex items-center justify-start gap-1.5 text-muted-foreground text-xs h-8 hover:text-foreground mt-auto px-1 rounded-lg hover:bg-muted/30 transition-colors min-h-[44px]"
+                        data-ocid={`mobile-add-task-btn-${col.status}`}
+                      >
+                        <Plus className="h-3.5 w-3.5" /> Add Task
+                      </Link>
                     </div>
                   </div>
                 );
               })}
-              {tasksWithStatus.length === 0 && (
-                <div className="flex flex-col items-center justify-center py-16 gap-3 rounded-2xl border border-dashed border-border">
-                  <p className="text-sm text-muted-foreground">No tasks yet</p>
-                  <Link
-                    to="/app/$workspaceId/projects/$projectId/tasks/$taskId"
-                    params={{ workspaceId, projectId, taskId: "new" }}
-                    className="text-xs text-primary hover:underline flex items-center gap-1"
-                  >
-                    <Plus className="h-3.5 w-3.5" /> Add first task
-                  </Link>
-                </div>
-              )}
             </div>
-            {/* Desktop: kanban columns */}
+            {/* Desktop: drag-and-drop kanban columns */}
             <div
               className="hidden md:flex gap-3 sm:gap-4 pb-4"
               style={{ minWidth: "max-content" }}
@@ -923,6 +1052,7 @@ export default function ProjectDetailPage() {
                   onDragLeave={handleDragLeave}
                   onDrop={handleDrop}
                   onDragStart={handleDragStart}
+                  onAddTask={handleAddTask}
                 />
               ))}
             </div>
@@ -1001,9 +1131,11 @@ export default function ProjectDetailPage() {
                 [MilestoneStatus.missed]: "Missed",
               };
               return (
-                <div
+                <Link
                   key={ms.id}
-                  className="rounded-xl border border-border/50 bg-card p-4 space-y-3 hover:border-primary/30 transition-colors"
+                  to="/app/$workspaceId/projects/$projectId/milestones"
+                  params={{ workspaceId, projectId }}
+                  className="rounded-xl border border-border/50 bg-card p-4 space-y-3 hover:border-primary/30 hover:shadow-sm transition-all block"
                   data-ocid={`milestone-card-${ms.id}`}
                 >
                   <div className="flex items-start justify-between gap-2">
@@ -1052,7 +1184,7 @@ export default function ProjectDetailPage() {
                       <span className="font-medium">· Overdue</span>
                     )}
                   </div>
-                </div>
+                </Link>
               );
             })}
           </div>

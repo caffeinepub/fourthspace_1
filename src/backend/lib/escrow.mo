@@ -18,6 +18,10 @@ module {
   };
 
   // ── Escrow lifecycle ──────────────────────────────────────────────────────────
+
+  /// Create a new escrow contract. Balance gating is enforced in main.mo BEFORE calling this:
+  /// users with zero wallet balance are blocked from creating escrows with the error:
+  /// "Insufficient wallet balance. Please fund your wallet before creating an escrow."
   public func createEscrow(
     contracts : [(Common.EntityId, Types.EscrowContract)],
     tenantId : Common.TenantId,
@@ -72,6 +76,9 @@ module {
     };
   };
 
+  /// List all escrow contracts visible to workspace members.
+  /// All workspace members with same tenantId and workspaceId can see all escrows,
+  /// enabling full transparency for workspace-level financial agreements.
   public func listEscrows(
     contracts : [(Common.EntityId, Types.EscrowContract)],
     tenantId : Common.TenantId,
@@ -81,7 +88,7 @@ module {
   ) : [Types.EscrowContract] {
     let filtered = contracts.filter(
       func((_, c)) {
-        // All workspace members can view escrows — not restricted to parties only
+        // All workspace members can view escrows — scoped by tenant and workspace
         if (not (c.tenantId == tenantId and c.workspaceId == workspaceId)) {
           return false;
         };
@@ -214,7 +221,7 @@ module {
 
   // Payer or arbiter refunds: (#Funded | #Disputed) -> #Cancelled
   // Returns updated contracts. The actual on-chain refund transfer must be done by main.mo
-  // BEFORE calling this (state-before-transfer: main.mo first transfers, then calls this).
+  // state-before-transfer: main.mo first updates state here, then calls ledger.
   public func refundEscrow(
     contracts : [(Common.EntityId, Types.EscrowContract)],
     tenantId : Common.TenantId,

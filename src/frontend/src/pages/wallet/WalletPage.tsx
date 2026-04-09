@@ -1,375 +1,101 @@
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Link } from "@tanstack/react-router";
+import { useNavigate, useParams } from "@tanstack/react-router";
 import { format } from "date-fns";
 import {
-  AlertCircle,
+  AlertTriangle,
   ArrowDownLeft,
-  ArrowRightLeft,
   ArrowUpRight,
-  Bitcoin,
   Building2,
-  CheckCircle2,
-  ClipboardCopy,
+  Copy,
   Download,
   Plus,
-  QrCode,
   RefreshCw,
-  Settings,
-  TrendingUp,
   User,
   Wallet,
-  XCircle,
 } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
-import type { TxFilter } from "../../backend";
 import { useBackend } from "../../hooks/useBackend";
-import { getTenantId, useWorkspace } from "../../hooks/useWorkspace";
-import { AssetType, TransactionStatus, TransactionType } from "../../types";
+import { useWorkspace } from "../../hooks/useWorkspace";
 import type { WalletAccount, WalletTransaction } from "../../types";
-
-const E8S = BigInt(100_000_000);
+import { TransactionType } from "../../types";
 
 function formatICP(e8s: bigint): string {
-  const whole = e8s / E8S;
-  const frac = (e8s % E8S).toString().padStart(8, "0").slice(0, 4);
-  return `${whole.toLocaleString()}.${frac}`;
+  return `${(Number(e8s) / 1e8).toFixed(4)} ICP`;
+}
+function formatBTC(sats: bigint): string {
+  return `${(Number(sats) / 1e8).toFixed(8)} ckBTC`;
+}
+function formatTs(ts: bigint): string {
+  return format(new Date(Number(ts) / 1_000_000), "MMM d, yyyy HH:mm");
 }
 
-function formatCKBTC(sats: bigint): string {
-  const whole = sats / E8S;
-  const frac = (sats % E8S).toString().padStart(8, "0");
-  return `${whole.toLocaleString()}.${frac}`;
-}
-
-function truncateAddress(addr: string, len = 8): string {
-  if (addr.length <= len * 2 + 3) return addr;
-  return `${addr.slice(0, len)}...${addr.slice(-len)}`;
-}
-
-const TX_TYPE_ICONS: Record<TransactionType, React.ReactNode> = {
-  [TransactionType.Send]: <ArrowUpRight className="h-4 w-4 text-red-500" />,
+const TX_ICONS: Record<string, React.ReactNode> = {
   [TransactionType.Receive]: (
-    <ArrowDownLeft className="h-4 w-4 text-emerald-500" />
+    <ArrowDownLeft className="w-3.5 h-3.5 text-green-500" />
   ),
-  [TransactionType.Swap]: (
-    <ArrowRightLeft className="h-4 w-4 text-violet-500" />
-  ),
-  [TransactionType.Stake]: <RefreshCw className="h-4 w-4 text-violet-500" />,
-  [TransactionType.Unstake]: (
-    <RefreshCw className="h-4 w-4 text-muted-foreground" />
+  [TransactionType.Send]: (
+    <ArrowUpRight className="w-3.5 h-3.5 text-destructive" />
   ),
 };
 
-const TX_STATUS_STYLES: Record<TransactionStatus, string> = {
-  [TransactionStatus.Pending]:
-    "bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20",
-  [TransactionStatus.Completed]:
-    "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20",
-  [TransactionStatus.Failed]:
-    "bg-red-500/10 text-red-600 dark:text-red-400 border-red-500/20",
-  [TransactionStatus.Cancelled]: "bg-muted text-muted-foreground border-border",
-  [TransactionStatus.AwaitingApproval]:
-    "bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20",
-};
-
-function CopyButton({ value, label }: { value: string; label: string }) {
-  const handleCopy = async () => {
-    await navigator.clipboard.writeText(value);
-    toast.success(`${label} copied`);
-  };
-  return (
-    <button
-      type="button"
-      onClick={handleCopy}
-      aria-label={`Copy ${label}`}
-      className="ml-1.5 text-white/60 hover:text-white transition-colors min-h-[44px] min-w-[44px] flex items-center justify-center -mr-2"
-    >
-      <ClipboardCopy className="h-3.5 w-3.5" />
-    </button>
-  );
+function truncatePrincipal(id: string): string {
+  if (!id || id.length <= 16) return id;
+  return `${id.slice(0, 8)}...${id.slice(-4)}`;
 }
-
-function AccountCard({
-  account,
-  label,
-}: { account: WalletAccount; label: string }) {
-  const isPersonal = label === "Personal";
-  const gradient = isPersonal
-    ? "from-violet-600 to-purple-700"
-    : "from-blue-600 to-indigo-700";
-
-  // The Account ID is always a unique 64-char hex derived from principal + subaccount.
-  // For personal wallets: default subaccount (all-zeros). For treasury: workspace-derived subaccount.
-  // Both wallets share the same Principal ID (same user) but have DISTINCT Account IDs.
-  const accountIdLabel = isPersonal
-    ? "Account ID (personal subaccount)"
-    : "Account ID (workspace subaccount)";
-
-  return (
-    <div
-      className={`rounded-2xl bg-gradient-to-br ${gradient} p-5 sm:p-6 text-white shadow-lg`}
-      data-ocid="wallet-account-card"
-    >
-      <div className="flex items-start justify-between mb-4 sm:mb-5">
-        <div>
-          <div className="flex items-center gap-2">
-            <p className="text-xs font-medium text-white/60 uppercase tracking-wider">
-              {label} Wallet
-            </p>
-            {!isPersonal && (
-              <span className="rounded-full bg-blue-400/30 border border-blue-300/30 px-2 py-0.5 text-[10px] font-semibold text-blue-100">
-                Workspace
-              </span>
-            )}
-          </div>
-          <h2 className="font-display text-lg sm:text-xl font-bold mt-1">
-            {account.displayName}
-          </h2>
-        </div>
-        <div className="flex items-center gap-1.5 rounded-full bg-white/20 px-2.5 py-1 text-xs font-semibold">
-          <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" />
-          Live
-        </div>
-      </div>
-      <div className="grid grid-cols-2 gap-2 sm:gap-3 mb-4 sm:mb-5">
-        <div className="rounded-xl bg-white/10 p-3 sm:p-4">
-          <p className="text-xs text-white/60 mb-1">ICP Balance</p>
-          <p className="font-mono text-xl sm:text-2xl font-bold leading-none tabular-nums">
-            {formatICP(account.icpBalance)}
-          </p>
-          <p className="text-xs text-white/50 mt-1">ICP</p>
-        </div>
-        <div className="rounded-xl bg-white/10 p-3 sm:p-4">
-          <p className="text-xs text-white/60 mb-1">ckBTC Balance</p>
-          <p className="font-mono text-xl sm:text-2xl font-bold leading-none tabular-nums">
-            {formatCKBTC(account.btcBalance)}
-          </p>
-          <p className="text-xs text-white/50 mt-1">ckBTC</p>
-        </div>
-      </div>
-      <div className="space-y-2.5 text-xs border-t border-white/20 pt-3 sm:pt-4">
-        {/* Account ID — unique per wallet (personal vs treasury use different subaccounts) */}
-        <div className="space-y-1">
-          <div className="flex items-center gap-2">
-            <span className="text-white/50 shrink-0 min-w-[5rem]">
-              Account ID
-            </span>
-            <code className="flex-1 truncate text-white/90 font-mono text-[11px]">
-              {account.accountId}
-            </code>
-            <CopyButton value={account.accountId} label="Account ID" />
-          </div>
-          <p className="text-[10px] text-white/40 pl-[5.25rem] leading-relaxed">
-            {accountIdLabel} — 64-char hex, unique to this wallet
-          </p>
-        </div>
-        {/* ICRC-1 */}
-        <div className="space-y-1">
-          <div className="flex items-center gap-2">
-            <span className="text-white/50 shrink-0 min-w-[5rem]">ICRC-1</span>
-            <code className="flex-1 truncate text-white/80 font-mono text-[11px]">
-              {account.icrc1Account}
-            </code>
-            <CopyButton value={account.icrc1Account} label="ICRC-1 Account" />
-          </div>
-          <p className="text-[10px] text-white/40 pl-[5.25rem]">
-            For ckBTC and ICRC-1 tokens
-          </p>
-        </div>
-        {/* Principal ID — same for both wallets (it's the user's identity) */}
-        <div className="space-y-1">
-          <div className="flex items-center gap-2">
-            <span className="text-white/50 shrink-0 min-w-[5rem]">
-              Principal
-            </span>
-            <code className="flex-1 truncate text-white/60 font-mono text-[11px]">
-              {truncateAddress(account.principalId, 12)}
-            </code>
-            <CopyButton value={account.principalId} label="Principal ID" />
-          </div>
-          <p className="text-[10px] text-white/40 pl-[5.25rem]">
-            Your Internet Identity — shared across all your wallets
-          </p>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function AccountCardSkeleton() {
-  return (
-    <div className="rounded-2xl bg-gradient-to-br from-violet-600/50 to-purple-700/50 p-5 sm:p-6 space-y-4">
-      <div className="flex items-start justify-between">
-        <div className="space-y-2">
-          <Skeleton className="h-3 w-20 bg-white/20" />
-          <Skeleton className="h-5 w-32 bg-white/20" />
-        </div>
-        <Skeleton className="h-6 w-16 rounded-full bg-white/20" />
-      </div>
-      <div className="grid grid-cols-2 gap-3">
-        <Skeleton className="h-20 rounded-xl bg-white/20" />
-        <Skeleton className="h-20 rounded-xl bg-white/20" />
-      </div>
-      <div className="space-y-2 border-t border-white/20 pt-3">
-        <Skeleton className="h-4 w-full bg-white/20" />
-        <Skeleton className="h-4 w-full bg-white/20" />
-        <Skeleton className="h-4 w-full bg-white/20" />
-      </div>
-    </div>
-  );
-}
-
-function TxRow({ tx }: { tx: WalletTransaction }) {
-  const counterparty =
-    tx.txType === TransactionType.Send ? tx.toAddress : tx.fromAddress;
-  const isDebit =
-    tx.txType === TransactionType.Send || tx.txType === TransactionType.Stake;
-  return (
-    <div
-      className="flex items-center gap-3 py-3 border-b border-border/40 last:border-0 hover:bg-muted/50 transition-colors px-4 sm:px-5"
-      data-ocid={`tx-row-${tx.id}`}
-    >
-      <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-muted">
-        {TX_TYPE_ICONS[tx.txType]}
-      </div>
-      <div className="flex-1 min-w-0">
-        <p className="text-sm font-medium text-foreground">{tx.txType}</p>
-        {counterparty && (
-          <p className="text-xs text-muted-foreground truncate font-mono">
-            {truncateAddress(counterparty)}
-          </p>
-        )}
-        {tx.ledgerBlockHeight !== undefined &&
-          tx.ledgerBlockHeight !== null && (
-            <p className="text-xs text-muted-foreground font-mono">
-              Block #{tx.ledgerBlockHeight.toString()}
-            </p>
-          )}
-        <p className="text-xs text-muted-foreground">
-          {format(
-            new Date(Number(tx.createdAt / BigInt(1_000_000))),
-            "MMM d, yyyy",
-          )}
-        </p>
-      </div>
-      <div className="text-right shrink-0 space-y-1">
-        <p
-          className={`text-sm font-semibold font-mono tabular-nums ${isDebit ? "text-red-500" : "text-emerald-500"}`}
-        >
-          {isDebit ? "−" : "+"}
-          {tx.asset === AssetType.ICP
-            ? formatICP(tx.amount)
-            : formatCKBTC(tx.amount)}{" "}
-          {tx.asset === AssetType.BTC ? "ckBTC" : tx.asset}
-        </p>
-        <span
-          className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-medium border ${TX_STATUS_STYLES[tx.status]}`}
-        >
-          {tx.status}
-        </span>
-        {Number(tx.requiredApprovals) > 0 &&
-          tx.status === TransactionStatus.Pending && (
-            <p className="text-[10px] text-muted-foreground">
-              {tx.approvals.length}/{Number(tx.requiredApprovals)} approvals
-            </p>
-          )}
-      </div>
-    </div>
-  );
-}
-
-type WalletTab = "personal" | "treasury";
 
 export default function WalletPage() {
-  const { actor, isFetching } = useBackend();
-  const tenantId = getTenantId();
-  const { activeWorkspaceId } = useWorkspace();
-  const workspaceId = activeWorkspaceId ?? "";
-  const queryClient = useQueryClient();
-
-  const [activeTab, setActiveTab] = useState<WalletTab>("personal");
-  const [txTypeFilter, setTxTypeFilter] = useState<string>("");
-  const [txStatusFilter, setTxStatusFilter] = useState<string>("");
-  const [dateFrom, setDateFrom] = useState("");
-  const [dateTo, setDateTo] = useState("");
-  const [amountMin, setAmountMin] = useState("");
-  const [amountMax, setAmountMax] = useState("");
-  const [showFilters, setShowFilters] = useState(false);
-
-  const {
-    data: account,
-    isLoading,
-    isError: accountError,
-    refetch: refetchAccount,
-  } = useQuery<WalletAccount | null>({
-    queryKey: ["walletAccount", tenantId, workspaceId],
-    queryFn: async () => {
-      if (!actor) return null;
-      return actor.getMyWalletAccount(tenantId, workspaceId);
-    },
-    enabled: !!actor && !isFetching && !!workspaceId,
-    retry: 1,
-  });
-
-  const {
-    data: treasury,
-    isLoading: treasuryLoading,
-    isError: treasuryError,
-    refetch: refetchTreasury,
-  } = useQuery<WalletAccount | null>({
-    queryKey: ["workspaceTreasury", tenantId, workspaceId],
-    queryFn: async () => {
-      if (!actor) return null;
-      return actor.getWorkspaceTreasury(tenantId, workspaceId);
-    },
-    enabled: !!actor && !isFetching && !!workspaceId,
-    retry: 1,
-  });
-
-  const activeAccount = activeTab === "personal" ? account : treasury;
-  const activeAccountLoading =
-    activeTab === "personal" ? isLoading : treasuryLoading;
-  const activeAccountError =
-    activeTab === "personal" ? accountError : treasuryError;
-  const refetchActiveAccount =
-    activeTab === "personal" ? refetchAccount : refetchTreasury;
-
-  const txFilter: TxFilter = {
-    ...(txTypeFilter ? { txType: txTypeFilter as TransactionType } : {}),
-    ...(txStatusFilter ? { status: txStatusFilter as TransactionStatus } : {}),
-    ...(dateFrom
-      ? { fromDate: BigInt(new Date(dateFrom).getTime()) * BigInt(1_000_000) }
-      : {}),
-    ...(dateTo
-      ? {
-          toDate:
-            BigInt(new Date(dateTo).getTime() + 86_400_000) * BigInt(1_000_000),
-        }
-      : {}),
-    ...(amountMin ? { minAmount: Number(amountMin) } : {}),
-    ...(amountMax ? { maxAmount: Number(amountMax) } : {}),
+  const { workspaceId } = useParams({ strict: false }) as {
+    workspaceId: string;
   };
-
-  const hasFilters = !!(
-    txTypeFilter ||
-    txStatusFilter ||
-    dateFrom ||
-    dateTo ||
-    amountMin ||
-    amountMax
+  const { tenantId } = useWorkspace();
+  const { actor, isFetching } = useBackend();
+  const navigate = useNavigate();
+  const queryClient = useQueryClient();
+  const [activeTab, setActiveTab] = useState<"personal" | "treasury">(
+    "personal",
   );
 
-  const { data: transactions, isLoading: txLoading } = useQuery<
+  const { data: personal, isLoading: loadingPersonal } =
+    useQuery<WalletAccount | null>({
+      queryKey: ["myWallet", tenantId, workspaceId],
+      queryFn: async () => {
+        if (!actor) return null;
+        return actor.getMyWalletAccount(tenantId, workspaceId);
+      },
+      enabled: !!actor && !isFetching && !!workspaceId,
+    });
+
+  const { data: treasury, isLoading: loadingTreasury } =
+    useQuery<WalletAccount | null>({
+      queryKey: ["treasury", tenantId, workspaceId],
+      queryFn: async () => {
+        if (!actor) return null;
+        return actor.getWorkspaceTreasury(tenantId, workspaceId);
+      },
+      enabled: !!actor && !isFetching && !!workspaceId,
+    });
+
+  const activeAccount = activeTab === "personal" ? personal : treasury;
+
+  // Wallet configuration error: personal and treasury must have different account IDs
+  const walletConfigError =
+    personal &&
+    treasury &&
+    personal.accountId &&
+    treasury.accountId &&
+    personal.accountId === treasury.accountId;
+
+  const { data: transactions = [], isLoading: loadingTx } = useQuery<
     WalletTransaction[]
   >({
-    queryKey: ["walletTxs", tenantId, workspaceId, activeAccount?.id, txFilter],
+    queryKey: ["walletTx", tenantId, workspaceId, activeAccount?.id],
     queryFn: async () => {
-      if (!actor || !activeAccount) return [];
+      if (!actor || !activeAccount?.id) return [];
       return actor.listTransactions(
         tenantId,
         workspaceId,
@@ -377,580 +103,439 @@ export default function WalletPage() {
         null,
       );
     },
-    enabled: !!actor && !isFetching && !!activeAccount && !!workspaceId,
+    enabled: !!actor && !isFetching && !!activeAccount?.id,
   });
 
-  const { data: pendingApprovals } = useQuery<WalletTransaction[]>({
-    queryKey: ["pendingApprovals", tenantId, workspaceId],
-    queryFn: async () => {
-      if (!actor) return [];
-      return actor.getPendingApprovals(tenantId, workspaceId);
-    },
-    enabled: !!actor && !isFetching && !!workspaceId,
-  });
-
-  const createMutation = useMutation({
+  const createPersonalMutation = useMutation({
     mutationFn: async () => {
-      if (!actor) throw new Error("No actor");
-      const res = await actor.createWalletAccount(
+      if (!actor) throw new Error("Not connected");
+      const r = await actor.createWalletAccount(
         tenantId,
         workspaceId,
         "My Wallet",
       );
-      if (res.__kind__ === "err") throw new Error(res.err);
-      return res.ok;
+      if (r.__kind__ === "err") throw new Error(r.err);
+      return r.ok;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({
-        queryKey: ["walletAccount", tenantId, workspaceId],
-      });
-      toast.success("Wallet created successfully");
+      toast.success("Personal wallet created");
+      void queryClient.invalidateQueries({ queryKey: ["myWallet"] });
     },
-    onError: (err: Error) => toast.error(err.message),
+    onError: (e: Error) => toast.error(e.message),
   });
 
   const createTreasuryMutation = useMutation({
     mutationFn: async () => {
-      if (!actor) throw new Error("No actor");
-      const res = await actor.createWorkspaceTreasury(tenantId, workspaceId);
-      if (res.__kind__ === "err") throw new Error(res.err);
-      return res.ok;
+      if (!actor) throw new Error("Not connected");
+      const r = await actor.createWorkspaceTreasury(tenantId, workspaceId);
+      if (r.__kind__ === "err") throw new Error(r.err);
+      return r.ok;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({
-        queryKey: ["workspaceTreasury", tenantId, workspaceId],
-      });
       toast.success("Workspace treasury created");
+      void queryClient.invalidateQueries({ queryKey: ["treasury"] });
     },
-    onError: (err: Error) => toast.error(err.message),
+    onError: (e: Error) => toast.error(e.message),
   });
 
-  const approveMutation = useMutation({
-    mutationFn: async ({
-      txId,
-      approved,
-    }: { txId: string; approved: boolean }) => {
-      if (!actor) throw new Error("No actor");
-      const res = await actor.approveTransaction(
-        tenantId,
-        workspaceId,
-        txId,
-        approved,
-      );
-      if (res.__kind__ === "err") throw new Error(res.err);
-      return res.ok;
+  const refreshMutation = useMutation({
+    mutationFn: async () => {
+      await queryClient.invalidateQueries({ queryKey: ["myWallet"] });
+      await queryClient.invalidateQueries({ queryKey: ["treasury"] });
+      await queryClient.invalidateQueries({ queryKey: ["walletTx"] });
     },
-    onSuccess: (_, { approved }) => {
-      queryClient.invalidateQueries({
-        queryKey: ["pendingApprovals", tenantId, workspaceId],
-      });
-      queryClient.invalidateQueries({
-        queryKey: ["walletTxs", tenantId, workspaceId],
-      });
-      toast.success(approved ? "Transaction approved" : "Transaction rejected");
-    },
-    onError: (err: Error) => toast.error(err.message),
+    onSuccess: () => toast.success("Balances refreshed"),
   });
 
-  function handleExportCSV() {
-    if (!actor || !activeAccount) return;
-    actor
-      .exportTransactions(
-        tenantId,
-        workspaceId,
-        activeAccount.id,
-        hasFilters ? txFilter : null,
-      )
-      .then((csv) => {
-        const blob = new Blob([csv], { type: "text/csv" });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement("a");
-        a.href = url;
-        a.download = `wallet-transactions-${format(new Date(), "yyyy-MM-dd")}.csv`;
-        a.click();
-        URL.revokeObjectURL(url);
-        toast.success("CSV exported");
-      })
-      .catch((err: Error) => toast.error(err.message));
+  function copyToClipboard(text: string) {
+    void navigator.clipboard.writeText(text);
+    toast.success("Copied to clipboard");
   }
 
-  const filteredTxs = (transactions ?? []).filter((tx) => {
-    if (txTypeFilter && tx.txType !== txTypeFilter) return false;
-    if (txStatusFilter && tx.status !== txStatusFilter) return false;
-    return true;
-  });
-
-  const pendingList = pendingApprovals ?? [];
-
-  const quickActions = [
-    {
-      label: "Send",
-      icon: <ArrowUpRight className="h-5 w-5 text-violet-500" />,
-      href: `/app/${workspaceId}/wallet/send`,
-      ocid: "quick-send",
-    },
-    {
-      label: "Receive",
-      icon: <QrCode className="h-5 w-5 text-violet-500" />,
-      href: `/app/${workspaceId}/wallet/receive`,
-      ocid: "quick-receive",
-    },
-    {
-      label: "ckBTC",
-      icon: <Bitcoin className="h-5 w-5 text-orange-500" />,
-      href: `/app/${workspaceId}/wallet/send`,
-      ocid: "quick-send-ckbtc",
-    },
-    {
-      label: "Recurring",
-      icon: <RefreshCw className="h-5 w-5 text-violet-500" />,
-      href: `/app/${workspaceId}/wallet/recurring`,
-      ocid: "quick-recurring",
-    },
-  ];
+  const isLoading = loadingPersonal || loadingTreasury;
 
   return (
-    <div className="animate-fade-in-up p-4 sm:p-6 space-y-5 max-w-3xl mx-auto pb-20 md:pb-6">
+    <div className="flex flex-col gap-6 p-4 sm:p-6 max-w-4xl mx-auto w-full">
       {/* Header */}
       <div className="flex items-center justify-between gap-3 flex-wrap">
         <div className="flex items-center gap-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-violet-500/15 border border-violet-500/20">
-            <Wallet className="h-5 w-5 text-violet-600 dark:text-violet-400" />
+          <div className="w-9 h-9 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
+            <Wallet className="w-5 h-5 text-primary" />
           </div>
           <div>
-            <h1 className="font-display text-xl sm:text-2xl font-bold tracking-tight text-foreground">
+            <h1 className="text-xl font-semibold text-foreground font-display">
               Wallet
             </h1>
-            <p className="text-sm text-muted-foreground hidden sm:block">
-              ICP and ckBTC on the Internet Computer
+            <p className="text-sm text-muted-foreground">
+              Manage ICP and ckBTC balances
             </p>
           </div>
         </div>
-        {activeAccount && (
-          <div className="flex gap-2 flex-wrap">
+        <div className="flex gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => refreshMutation.mutate()}
+            disabled={refreshMutation.isPending}
+            data-ocid="wallet-refresh-btn"
+            className="gap-1.5"
+          >
+            <RefreshCw
+              className={`w-3.5 h-3.5 ${refreshMutation.isPending ? "animate-spin" : ""}`}
+            />
+            Refresh
+          </Button>
+          <Button
+            size="sm"
+            onClick={() =>
+              navigate({ to: `/app/${workspaceId}/wallet/receive` as "/" })
+            }
+            data-ocid="wallet-receive-btn"
+            className="gap-1.5"
+          >
+            <ArrowDownLeft className="w-3.5 h-3.5" />
+            Receive
+          </Button>
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() =>
+              navigate({ to: `/app/${workspaceId}/wallet/send` as "/" })
+            }
+            data-ocid="wallet-send-btn"
+            className="gap-1.5"
+          >
+            <ArrowUpRight className="w-3.5 h-3.5" />
+            Send
+          </Button>
+        </div>
+      </div>
+
+      {/* Tabs */}
+      <div className="flex gap-0 border-b border-border">
+        {(["personal", "treasury"] as const).map((tab) => (
+          <button
+            type="button"
+            key={tab}
+            data-ocid={`wallet-tab-${tab}`}
+            onClick={() => setActiveTab(tab)}
+            className={`flex items-center gap-2 px-4 py-2.5 text-sm font-medium border-b-2 -mb-px transition-colors ${
+              activeTab === tab
+                ? "border-primary text-primary"
+                : "border-transparent text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            {tab === "personal" ? (
+              <User className="w-4 h-4" />
+            ) : (
+              <Building2 className="w-4 h-4" />
+            )}
+            {tab === "personal" ? "Personal Wallet" : "Workspace Treasury"}
+          </button>
+        ))}
+      </div>
+
+      {/* Account section */}
+      {walletConfigError ? (
+        <Card className="border-destructive/40 bg-destructive/5">
+          <CardContent className="flex flex-col items-center justify-center py-10 gap-3 text-center">
+            <AlertTriangle className="w-8 h-8 text-destructive" />
+            <p className="font-semibold text-destructive font-display text-sm">
+              Wallet configuration error
+            </p>
+            <p className="text-xs text-muted-foreground max-w-xs">
+              Your personal wallet and workspace treasury are showing the same
+              address, which means the wallet needs to be reconfigured. Please
+              contact support.
+            </p>
+          </CardContent>
+        </Card>
+      ) : isLoading ? (
+        <Skeleton className="h-44 w-full rounded-xl" />
+      ) : !activeAccount ? (
+        <Card className="border-dashed">
+          <CardContent className="flex flex-col items-center justify-center py-12 gap-4">
+            {activeTab === "personal" ? (
+              <User className="w-10 h-10 text-muted-foreground" />
+            ) : (
+              <Building2 className="w-10 h-10 text-muted-foreground" />
+            )}
+            <div className="text-center">
+              <p className="font-medium text-foreground font-display">
+                {activeTab === "personal"
+                  ? "No personal wallet yet"
+                  : "No workspace treasury yet"}
+              </p>
+              <p className="text-sm text-muted-foreground mt-1">
+                Create one to start receiving and sending tokens.
+              </p>
+            </div>
             <Button
-              asChild
-              size="sm"
-              className="bg-violet-600 hover:bg-violet-700 text-white active-press min-h-[44px]"
-              data-ocid="wallet-send-btn"
+              data-ocid={`wallet-create-${activeTab}`}
+              onClick={() =>
+                activeTab === "personal"
+                  ? createPersonalMutation.mutate()
+                  : createTreasuryMutation.mutate()
+              }
+              disabled={
+                createPersonalMutation.isPending ||
+                createTreasuryMutation.isPending
+              }
+              className="gap-2"
             >
-              <Link to={`/app/${workspaceId}/wallet/send`}>
-                <ArrowUpRight className="mr-1 h-4 w-4" />
-                <span className="hidden sm:inline">Send</span>
-              </Link>
+              <Plus className="w-4 h-4" />
+              Create{" "}
+              {activeTab === "personal"
+                ? "Personal Wallet"
+                : "Workspace Treasury"}
             </Button>
-            <Button
-              asChild
-              variant="outline"
-              size="sm"
-              data-ocid="wallet-receive-btn"
-              className="min-h-[44px]"
-            >
-              <Link to={`/app/${workspaceId}/wallet/receive`}>
-                <QrCode className="mr-1 h-4 w-4" />
-                <span className="hidden sm:inline">Receive</span>
-              </Link>
-            </Button>
-            <Button
-              asChild
-              variant="outline"
-              size="sm"
-              data-ocid="wallet-recurring-btn"
-              className="min-h-[44px]"
-            >
-              <Link to={`/app/${workspaceId}/wallet/recurring`}>
-                <RefreshCw className="mr-1 h-4 w-4" />
-                <span className="hidden sm:inline">Recurring</span>
-              </Link>
-            </Button>
-            <Button
-              asChild
-              variant="outline"
-              size="sm"
-              data-ocid="wallet-limits-btn"
-              className="min-h-[44px]"
-            >
-              <Link to={`/app/${workspaceId}/wallet/spending-limits`}>
-                <Settings className="mr-1 h-4 w-4" />
-                <span className="hidden sm:inline">Limits</span>
-              </Link>
-            </Button>
+          </CardContent>
+        </Card>
+      ) : (
+        <AccountCard
+          account={activeAccount}
+          label={
+            activeTab === "personal" ? "Personal Wallet" : "Workspace Treasury"
+          }
+          icon={
+            activeTab === "personal" ? (
+              <User className="w-4 h-4" />
+            ) : (
+              <Building2 className="w-4 h-4" />
+            )
+          }
+          onCopy={copyToClipboard}
+          workspaceId={workspaceId}
+          navigate={navigate}
+        />
+      )}
+
+      {/* Transaction history */}
+      <div>
+        <h2 className="text-sm font-semibold text-foreground font-display mb-3">
+          Transaction History
+        </h2>
+        {loadingTx ? (
+          <div className="flex flex-col gap-2">
+            {(["a", "b", "c"] as const).map((k) => (
+              <Skeleton key={k} className="h-14 w-full rounded-lg" />
+            ))}
+          </div>
+        ) : transactions.length === 0 ? (
+          <div
+            data-ocid="wallet-tx-empty"
+            className="flex flex-col items-center justify-center py-12 gap-2 text-center rounded-lg border border-dashed border-border"
+          >
+            <Wallet className="w-8 h-8 text-muted-foreground" />
+            <p className="text-sm text-muted-foreground">No transactions yet</p>
+          </div>
+        ) : (
+          <div className="flex flex-col gap-1">
+            {transactions.map((tx) => (
+              <TxRow key={tx.id} tx={tx} />
+            ))}
           </div>
         )}
       </div>
 
-      {/* Tabs */}
-      <div className="border-b border-border/60">
-        <div className="flex overflow-x-auto scrollbar-none">
-          {(
-            [
-              {
-                id: "personal" as WalletTab,
-                label: "Personal Wallet",
-                icon: User,
-              },
-              {
-                id: "treasury" as WalletTab,
-                label: "Workspace Treasury",
-                icon: Building2,
-              },
-            ] as const
-          ).map(({ id, label, icon: Icon }) => (
-            <button
-              key={id}
-              type="button"
-              onClick={() => setActiveTab(id)}
-              data-ocid={`wallet-tab-${id}`}
-              className={`flex items-center gap-2 px-3 sm:px-4 py-2.5 text-xs sm:text-sm font-medium border-b-2 transition-colors whitespace-nowrap min-h-[44px] ${
-                activeTab === id
-                  ? "border-violet-500 text-violet-600 dark:text-violet-400"
-                  : "border-transparent text-muted-foreground hover:text-foreground hover:border-border"
-              }`}
-            >
-              <Icon className="h-4 w-4" />
-              <span className="hidden sm:inline">{label}</span>
-              <span className="sm:hidden">
-                {id === "personal" ? "Personal" : "Treasury"}
-              </span>
-            </button>
-          ))}
-        </div>
-      </div>
-
-      {/* Pending Approvals */}
-      {pendingList.length > 0 && (
-        <div className="rounded-xl border border-amber-200 dark:border-amber-800 bg-amber-500/5 p-4">
-          <p className="text-sm font-semibold text-amber-700 dark:text-amber-400 flex items-center gap-2 mb-3">
-            <AlertCircle className="h-4 w-4" />
-            {pendingList.length} transaction{pendingList.length > 1 ? "s" : ""}{" "}
-            awaiting approval
-          </p>
-          <div className="space-y-2">
-            {pendingList.map((tx) => (
-              <div
-                key={tx.id}
-                className="flex items-center justify-between gap-3 rounded-lg bg-card border border-border/50 p-3 flex-wrap"
-                data-ocid={`pending-approval-${tx.id}`}
-              >
-                <div className="flex-1 min-w-0">
-                  <p className="text-xs font-medium text-foreground">
-                    {tx.txType} —{" "}
-                    {tx.asset === AssetType.BTC ? "ckBTC" : tx.asset}
-                  </p>
-                  <p className="text-xs text-muted-foreground">
-                    {tx.asset === AssetType.ICP
-                      ? formatICP(tx.amount)
-                      : formatCKBTC(tx.amount)}{" "}
-                    {tx.asset === AssetType.BTC ? "ckBTC" : tx.asset}
-                    {tx.toAddress && ` → ${truncateAddress(tx.toAddress)}`}
-                  </p>
-                  <p className="text-[10px] text-muted-foreground">
-                    {tx.approvals.length}/{Number(tx.requiredApprovals)}{" "}
-                    approvals
-                  </p>
-                </div>
-                <div className="flex gap-1.5 shrink-0">
-                  <Button
-                    size="sm"
-                    onClick={() =>
-                      approveMutation.mutate({ txId: tx.id, approved: true })
-                    }
-                    disabled={approveMutation.isPending}
-                    className="h-9 text-xs bg-emerald-600 hover:bg-emerald-700 text-white gap-1 active-press min-h-[44px]"
-                    data-ocid={`approve-tx-${tx.id}`}
-                  >
-                    <CheckCircle2 className="h-3 w-3" /> Approve
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={() =>
-                      approveMutation.mutate({ txId: tx.id, approved: false })
-                    }
-                    disabled={approveMutation.isPending}
-                    className="h-9 text-xs border-red-300 text-red-600 hover:bg-red-50 gap-1 min-h-[44px]"
-                    data-ocid={`reject-tx-${tx.id}`}
-                  >
-                    <XCircle className="h-3 w-3" /> Reject
-                  </Button>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {activeAccountLoading ? (
-        <div className="space-y-4">
-          <AccountCardSkeleton />
-          <Skeleton className="h-32 rounded-2xl" />
-        </div>
-      ) : activeAccountError ? (
-        <div
-          className="flex flex-col items-center justify-center rounded-2xl border border-destructive/30 bg-destructive/5 py-12 text-center px-4"
-          data-ocid="wallet-error"
-        >
-          <AlertCircle className="h-10 w-10 text-destructive/60 mb-3" />
-          <p className="font-semibold text-foreground">Balance unavailable</p>
-          <p className="text-sm text-muted-foreground mt-1 mb-4">
-            Could not fetch your wallet balance. Please try again.
-          </p>
+      {/* Export */}
+      {transactions.length > 0 && activeAccount && (
+        <div className="flex justify-end">
           <Button
             variant="outline"
-            onClick={() => refetchActiveAccount()}
-            className="gap-2 min-h-[44px]"
-            data-ocid="wallet-retry-btn"
+            size="sm"
+            data-ocid="wallet-export-btn"
+            onClick={async () => {
+              if (!actor || !activeAccount) return;
+              const csv = await actor.exportTransactions(
+                tenantId,
+                workspaceId,
+                activeAccount.id,
+                null,
+              );
+              const blob = new Blob([csv], { type: "text/csv" });
+              const url = URL.createObjectURL(blob);
+              const a = document.createElement("a");
+              a.href = url;
+              a.download = `transactions-${activeAccount.accountType}-${Date.now()}.csv`;
+              a.click();
+              URL.revokeObjectURL(url);
+            }}
+            className="gap-1.5"
           >
-            <RefreshCw className="h-4 w-4" />
-            Retry
+            <Download className="w-3.5 h-3.5" />
+            Export CSV
           </Button>
         </div>
-      ) : !activeAccount ? (
-        <div
-          className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-border bg-muted/20 py-16 sm:py-20 text-center px-4"
-          data-ocid="wallet-empty"
-        >
-          <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-violet-500/10 mb-4">
-            {activeTab === "personal" ? (
-              <Wallet className="h-8 w-8 text-violet-500" />
-            ) : (
-              <Building2 className="h-8 w-8 text-blue-500" />
-            )}
-          </div>
-          <h3 className="font-display font-semibold text-foreground">
-            {activeTab === "personal"
-              ? "No personal wallet"
-              : "No workspace treasury"}
-          </h3>
-          <p className="mt-2 text-sm text-muted-foreground max-w-xs">
-            {activeTab === "personal"
-              ? "Set up your wallet to start sending and receiving ICP and ckBTC tokens."
-              : "Create a workspace treasury to manage shared funds."}
-          </p>
-          <Button
-            className={`mt-6 ${activeTab === "personal" ? "bg-violet-600 hover:bg-violet-700" : "bg-blue-600 hover:bg-blue-700"} text-white active-press min-h-[44px]`}
-            onClick={() =>
-              activeTab === "personal"
-                ? createMutation.mutate()
-                : createTreasuryMutation.mutate()
-            }
-            disabled={
-              createMutation.isPending || createTreasuryMutation.isPending
-            }
-            data-ocid="wallet-create-btn"
-          >
-            <Plus className="mr-2 h-4 w-4" />
-            {createMutation.isPending || createTreasuryMutation.isPending
-              ? "Creating…"
-              : activeTab === "personal"
-                ? "Create Personal Wallet"
-                : "Create Treasury"}
-          </Button>
-        </div>
-      ) : (
-        <>
-          <AccountCard
-            account={activeAccount}
-            label={activeTab === "personal" ? "Personal" : "Treasury"}
-          />
-
-          {/* Quick Actions — 4-col grid */}
-          <div className="grid grid-cols-4 gap-2 sm:gap-3">
-            {quickActions.map((action) => (
-              <Link
-                key={action.label}
-                to={action.href}
-                data-ocid={action.ocid}
-                className="flex flex-col items-center gap-1.5 sm:gap-2 rounded-xl border border-border/50 bg-card p-3 sm:p-4 text-center transition-all hover:border-violet-500/50 hover:bg-violet-500/5 hover:shadow-card min-h-[72px] sm:min-h-[80px]"
-              >
-                <div className="flex h-8 w-8 sm:h-10 sm:w-10 items-center justify-center rounded-xl bg-muted">
-                  {action.icon}
-                </div>
-                <span className="text-[10px] sm:text-xs font-medium text-foreground">
-                  {action.label}
-                </span>
-              </Link>
-            ))}
-          </div>
-
-          {/* Transaction History */}
-          <div className="rounded-2xl border border-border/50 bg-card shadow-card overflow-hidden">
-            <div className="px-4 sm:px-5 py-4 border-b border-border/40 flex items-center justify-between gap-3 flex-wrap">
-              <div className="flex items-center gap-2">
-                <TrendingUp className="h-4 w-4 text-violet-500" />
-                <h2 className="font-display font-semibold text-foreground text-sm sm:text-base">
-                  Transaction History
-                </h2>
-              </div>
-              <div className="flex gap-2">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setShowFilters(!showFilters)}
-                  data-ocid="tx-filter-toggle"
-                  className="h-8 text-xs gap-1 min-h-[44px]"
-                >
-                  Filters{hasFilters && " •"}
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={handleExportCSV}
-                  data-ocid="tx-export-btn"
-                  className="h-8 text-xs gap-1 min-h-[44px]"
-                >
-                  <Download className="h-3 w-3" />
-                  <span className="hidden sm:inline">CSV</span>
-                </Button>
-              </div>
-            </div>
-
-            {showFilters && (
-              <div className="px-4 sm:px-5 py-4 border-b border-border/40 bg-muted/20 space-y-3">
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-                  <div className="space-y-1">
-                    <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-                      Type
-                    </Label>
-                    <select
-                      value={txTypeFilter}
-                      onChange={(e) => setTxTypeFilter(e.target.value)}
-                      className="w-full rounded-md border border-input bg-background px-2 py-2 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-ring h-10"
-                      data-ocid="tx-type-filter"
-                    >
-                      <option value="">All types</option>
-                      {Object.values(TransactionType).map((t) => (
-                        <option key={t} value={t}>
-                          {t}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                  <div className="space-y-1">
-                    <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-                      Status
-                    </Label>
-                    <select
-                      value={txStatusFilter}
-                      onChange={(e) => setTxStatusFilter(e.target.value)}
-                      className="w-full rounded-md border border-input bg-background px-2 py-2 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-ring h-10"
-                      data-ocid="tx-status-filter"
-                    >
-                      <option value="">All statuses</option>
-                      {Object.values(TransactionStatus).map((s) => (
-                        <option key={s} value={s}>
-                          {s}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                  <div className="space-y-1">
-                    <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-                      From date
-                    </Label>
-                    <Input
-                      type="date"
-                      value={dateFrom}
-                      onChange={(e) => setDateFrom(e.target.value)}
-                      className="h-10 text-xs"
-                      data-ocid="tx-date-from"
-                    />
-                  </div>
-                  <div className="space-y-1">
-                    <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-                      To date
-                    </Label>
-                    <Input
-                      type="date"
-                      value={dateTo}
-                      onChange={(e) => setDateTo(e.target.value)}
-                      className="h-10 text-xs"
-                      data-ocid="tx-date-to"
-                    />
-                  </div>
-                  <div className="space-y-1">
-                    <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-                      Min amount
-                    </Label>
-                    <Input
-                      type="number"
-                      min="0"
-                      placeholder="0"
-                      value={amountMin}
-                      onChange={(e) => setAmountMin(e.target.value)}
-                      className="h-10 text-xs"
-                      data-ocid="tx-amount-min"
-                    />
-                  </div>
-                  <div className="space-y-1">
-                    <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-                      Max amount
-                    </Label>
-                    <Input
-                      type="number"
-                      min="0"
-                      placeholder="∞"
-                      value={amountMax}
-                      onChange={(e) => setAmountMax(e.target.value)}
-                      className="h-10 text-xs"
-                      data-ocid="tx-amount-max"
-                    />
-                  </div>
-                </div>
-                {hasFilters && (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setTxTypeFilter("");
-                      setTxStatusFilter("");
-                      setDateFrom("");
-                      setDateTo("");
-                      setAmountMin("");
-                      setAmountMax("");
-                    }}
-                    className="text-xs text-muted-foreground hover:text-foreground transition-colors"
-                  >
-                    Clear all filters
-                  </button>
-                )}
-              </div>
-            )}
-
-            <div>
-              {txLoading ? (
-                <div className="space-y-3 p-5">
-                  {[1, 2, 3].map((n) => (
-                    <Skeleton key={n} className="h-14" />
-                  ))}
-                </div>
-              ) : filteredTxs.length > 0 ? (
-                <div data-ocid="tx-list">
-                  {filteredTxs.map((tx) => (
-                    <TxRow key={tx.id} tx={tx} />
-                  ))}
-                </div>
-              ) : (
-                <div
-                  className="flex flex-col items-center py-10 text-center px-4"
-                  data-ocid="tx-empty"
-                >
-                  <ArrowRightLeft className="h-8 w-8 text-muted-foreground/40 mb-3" />
-                  <p className="text-sm text-muted-foreground">
-                    {hasFilters
-                      ? "No matching transactions"
-                      : "No transactions yet"}
-                  </p>
-                  <p className="text-xs text-muted-foreground mt-1">
-                    {hasFilters
-                      ? "Try adjusting your filters."
-                      : "Send or receive ICP to see your history here."}
-                  </p>
-                </div>
-              )}
-            </div>
-          </div>
-        </>
       )}
+    </div>
+  );
+}
+
+function AccountCard({
+  account,
+  label,
+  icon,
+  onCopy,
+  workspaceId,
+  navigate,
+}: {
+  account: WalletAccount;
+  label: string;
+  icon: React.ReactNode;
+  onCopy: (text: string) => void;
+  workspaceId: string;
+  navigate: ReturnType<typeof useNavigate>;
+}) {
+  return (
+    <Card className="bg-card">
+      <CardHeader className="pb-3">
+        <CardTitle className="text-sm font-display flex items-center gap-2">
+          {icon}
+          {label}
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="flex flex-col gap-4">
+        {/* Balances */}
+        <div className="grid grid-cols-2 gap-4">
+          <div className="p-3 rounded-lg bg-primary/5 border border-primary/20">
+            <p className="text-xs text-muted-foreground mb-1">ICP Balance</p>
+            <p className="text-lg font-bold text-foreground font-display">
+              {formatICP(account.icpBalance)}
+            </p>
+          </div>
+          <div className="p-3 rounded-lg bg-secondary/5 border border-secondary/20">
+            <p className="text-xs text-muted-foreground mb-1">ckBTC Balance</p>
+            <p className="text-lg font-bold text-foreground font-display">
+              {formatBTC(account.btcBalance)}
+            </p>
+          </div>
+        </div>
+
+        {/* ICP Account ID (for receiving ICP) */}
+        <div>
+          <div className="flex items-center justify-between mb-1">
+            <p className="text-xs text-muted-foreground">
+              ICP Account ID (64-char hex)
+            </p>
+            <button
+              type="button"
+              onClick={() => onCopy(account.accountId)}
+              className="text-xs text-primary hover:underline flex items-center gap-1"
+              data-ocid="wallet-copy-account-id"
+            >
+              <Copy className="w-3 h-3" />
+              Copy
+            </button>
+          </div>
+          <p
+            className="text-xs font-mono bg-muted/50 px-3 py-2 rounded-md break-all text-foreground border border-border"
+            data-ocid="wallet-account-id"
+          >
+            {account.accountId || "Generating…"}
+          </p>
+          <p className="text-xs text-muted-foreground mt-1">
+            Share this address to receive ICP from any compatible wallet or
+            exchange.
+          </p>
+        </div>
+
+        {/* ICRC-1 / Principal address */}
+        <div>
+          <div className="flex items-center justify-between mb-1">
+            <p className="text-xs text-muted-foreground">
+              Principal (for ckBTC / ICRC-1 tokens)
+            </p>
+            <button
+              type="button"
+              onClick={() =>
+                onCopy(account.icrc1Account || account.principalId || "")
+              }
+              className="text-xs text-primary hover:underline flex items-center gap-1"
+              data-ocid="wallet-copy-principal"
+            >
+              <Copy className="w-3 h-3" />
+              Copy
+            </button>
+          </div>
+          <p
+            className="text-xs font-mono bg-muted/50 px-3 py-2 rounded-md text-foreground border border-border"
+            data-ocid="wallet-principal-id"
+            title={account.icrc1Account || account.principalId || "—"}
+          >
+            {truncatePrincipal(
+              account.icrc1Account || account.principalId || "",
+            ) || "—"}
+          </p>
+        </div>
+
+        <div className="flex gap-2">
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() =>
+              navigate({ to: `/app/${workspaceId}/wallet/receive` as "/" })
+            }
+            className="gap-1.5 flex-1"
+          >
+            <ArrowDownLeft className="w-3.5 h-3.5" />
+            Receive
+          </Button>
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() =>
+              navigate({ to: `/app/${workspaceId}/wallet/send` as "/" })
+            }
+            className="gap-1.5 flex-1"
+          >
+            <ArrowUpRight className="w-3.5 h-3.5" />
+            Send
+          </Button>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+function TxRow({ tx }: { tx: WalletTransaction }) {
+  const isReceive = tx.txType === TransactionType.Receive;
+  const amtStr = formatICP(tx.amount);
+
+  return (
+    <div
+      data-ocid={`tx-row-${tx.id}`}
+      className="flex items-center gap-3 p-3 rounded-lg hover:bg-muted/30 transition-colors"
+    >
+      <div
+        className={`w-7 h-7 rounded-full flex items-center justify-center shrink-0 ${
+          isReceive ? "bg-accent/10" : "bg-destructive/10"
+        }`}
+      >
+        {TX_ICONS[tx.txType] ?? (
+          <ArrowUpRight className="w-3.5 h-3.5 text-muted-foreground" />
+        )}
+      </div>
+      <div className="flex-1 min-w-0">
+        <p className="text-sm font-medium text-foreground">{tx.txType}</p>
+        {tx.memo && (
+          <p className="text-xs text-muted-foreground truncate">{tx.memo}</p>
+        )}
+      </div>
+      <div className="text-right shrink-0">
+        <p
+          className={`text-sm font-semibold ${isReceive ? "text-accent-foreground" : "text-destructive"}`}
+        >
+          {isReceive ? "+" : "-"}
+          {amtStr}
+        </p>
+        <p className="text-xs text-muted-foreground">
+          {tx.createdAt ? formatTs(tx.createdAt) : "—"}
+        </p>
+      </div>
+      <Badge variant="outline" className="text-xs shrink-0 ml-1">
+        {tx.status}
+      </Badge>
     </div>
   );
 }

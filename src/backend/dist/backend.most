@@ -600,6 +600,7 @@ type NoteLastEditEntry__605511832 =
 type NotePresenceEntry__432572757 =
   {
     displayName : Text;
+    isEditing : Bool;
     lastSeen : Int;
     noteId : EntityId__892221652;
     tenantId : TenantId__234751125;
@@ -874,6 +875,7 @@ type Task__929654902 =
     priority : TaskPriority__409192515;
     projectId : EntityId__892221652;
     status : TaskStatus__562831937;
+    tags : [Text];
     tenantId : TenantId__234751125;
     title : Text;
     updatedAt : Timestamp__301639476;
@@ -930,6 +932,24 @@ type UserProfile__244945094 =
     tenantId : TenantId__234751125;
     userId : UserId__158757552;
     workspaceId : EntityId__892221652
+  };
+type UserSettingsEntry__322544806 =
+  {
+    accentColor : Text;
+    dateFormat : Text;
+    defaultModule : Text;
+    displayName : Text;
+    email : Text;
+    language : Text;
+    notifyEscrow : Bool;
+    notifyGoals : Bool;
+    notifyMentions : Bool;
+    notifyPayroll : Bool;
+    notifyTaskAssigned : Bool;
+    sidebarLayout : Text;
+    timeFormat : Text;
+    updatedAt : Int;
+    userId : Text
   };
 type UserStatus__380884490 =
   {
@@ -1137,6 +1157,7 @@ actor {
     [(EntityId__892221652, PayrollRecord__556311547)];
   stable profilesRef :
     {var val : [(UserId__158757552, UserProfile__244945094)]};
+  stable var profilesStable : [(UserId__158757552, UserProfile__244945094)];
   stable var projects : [(EntityId__892221652, Project__614212307)];
   stable var recurringPmts :
     [(EntityId__892221652, RecurringPayment__52651042)];
@@ -1156,6 +1177,7 @@ actor {
   stable var threadNotifications : [(Text, ThreadNotification__306762693)];
   stable var timeEntries : [(EntityId__892221652, TimeEntry__332413573)];
   stable var txMemoCounter : Nat64;
+  stable var userSettingsStore : [(Text, UserSettingsEntry__322544806)];
   stable var walletAccounts :
     [(EntityId__892221652, WalletAccount__310674054)];
   stable var walletApprovals :
@@ -1166,5 +1188,6 @@ actor {
   stable var whiteboards : [(EntityId__892221652, Whiteboard__8914256)];
   stable var workspaceShareTokens : [(Text, Text)];
   stable workspacesRef :
-    {var val : [(EntityId__892221652, Workspace__405571195)]}
+    {var val : [(EntityId__892221652, Workspace__405571195)]};
+  stable var workspacesStable : [(EntityId__892221652, Workspace__405571195)]
 };

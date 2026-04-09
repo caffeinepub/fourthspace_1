@@ -1025,6 +1025,7 @@ export const Subtask = IDL.Record({
 export const TaskInput = IDL.Record({
   'title' : IDL.Text,
   'assigneeId' : IDL.Opt(UserId),
+  'tags' : IDL.Vec(IDL.Text),
   'dueDate' : IDL.Opt(Timestamp),
   'description' : IDL.Text,
   'projectId' : EntityId,
@@ -1037,6 +1038,7 @@ export const Task = IDL.Record({
   'title' : IDL.Text,
   'assigneeId' : IDL.Opt(UserId),
   'createdAt' : Timestamp,
+  'tags' : IDL.Vec(IDL.Text),
   'dueDate' : IDL.Opt(Timestamp),
   'description' : IDL.Text,
   'tenantId' : TenantId,
@@ -1253,6 +1255,7 @@ export const UserProfile = IDL.Record({
   'workspaceId' : EntityId,
 });
 export const NoteEditorPresence = IDL.Record({
+  'isEditing' : IDL.Bool,
   'displayName' : IDL.Text,
   'userId' : UserId,
   'lastSeen' : IDL.Int,
@@ -1316,6 +1319,23 @@ export const TimeReport = IDL.Record({
   'byProject' : IDL.Vec(IDL.Tuple(EntityId, IDL.Float64)),
   'billableHours' : IDL.Float64,
   'nonBillableHours' : IDL.Float64,
+});
+export const UserSettingsEntry = IDL.Record({
+  'displayName' : IDL.Text,
+  'userId' : IDL.Text,
+  'notifyEscrow' : IDL.Bool,
+  'email' : IDL.Text,
+  'notifyTaskAssigned' : IDL.Bool,
+  'accentColor' : IDL.Text,
+  'language' : IDL.Text,
+  'updatedAt' : IDL.Int,
+  'notifyMentions' : IDL.Bool,
+  'dateFormat' : IDL.Text,
+  'notifyPayroll' : IDL.Bool,
+  'timeFormat' : IDL.Text,
+  'defaultModule' : IDL.Text,
+  'notifyGoals' : IDL.Bool,
+  'sidebarLayout' : IDL.Text,
 });
 export const UserStatus = IDL.Record({
   'id' : IDL.Principal,
@@ -1798,7 +1818,18 @@ export const idlService = IDL.Service({
     ),
   'createWorkspace' : IDL.Func(
       [TenantId, WorkspaceInput, IDL.Text, IDL.Text],
-      [IDL.Variant({ 'ok' : Workspace, 'err' : IDL.Text })],
+      [
+        IDL.Variant({
+          'ok' : Workspace,
+          'err' : IDL.Variant({
+            'workspaceExists' : IDL.Text,
+            'invalidName' : IDL.Text,
+            'canisterUnavailable' : IDL.Text,
+            'unauthorized' : IDL.Text,
+            'unknown' : IDL.Text,
+          }),
+        }),
+      ],
       [],
     ),
   'createWorkspaceTreasury' : IDL.Func(
@@ -2094,6 +2125,11 @@ export const idlService = IDL.Service({
       [IDL.Vec(NoteEditorPresence)],
       ['query'],
     ),
+  'getNotePresence' : IDL.Func(
+      [TenantId, WorkspaceId, EntityId],
+      [IDL.Vec(NoteEditorPresence)],
+      ['query'],
+    ),
   'getOrCreateWorkspaceShareToken' : IDL.Func(
       [WorkspaceId, TenantId],
       [IDL.Text],
@@ -2180,6 +2216,7 @@ export const idlService = IDL.Service({
       [IDL.Vec(IDL.Tuple(IDL.Text, IDL.Nat))],
       ['query'],
     ),
+  'getUserSettings' : IDL.Func([], [IDL.Opt(UserSettingsEntry)], ['query']),
   'getUserStatus' : IDL.Func(
       [TenantId, WorkspaceId, IDL.Principal],
       [IDL.Opt(UserStatus)],
@@ -2188,6 +2225,19 @@ export const idlService = IDL.Service({
   'getUserTimeEntries' : IDL.Func(
       [TenantId, WorkspaceId, UserId],
       [IDL.Vec(TimeEntry)],
+      ['query'],
+    ),
+  'getUsersInWorkspace' : IDL.Func(
+      [TenantId, WorkspaceId],
+      [
+        IDL.Vec(
+          IDL.Record({
+            'displayName' : IDL.Text,
+            'userId' : UserId,
+            'email' : IDL.Text,
+          })
+        ),
+      ],
       ['query'],
     ),
   'getWalletAccount' : IDL.Func(
@@ -2248,6 +2298,7 @@ export const idlService = IDL.Service({
       [IDL.Bool],
       ['query'],
     ),
+  'isWorkspaceOwner' : IDL.Func([TenantId, WorkspaceId], [IDL.Bool], ['query']),
   'joinChannel' : IDL.Func(
       [TenantId, WorkspaceId, EntityId],
       [IDL.Variant({ 'ok' : Channel, 'err' : IDL.Text })],
@@ -2625,6 +2676,25 @@ export const idlService = IDL.Service({
       [IDL.Variant({ 'ok' : Integration, 'err' : IDL.Text })],
       [],
     ),
+  'saveUserSettings' : IDL.Func(
+      [
+        IDL.Text,
+        IDL.Text,
+        IDL.Text,
+        IDL.Text,
+        IDL.Text,
+        IDL.Text,
+        IDL.Text,
+        IDL.Text,
+        IDL.Bool,
+        IDL.Bool,
+        IDL.Bool,
+        IDL.Bool,
+        IDL.Bool,
+      ],
+      [IDL.Variant({ 'ok' : UserSettingsEntry, 'err' : IDL.Text })],
+      [],
+    ),
   'searchMessages' : IDL.Func(
       [
         TenantId,
@@ -2699,6 +2769,11 @@ export const idlService = IDL.Service({
   'toggleGoalPublic' : IDL.Func(
       [EntityId, WorkspaceId, TenantId],
       [IDL.Variant({ 'ok' : Goal, 'err' : IDL.Text })],
+      [],
+    ),
+  'toggleSubtask' : IDL.Func(
+      [TenantId, WorkspaceId, EntityId],
+      [IDL.Variant({ 'ok' : Subtask, 'err' : IDL.Text })],
       [],
     ),
   'unlinkTaskFromKR' : IDL.Func(
@@ -2792,7 +2867,7 @@ export const idlService = IDL.Service({
       [],
     ),
   'updateNotePresence' : IDL.Func(
-      [TenantId, WorkspaceId, EntityId, IDL.Text],
+      [TenantId, WorkspaceId, EntityId, IDL.Text, IDL.Bool],
       [],
       [],
     ),
@@ -3894,6 +3969,7 @@ export const idlFactory = ({ IDL }) => {
   const TaskInput = IDL.Record({
     'title' : IDL.Text,
     'assigneeId' : IDL.Opt(UserId),
+    'tags' : IDL.Vec(IDL.Text),
     'dueDate' : IDL.Opt(Timestamp),
     'description' : IDL.Text,
     'projectId' : EntityId,
@@ -3906,6 +3982,7 @@ export const idlFactory = ({ IDL }) => {
     'title' : IDL.Text,
     'assigneeId' : IDL.Opt(UserId),
     'createdAt' : Timestamp,
+    'tags' : IDL.Vec(IDL.Text),
     'dueDate' : IDL.Opt(Timestamp),
     'description' : IDL.Text,
     'tenantId' : TenantId,
@@ -4122,6 +4199,7 @@ export const idlFactory = ({ IDL }) => {
     'workspaceId' : EntityId,
   });
   const NoteEditorPresence = IDL.Record({
+    'isEditing' : IDL.Bool,
     'displayName' : IDL.Text,
     'userId' : UserId,
     'lastSeen' : IDL.Int,
@@ -4185,6 +4263,23 @@ export const idlFactory = ({ IDL }) => {
     'byProject' : IDL.Vec(IDL.Tuple(EntityId, IDL.Float64)),
     'billableHours' : IDL.Float64,
     'nonBillableHours' : IDL.Float64,
+  });
+  const UserSettingsEntry = IDL.Record({
+    'displayName' : IDL.Text,
+    'userId' : IDL.Text,
+    'notifyEscrow' : IDL.Bool,
+    'email' : IDL.Text,
+    'notifyTaskAssigned' : IDL.Bool,
+    'accentColor' : IDL.Text,
+    'language' : IDL.Text,
+    'updatedAt' : IDL.Int,
+    'notifyMentions' : IDL.Bool,
+    'dateFormat' : IDL.Text,
+    'notifyPayroll' : IDL.Bool,
+    'timeFormat' : IDL.Text,
+    'defaultModule' : IDL.Text,
+    'notifyGoals' : IDL.Bool,
+    'sidebarLayout' : IDL.Text,
   });
   const UserStatus = IDL.Record({
     'id' : IDL.Principal,
@@ -4667,7 +4762,18 @@ export const idlFactory = ({ IDL }) => {
       ),
     'createWorkspace' : IDL.Func(
         [TenantId, WorkspaceInput, IDL.Text, IDL.Text],
-        [IDL.Variant({ 'ok' : Workspace, 'err' : IDL.Text })],
+        [
+          IDL.Variant({
+            'ok' : Workspace,
+            'err' : IDL.Variant({
+              'workspaceExists' : IDL.Text,
+              'invalidName' : IDL.Text,
+              'canisterUnavailable' : IDL.Text,
+              'unauthorized' : IDL.Text,
+              'unknown' : IDL.Text,
+            }),
+          }),
+        ],
         [],
       ),
     'createWorkspaceTreasury' : IDL.Func(
@@ -4963,6 +5069,11 @@ export const idlFactory = ({ IDL }) => {
         [IDL.Vec(NoteEditorPresence)],
         ['query'],
       ),
+    'getNotePresence' : IDL.Func(
+        [TenantId, WorkspaceId, EntityId],
+        [IDL.Vec(NoteEditorPresence)],
+        ['query'],
+      ),
     'getOrCreateWorkspaceShareToken' : IDL.Func(
         [WorkspaceId, TenantId],
         [IDL.Text],
@@ -5049,6 +5160,7 @@ export const idlFactory = ({ IDL }) => {
         [IDL.Vec(IDL.Tuple(IDL.Text, IDL.Nat))],
         ['query'],
       ),
+    'getUserSettings' : IDL.Func([], [IDL.Opt(UserSettingsEntry)], ['query']),
     'getUserStatus' : IDL.Func(
         [TenantId, WorkspaceId, IDL.Principal],
         [IDL.Opt(UserStatus)],
@@ -5057,6 +5169,19 @@ export const idlFactory = ({ IDL }) => {
     'getUserTimeEntries' : IDL.Func(
         [TenantId, WorkspaceId, UserId],
         [IDL.Vec(TimeEntry)],
+        ['query'],
+      ),
+    'getUsersInWorkspace' : IDL.Func(
+        [TenantId, WorkspaceId],
+        [
+          IDL.Vec(
+            IDL.Record({
+              'displayName' : IDL.Text,
+              'userId' : UserId,
+              'email' : IDL.Text,
+            })
+          ),
+        ],
         ['query'],
       ),
     'getWalletAccount' : IDL.Func(
@@ -5114,6 +5239,11 @@ export const idlFactory = ({ IDL }) => {
       ),
     'isWatching' : IDL.Func(
         [TenantId, WorkspaceId, EntityId, UserId],
+        [IDL.Bool],
+        ['query'],
+      ),
+    'isWorkspaceOwner' : IDL.Func(
+        [TenantId, WorkspaceId],
         [IDL.Bool],
         ['query'],
       ),
@@ -5494,6 +5624,25 @@ export const idlFactory = ({ IDL }) => {
         [IDL.Variant({ 'ok' : Integration, 'err' : IDL.Text })],
         [],
       ),
+    'saveUserSettings' : IDL.Func(
+        [
+          IDL.Text,
+          IDL.Text,
+          IDL.Text,
+          IDL.Text,
+          IDL.Text,
+          IDL.Text,
+          IDL.Text,
+          IDL.Text,
+          IDL.Bool,
+          IDL.Bool,
+          IDL.Bool,
+          IDL.Bool,
+          IDL.Bool,
+        ],
+        [IDL.Variant({ 'ok' : UserSettingsEntry, 'err' : IDL.Text })],
+        [],
+      ),
     'searchMessages' : IDL.Func(
         [
           TenantId,
@@ -5568,6 +5717,11 @@ export const idlFactory = ({ IDL }) => {
     'toggleGoalPublic' : IDL.Func(
         [EntityId, WorkspaceId, TenantId],
         [IDL.Variant({ 'ok' : Goal, 'err' : IDL.Text })],
+        [],
+      ),
+    'toggleSubtask' : IDL.Func(
+        [TenantId, WorkspaceId, EntityId],
+        [IDL.Variant({ 'ok' : Subtask, 'err' : IDL.Text })],
         [],
       ),
     'unlinkTaskFromKR' : IDL.Func(
@@ -5661,7 +5815,7 @@ export const idlFactory = ({ IDL }) => {
         [],
       ),
     'updateNotePresence' : IDL.Func(
-        [TenantId, WorkspaceId, EntityId, IDL.Text],
+        [TenantId, WorkspaceId, EntityId, IDL.Text, IDL.Bool],
         [],
         [],
       ),

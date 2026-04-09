@@ -12,7 +12,7 @@ import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { Switch } from "@/components/ui/switch";
 import { cn } from "@/lib/utils";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   AlertTriangle,
   Bell,
@@ -56,7 +56,6 @@ function lsGet<T>(key: string, fallback: T): T {
 function lsSet(key: string, value: unknown) {
   try {
     localStorage.setItem(key, JSON.stringify(value));
-    // Notify Layout of preference changes within the same tab
     window.dispatchEvent(new Event("fs_pref_changed"));
   } catch {
     // ignore
@@ -107,7 +106,7 @@ const ALL_MODULES = [
 const DATE_FORMATS = ["MM/DD/YYYY", "DD/MM/YYYY", "YYYY-MM-DD"];
 
 const LAYOUT_DENSITY = [
-  { label: "Compact", value: "compact", desc: "Tighter spacing, more content" },
+  { label: "Compact", value: "compact", desc: "Tighter spacing" },
   { label: "Default", value: "default", desc: "Balanced layout" },
   { label: "Spacious", value: "spacious", desc: "Extra breathing room" },
 ];
@@ -188,12 +187,63 @@ export default function SettingsPage() {
   const tenantId = getTenantId();
   const [activeSection, setActiveSection] = useState("profile");
 
-  // Profile — initialised from userProfile, synced when it loads/changes
+  // Profile state
   const [displayName, setDisplayName] = useState(
     userProfile?.displayName ?? "",
   );
   const [email, setEmail] = useState(userProfile?.email ?? "");
   const [profileError, setProfileError] = useState<string | null>(null);
+
+  // Load settings from backend on mount
+  const { data: userSettingsData } = useQuery({
+    queryKey: ["userSettings"],
+    queryFn: async () => {
+      if (!actor) return null;
+      return actor.getUserSettings();
+    },
+    enabled: !!actor,
+  });
+
+  useEffect(() => {
+    const data = userSettingsData;
+    if (!data) return;
+    // Hydrate state from backend
+    if (data.displayName) setDisplayName(data.displayName);
+    if (data.email) setEmail(data.email);
+    if (data.accentColor) {
+      const preset = ACCENT_PRESETS.find((p) => p.value === data.accentColor);
+      if (preset) {
+        setAccentColor(preset.value);
+        setAccentCss(preset.css);
+        lsSet("fs_accent_color", preset.value);
+        lsSet("fs_accent_css", preset.css);
+      }
+    }
+    if (data.defaultModule) {
+      setDefaultModule(data.defaultModule);
+      lsSet("fs_default_module", data.defaultModule);
+    }
+    if (data.sidebarLayout) {
+      setIconsOnly(data.sidebarLayout === "icons-only");
+      lsSet("fs_sidebar_icons_only", data.sidebarLayout === "icons-only");
+    }
+    if (data.dateFormat) {
+      setDateFormat(data.dateFormat);
+      lsSet("fs_date_format", data.dateFormat);
+    }
+    if (data.timeFormat) {
+      setTimeFormat(data.timeFormat);
+      lsSet("fs_time_format", data.timeFormat);
+    }
+    if (data.language) {
+      lsSet("fs_language", data.language);
+    }
+    setNotifTaskAssign(data.notifyTaskAssigned);
+    setNotifMentions(data.notifyMentions);
+    setNotifEscrow(data.notifyEscrow);
+    setNotifPayroll(data.notifyPayroll);
+  }, [userSettingsData]);
+
   useEffect(() => {
     if (userProfile) {
       setDisplayName((prev) =>
@@ -286,19 +336,21 @@ export default function SettingsPage() {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [deleteConfirmText, setDeleteConfirmText] = useState("");
 
-  // Workspace name/desc local edits
+  // Workspace name/desc
   const [workspaceName, setWorkspaceName] = useState(
     activeWorkspace?.name ?? "",
   );
   const [workspaceDescription, setWorkspaceDescription] = useState(
     lsGet(`fs_ws_desc_${activeWorkspace?.id ?? ""}`, ""),
   );
-  // Sync workspaceName when activeWorkspace loads
+
   useEffect(() => {
     if (activeWorkspace?.name) {
       setWorkspaceName((prev) => (prev === "" ? activeWorkspace.name : prev));
     }
   }, [activeWorkspace]);
+
+  // ── Backend save mutations ──────────────────────────────────────────────
 
   const workspaceSaveMutation = useMutation({
     mutationFn: async () => {
@@ -309,7 +361,6 @@ export default function SettingsPage() {
         workspaceName,
       );
       if (res.__kind__ === "err") throw new Error(res.err);
-      // description is persisted locally since the backend only stores name
       lsSet(`fs_ws_desc_${activeWorkspace.id}`, workspaceDescription);
       return res.ok;
     },
@@ -322,11 +373,95 @@ export default function SettingsPage() {
     },
   });
 
-  function handleWorkspaceSave() {
-    workspaceSaveMutation.mutate();
-  }
+  // Save ALL user settings to backend
+  const { mutate: saveAllSettings, isPending: isSavingAll } = useMutation({
+    mutationFn: async () => {
+      if (!actor)
+        throw new Error(
+          "Not connected to backend. Please wait a moment and try again.",
+        );
+      const result = await actor.saveUserSettings(
+        displayName,
+        email,
+        accentColor,
+        defaultModule,
+        iconsOnly ? "icons-only" : "expanded",
+        dateFormat,
+        timeFormat,
+        "en",
+        notifTaskAssign,
+        notifMentions,
+        notifEscrow,
+        notifPayroll,
+        false, // notifyGoals — not surfaced separately in UI
+      );
+      if (result.__kind__ === "err") throw new Error(result.err);
+      return result.ok;
+    },
+    onSuccess: () => {
+      toast.success("Settings saved");
+      queryClient.invalidateQueries({ queryKey: ["userSettings"] });
+      queryClient.invalidateQueries({ queryKey: ["myProfile"] });
+    },
+    onError: (err: Error) => {
+      toast.error(err.message || "Failed to save settings");
+    },
+  });
 
-  // Apply accent color + font size to :root on load and change
+  // Profile save mutation (also calls saveUserSettings)
+  const { mutate: saveProfile, isPending } = useMutation({
+    mutationFn: async () => {
+      if (!actor || !userProfile) throw new Error("Not connected");
+      if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+        throw new Error("Please enter a valid email address");
+      }
+      return actor.upsertProfile(tenantId, {
+        displayName,
+        email,
+        role: userProfile.role,
+        workspaceId: userProfile.workspaceId,
+      });
+    },
+    onSuccess: async (result) => {
+      if (result.__kind__ === "ok") {
+        setDisplayName(result.ok.displayName);
+        setEmail(result.ok.email);
+        setProfileError(null);
+        void queryClient.invalidateQueries({ queryKey: ["myProfile"] });
+        // Also persist to saveUserSettings so name/email sync
+        if (actor) {
+          await actor.saveUserSettings(
+            result.ok.displayName,
+            result.ok.email,
+            accentColor,
+            defaultModule,
+            iconsOnly ? "icons-only" : "expanded",
+            dateFormat,
+            timeFormat,
+            "en",
+            notifTaskAssign,
+            notifMentions,
+            notifEscrow,
+            notifPayroll,
+            false,
+          );
+        }
+        toast.success("Profile updated successfully");
+      } else {
+        setProfileError(result.err ?? "Failed to update profile");
+        toast.error(result.err ?? "Failed to update profile");
+      }
+    },
+    onError: (err: unknown) => {
+      const msg =
+        err instanceof Error ? err.message : "Failed to update profile";
+      setProfileError(msg);
+      toast.error(msg);
+    },
+  });
+
+  // ── Visual prefs ────────────────────────────────────────────────────────
+
   const applyVisualPrefs = useCallback((css: string, size: string) => {
     const sizeObj = FONT_SIZES.find((f) => f.value === size);
     const root = document.documentElement;
@@ -362,7 +497,6 @@ export default function SettingsPage() {
       toast.error("Enter a valid hex color (e.g. #3b82f6)");
       return;
     }
-    // Use a neutral CSS approximation for custom colors
     const css = "0.55 0.20 220";
     setAccentColor(hex);
     setAccentCss(css);
@@ -386,13 +520,11 @@ export default function SettingsPage() {
     setLayoutDensity(val);
     lsSet("fs_layout_density", val);
     const root = document.documentElement;
-    if (val === "compact") {
+    if (val === "compact")
       root.style.setProperty("--layout-spacing", "0.75rem");
-    } else if (val === "spacious") {
+    else if (val === "spacious")
       root.style.setProperty("--layout-spacing", "1.5rem");
-    } else {
-      root.style.setProperty("--layout-spacing", "1rem");
-    }
+    else root.style.setProperty("--layout-spacing", "1rem");
   }
 
   function handleContentWidth(val: string) {
@@ -410,11 +542,8 @@ export default function SettingsPage() {
     setReduceMotion(val);
     lsSet("fs_reduce_motion", val);
     const root = document.documentElement;
-    if (val) {
-      root.style.setProperty("--transition-duration", "0ms");
-    } else {
-      root.style.removeProperty("--transition-duration");
-    }
+    if (val) root.style.setProperty("--transition-duration", "0ms");
+    else root.style.removeProperty("--transition-duration");
   }
 
   function handleNotifToggle(
@@ -439,43 +568,6 @@ export default function SettingsPage() {
     setter(val);
     lsSet(key, val);
   }
-
-  // Save profile mutation
-  const { mutate: saveProfile, isPending } = useMutation({
-    mutationFn: async () => {
-      if (!actor || !userProfile) throw new Error("Not connected");
-      // Basic email validation
-      if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-        throw new Error("Please enter a valid email address");
-      }
-      return actor.upsertProfile(tenantId, {
-        displayName,
-        email,
-        role: userProfile.role,
-        workspaceId: userProfile.workspaceId,
-      });
-    },
-    onSuccess: (result) => {
-      if (result.__kind__ === "ok") {
-        // Sync local state to what the backend confirmed
-        setDisplayName(result.ok.displayName);
-        setEmail(result.ok.email);
-        setProfileError(null);
-        // Invalidate and refetch so all other consumers see updated profile
-        void queryClient.invalidateQueries({ queryKey: ["myProfile"] });
-        toast.success("Profile updated successfully");
-      } else {
-        setProfileError(result.err ?? "Failed to update profile");
-        toast.error(result.err ?? "Failed to update profile");
-      }
-    },
-    onError: (err: unknown) => {
-      const msg =
-        err instanceof Error ? err.message : "Failed to update profile";
-      setProfileError(msg);
-      toast.error(msg);
-    },
-  });
 
   // ── Render helpers ─────────────────────────────────────────────────────────
 
@@ -547,7 +639,7 @@ export default function SettingsPage() {
 
   return (
     <div className="flex h-full min-h-screen bg-background">
-      {/* Sidebar nav */}
+      {/* Settings sidebar nav */}
       <aside className="hidden md:flex w-52 shrink-0 flex-col border-r border-border/60 bg-card/50 p-3">
         <div className="mb-4 px-2">
           <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
@@ -737,8 +829,7 @@ export default function SettingsPage() {
               <Card className="border-border">
                 <CardHeader className="pb-2 pt-4 px-5">
                   <CardTitle className="text-sm font-semibold flex items-center gap-2 tracking-tight">
-                    <Sliders className="h-4 w-4 text-primary" />
-                    Accent Color
+                    <Sliders className="h-4 w-4 text-primary" /> Accent Color
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="px-5 pb-5 space-y-4">
@@ -795,8 +886,8 @@ export default function SettingsPage() {
               {/* Font Size */}
               <Card className="border-border">
                 <CardHeader className="pb-2 pt-4 px-5">
-                  <CardTitle className="text-sm font-semibold tracking-tight">
-                    Font Size
+                  <CardTitle className="text-sm font-semibold tracking-tight flex items-center gap-2">
+                    <Type className="h-4 w-4 text-primary" /> Font Size
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="px-5 pb-5 space-y-3">
@@ -852,8 +943,7 @@ export default function SettingsPage() {
               <Card className="border-border">
                 <CardHeader className="pb-2 pt-4 px-5">
                   <CardTitle className="text-sm font-semibold tracking-tight flex items-center gap-2">
-                    <Move className="h-4 w-4 text-primary" />
-                    Layout Density
+                    <Move className="h-4 w-4 text-primary" /> Layout Density
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="px-5 pb-5 space-y-3">
@@ -888,8 +978,7 @@ export default function SettingsPage() {
               <Card className="border-border">
                 <CardHeader className="pb-2 pt-4 px-5">
                   <CardTitle className="text-sm font-semibold tracking-tight flex items-center gap-2">
-                    <Layout className="h-4 w-4 text-primary" />
-                    Content Width
+                    <Layout className="h-4 w-4 text-primary" /> Content Width
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="px-5 pb-5 space-y-3">
@@ -924,8 +1013,7 @@ export default function SettingsPage() {
               <Card className="border-border">
                 <CardHeader className="pb-2 pt-4 px-5">
                   <CardTitle className="text-sm font-semibold tracking-tight flex items-center gap-2">
-                    <Sparkles className="h-4 w-4 text-primary" />
-                    Sidebar Style
+                    <Sparkles className="h-4 w-4 text-primary" /> Sidebar Style
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="px-5 pb-5 space-y-3">
@@ -969,12 +1057,11 @@ export default function SettingsPage() {
                 </CardContent>
               </Card>
 
-              {/* Motion & Animation */}
+              {/* Motion */}
               <Card className="border-border">
                 <CardHeader className="pb-2 pt-4 px-5">
                   <CardTitle className="text-sm font-semibold tracking-tight flex items-center gap-2">
-                    <Zap className="h-4 w-4 text-primary" />
-                    Motion & Animation
+                    <Zap className="h-4 w-4 text-primary" /> Motion & Animation
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="px-5 pb-5 space-y-3">
@@ -1015,6 +1102,20 @@ export default function SettingsPage() {
                   </div>
                 </CardContent>
               </Card>
+
+              {/* Save button for appearance prefs */}
+              <div className="flex justify-end">
+                <Button
+                  size="sm"
+                  onClick={() => saveAllSettings()}
+                  disabled={isSavingAll}
+                  className="h-8 gap-1.5 text-xs font-semibold active-press"
+                  data-ocid="appearance-save-btn"
+                >
+                  <Save className="h-3.5 w-3.5" />
+                  {isSavingAll ? "Saving…" : "Save Preferences"}
+                </Button>
+              </div>
             </div>
           )}
 
@@ -1030,7 +1131,6 @@ export default function SettingsPage() {
                 </p>
               </div>
 
-              {/* Delivery channels */}
               <Card className="border-border">
                 <CardHeader className="pb-2 pt-4 px-5">
                   <CardTitle className="text-sm font-semibold tracking-tight">
@@ -1069,7 +1169,6 @@ export default function SettingsPage() {
                 </CardContent>
               </Card>
 
-              {/* Events */}
               <Card className="border-border">
                 <CardHeader className="pb-2 pt-4 px-5">
                   <CardTitle className="text-sm font-semibold tracking-tight">
@@ -1154,6 +1253,20 @@ export default function SettingsPage() {
                   />
                 </CardContent>
               </Card>
+
+              {/* Save to backend */}
+              <div className="flex justify-end">
+                <Button
+                  size="sm"
+                  onClick={() => saveAllSettings()}
+                  disabled={isSavingAll}
+                  className="h-8 gap-1.5 text-xs font-semibold active-press"
+                  data-ocid="notifications-save-btn"
+                >
+                  <Save className="h-3.5 w-3.5" />
+                  {isSavingAll ? "Saving…" : "Save Notification Settings"}
+                </Button>
+              </div>
             </div>
           )}
 
@@ -1169,12 +1282,10 @@ export default function SettingsPage() {
                 </p>
               </div>
 
-              {/* General */}
               <Card className="border-border">
                 <CardHeader className="pb-2 pt-4 px-5">
                   <CardTitle className="text-sm font-semibold flex items-center gap-2 tracking-tight">
-                    <Building2 className="h-4 w-4 text-primary" />
-                    General
+                    <Building2 className="h-4 w-4 text-primary" /> General
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="px-5 pb-5 space-y-4">
@@ -1203,15 +1314,18 @@ export default function SettingsPage() {
                   <Button
                     size="sm"
                     className="gap-1.5 text-xs h-8 font-semibold active-press"
-                    onClick={handleWorkspaceSave}
+                    onClick={() => workspaceSaveMutation.mutate()}
+                    disabled={workspaceSaveMutation.isPending}
                     data-ocid="workspace-save-btn"
                   >
-                    <Save className="h-3.5 w-3.5" /> Save Changes
+                    <Save className="h-3.5 w-3.5" />
+                    {workspaceSaveMutation.isPending
+                      ? "Saving…"
+                      : "Save Changes"}
                   </Button>
                 </CardContent>
               </Card>
 
-              {/* Defaults */}
               <Card className="border-border">
                 <CardHeader className="pb-2 pt-4 px-5">
                   <CardTitle className="text-sm font-semibold tracking-tight">
@@ -1292,6 +1406,20 @@ export default function SettingsPage() {
                   />
                 </CardContent>
               </Card>
+
+              {/* Save preferences to backend */}
+              <div className="flex justify-end">
+                <Button
+                  size="sm"
+                  onClick={() => saveAllSettings()}
+                  disabled={isSavingAll}
+                  className="h-8 gap-1.5 text-xs font-semibold active-press"
+                  data-ocid="workspace-prefs-save-btn"
+                >
+                  <Save className="h-3.5 w-3.5" />
+                  {isSavingAll ? "Saving…" : "Save Preferences"}
+                </Button>
+              </div>
             </div>
           )}
 
@@ -1358,14 +1486,13 @@ export default function SettingsPage() {
                 </p>
               </div>
 
-              {/* Keyboard Shortcuts */}
               <Card className="border-border">
                 <CardContent className="p-5">
                   <div className="flex items-center justify-between gap-4">
                     <div>
                       <p className="text-sm font-medium text-foreground flex items-center gap-2">
-                        <Keyboard className="h-4 w-4 text-primary" />
-                        Keyboard Shortcuts
+                        <Keyboard className="h-4 w-4 text-primary" /> Keyboard
+                        Shortcuts
                       </p>
                       <p className="text-xs text-muted-foreground mt-0.5">
                         View all available keyboard shortcuts
@@ -1378,21 +1505,19 @@ export default function SettingsPage() {
                       className="h-8 text-xs gap-1.5 shrink-0"
                       data-ocid="keyboard-shortcuts-btn"
                     >
-                      <Keyboard className="h-3.5 w-3.5" />
-                      View shortcuts
+                      <Keyboard className="h-3.5 w-3.5" /> View shortcuts
                     </Button>
                   </div>
                 </CardContent>
               </Card>
 
-              {/* Data Export */}
               <Card className="border-border">
                 <CardContent className="p-5">
                   <div className="flex items-center justify-between gap-4">
                     <div>
                       <p className="text-sm font-medium text-foreground flex items-center gap-2">
-                        <Download className="h-4 w-4 text-primary" />
-                        Export Data
+                        <Download className="h-4 w-4 text-primary" /> Export
+                        Data
                       </p>
                       <p className="text-xs text-muted-foreground mt-0.5">
                         Download a copy of your workspace data as CSV
@@ -1402,26 +1527,23 @@ export default function SettingsPage() {
                       size="sm"
                       variant="outline"
                       onClick={() =>
-                        toast.success(
-                          "Export started — your file will be ready shortly.",
+                        toast.info(
+                          "Data export will be available in a future update.",
                         )
                       }
                       className="h-8 text-xs gap-1.5 shrink-0"
                       data-ocid="data-export-btn"
                     >
-                      <Download className="h-3.5 w-3.5" />
-                      Export
+                      <Download className="h-3.5 w-3.5" /> Export
                     </Button>
                   </div>
                 </CardContent>
               </Card>
 
-              {/* Danger Zone */}
               <Card className="border-destructive/40">
                 <CardHeader className="pb-2 pt-4 px-5">
                   <CardTitle className="text-sm font-semibold tracking-tight text-destructive flex items-center gap-2">
-                    <AlertTriangle className="h-4 w-4" />
-                    Danger Zone
+                    <AlertTriangle className="h-4 w-4" /> Danger Zone
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="px-5 pb-5">
@@ -1442,8 +1564,7 @@ export default function SettingsPage() {
                       className="h-8 text-xs gap-1.5 shrink-0"
                       data-ocid="delete-account-btn"
                     >
-                      <Trash2 className="h-3.5 w-3.5" />
-                      Delete
+                      <Trash2 className="h-3.5 w-3.5" /> Delete
                     </Button>
                   </div>
                 </CardContent>
@@ -1466,13 +1587,12 @@ export default function SettingsPage() {
         </div>
       </div>
 
-      {/* ── Keyboard Shortcuts Modal ──────────────────────────────────── */}
+      {/* Keyboard Shortcuts Modal */}
       <Dialog open={showShortcuts} onOpenChange={setShowShortcuts}>
         <DialogContent className="max-w-md" data-ocid="shortcuts-modal">
           <DialogHeader>
             <DialogTitle className="text-sm font-semibold flex items-center gap-2">
-              <Keyboard className="h-4 w-4 text-primary" />
-              Keyboard Shortcuts
+              <Keyboard className="h-4 w-4 text-primary" /> Keyboard Shortcuts
             </DialogTitle>
           </DialogHeader>
           <div className="max-h-80 overflow-y-auto space-y-1 pr-1">
@@ -1491,13 +1611,12 @@ export default function SettingsPage() {
         </DialogContent>
       </Dialog>
 
-      {/* ── Delete Account Confirm Modal ─────────────────────────────── */}
+      {/* Delete Account Confirm Modal */}
       <Dialog open={showDeleteConfirm} onOpenChange={setShowDeleteConfirm}>
         <DialogContent className="max-w-sm" data-ocid="delete-confirm-modal">
           <DialogHeader>
             <DialogTitle className="text-sm font-semibold flex items-center gap-2 text-destructive">
-              <AlertTriangle className="h-4 w-4" />
-              Delete Account
+              <AlertTriangle className="h-4 w-4" /> Delete Account
             </DialogTitle>
           </DialogHeader>
           <div className="space-y-4">
@@ -1537,8 +1656,8 @@ export default function SettingsPage() {
                 variant="destructive"
                 disabled={deleteConfirmText !== "DELETE"}
                 onClick={() => {
-                  toast.error(
-                    "Account deletion is not yet available in this version.",
+                  toast.info(
+                    "Account deletion is coming in a future update. Your data is safe.",
                   );
                   setShowDeleteConfirm(false);
                   setDeleteConfirmText("");
@@ -1546,8 +1665,7 @@ export default function SettingsPage() {
                 className="h-8 text-xs"
                 data-ocid="delete-confirm-btn"
               >
-                <Trash2 className="h-3.5 w-3.5 mr-1.5" />
-                Delete my account
+                <Trash2 className="h-3.5 w-3.5 mr-1.5" /> Delete my account
               </Button>
             </div>
           </div>

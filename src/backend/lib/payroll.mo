@@ -168,6 +168,10 @@ module {
   };
 
   // ── Payroll Processing ────────────────────────────────────────────────────────
+  // Balance gating is enforced in payroll-api.mo and main.mo BEFORE calling this:
+  // users/admins with zero treasury balance are blocked with:
+  // "Insufficient treasury balance. Please fund the workspace treasury before processing payroll."
+  //
   // Gross-to-net: grossPay = salary / payCyclesPerYear
   // taxDeduction = grossPay * (taxRate / 100)
   // otherDeductions = sum of active pre-tax deductions (perRun amounts + annual/cycles)

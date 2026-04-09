@@ -832,6 +832,7 @@ export interface Note {
   'crossLinks' : Array<CrossLink>,
 }
 export interface NoteEditorPresence {
+  'isEditing' : boolean,
   'displayName' : string,
   'userId' : UserId,
   'lastSeen' : bigint,
@@ -1133,6 +1134,7 @@ export interface Task {
   'title' : string,
   'assigneeId' : [] | [UserId],
   'createdAt' : Timestamp,
+  'tags' : Array<string>,
   'dueDate' : [] | [Timestamp],
   'description' : string,
   'tenantId' : TenantId,
@@ -1157,6 +1159,7 @@ export interface TaskCommentInput { 'content' : string, 'taskId' : EntityId }
 export interface TaskInput {
   'title' : string,
   'assigneeId' : [] | [UserId],
+  'tags' : Array<string>,
   'dueDate' : [] | [Timestamp],
   'description' : string,
   'projectId' : EntityId,
@@ -1296,6 +1299,23 @@ export interface UserProfileInput {
   'role' : Role,
   'email' : string,
   'workspaceId' : EntityId,
+}
+export interface UserSettingsEntry {
+  'displayName' : string,
+  'userId' : string,
+  'notifyEscrow' : boolean,
+  'email' : string,
+  'notifyTaskAssigned' : boolean,
+  'accentColor' : string,
+  'language' : string,
+  'updatedAt' : bigint,
+  'notifyMentions' : boolean,
+  'dateFormat' : string,
+  'notifyPayroll' : boolean,
+  'timeFormat' : string,
+  'defaultModule' : string,
+  'notifyGoals' : boolean,
+  'sidebarLayout' : string,
 }
 export interface UserStatus {
   'id' : Principal,
@@ -1705,7 +1725,13 @@ export interface _SERVICE {
   'createWorkspace' : ActorMethod<
     [TenantId, WorkspaceInput, string, string],
     { 'ok' : Workspace } |
-      { 'err' : string }
+      {
+        'err' : { 'workspaceExists' : string } |
+          { 'invalidName' : string } |
+          { 'canisterUnavailable' : string } |
+          { 'unauthorized' : string } |
+          { 'unknown' : string }
+      }
   >,
   'createWorkspaceTreasury' : ActorMethod<
     [TenantId, WorkspaceId],
@@ -1994,6 +2020,10 @@ export interface _SERVICE {
     [TenantId, WorkspaceId, EntityId],
     Array<NoteEditorPresence>
   >,
+  'getNotePresence' : ActorMethod<
+    [TenantId, WorkspaceId, EntityId],
+    Array<NoteEditorPresence>
+  >,
   'getOrCreateWorkspaceShareToken' : ActorMethod<
     [WorkspaceId, TenantId],
     string
@@ -2067,6 +2097,10 @@ export interface _SERVICE {
     [TenantId, WorkspaceId],
     Array<[string, bigint]>
   >,
+  /**
+   * / Returns the caller's saved settings. Returns null if no settings exist yet.
+   */
+  'getUserSettings' : ActorMethod<[], [] | [UserSettingsEntry]>,
   'getUserStatus' : ActorMethod<
     [TenantId, WorkspaceId, Principal],
     [] | [UserStatus]
@@ -2074,6 +2108,14 @@ export interface _SERVICE {
   'getUserTimeEntries' : ActorMethod<
     [TenantId, WorkspaceId, UserId],
     Array<TimeEntry>
+  >,
+  /**
+   * / Returns workspace members (userId + displayName + email) for DM channel creation.
+   * / Reads directly from workspacesRef to avoid depending on a separate store.
+   */
+  'getUsersInWorkspace' : ActorMethod<
+    [TenantId, WorkspaceId],
+    Array<{ 'displayName' : string, 'userId' : UserId, 'email' : string }>
   >,
   'getWalletAccount' : ActorMethod<
     [TenantId, WorkspaceId, EntityId],
@@ -2137,6 +2179,11 @@ export interface _SERVICE {
     [TenantId, WorkspaceId, EntityId, UserId],
     boolean
   >,
+  /**
+   * / Returns true if the caller is the owner (super admin) of the given workspace.
+   * / Used by the frontend to show or hide AI settings configuration.
+   */
+  'isWorkspaceOwner' : ActorMethod<[TenantId, WorkspaceId], boolean>,
   'joinChannel' : ActorMethod<
     [TenantId, WorkspaceId, EntityId],
     { 'ok' : Channel } |
@@ -2436,6 +2483,9 @@ export interface _SERVICE {
     { 'ok' : EventRsvp } |
       { 'err' : string }
   >,
+  /**
+   * / Save AI configuration — restricted to the workspace owner (super admin) only.
+   */
   'saveAIConfig' : ActorMethod<
     [TenantId, WorkspaceId, AIConfigInput],
     { 'ok' : AIConfig } |
@@ -2444,6 +2494,28 @@ export interface _SERVICE {
   'saveIntegration' : ActorMethod<
     [TenantId, WorkspaceId, IntegrationInput],
     { 'ok' : Integration } |
+      { 'err' : string }
+  >,
+  /**
+   * / Saves the caller's settings. Upserts on every call.
+   */
+  'saveUserSettings' : ActorMethod<
+    [
+      string,
+      string,
+      string,
+      string,
+      string,
+      string,
+      string,
+      string,
+      boolean,
+      boolean,
+      boolean,
+      boolean,
+      boolean,
+    ],
+    { 'ok' : UserSettingsEntry } |
       { 'err' : string }
   >,
   'searchMessages' : ActorMethod<
@@ -2519,6 +2591,11 @@ export interface _SERVICE {
   'toggleGoalPublic' : ActorMethod<
     [EntityId, WorkspaceId, TenantId],
     { 'ok' : Goal } |
+      { 'err' : string }
+  >,
+  'toggleSubtask' : ActorMethod<
+    [TenantId, WorkspaceId, EntityId],
+    { 'ok' : Subtask } |
       { 'err' : string }
   >,
   'unlinkTaskFromKR' : ActorMethod<
@@ -2612,7 +2689,7 @@ export interface _SERVICE {
       { 'err' : string }
   >,
   'updateNotePresence' : ActorMethod<
-    [TenantId, WorkspaceId, EntityId, string],
+    [TenantId, WorkspaceId, EntityId, string, boolean],
     undefined
   >,
   'updatePage' : ActorMethod<

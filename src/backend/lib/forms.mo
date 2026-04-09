@@ -171,6 +171,7 @@ module {
               priority = #Medium;
               assigneeId = cfg.assigneeId;
               dueDate = null;
+              tags = [];
               crossLinks = [];
             }
           };

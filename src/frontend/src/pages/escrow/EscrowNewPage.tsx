@@ -1,721 +1,312 @@
+// Escrow New Page — v3 with hard balance blocker
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useNavigate } from "@tanstack/react-router";
-import {
-  AlertTriangle,
-  ArrowLeft,
-  CheckCircle2,
-  Layers,
-  Plus,
-  Shield,
-  Trash2,
-  Wallet,
-} from "lucide-react";
+import { useNavigate, useParams } from "@tanstack/react-router";
+import { AlertTriangle, ArrowLeft, Plus, Shield, Wallet } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
-import type { EscrowMilestoneInput } from "../../backend";
-import { CrossLinkPicker } from "../../components/CrossLinkPicker";
 import { useBackend } from "../../hooks/useBackend";
-import { getTenantId, useWorkspace } from "../../hooks/useWorkspace";
-import type {
-  CrossLink,
-  EscrowInput,
-  UserId,
-  WalletAccount,
-} from "../../types";
+import { useWorkspace } from "../../hooks/useWorkspace";
+import type { WalletAccount } from "../../types";
 
-const CURRENCIES = ["ICP", "ckBTC", "USD"];
-
-interface ConditionItem {
-  id: string;
-  text: string;
-}
-
-interface MilestoneItem {
-  id: string;
-  title: string;
-  amount: string;
-  description: string;
-}
-
-let conditionCounter = 0;
-function newCondition(): ConditionItem {
-  conditionCounter += 1;
-  return { id: `cond-${conditionCounter}`, text: "" };
-}
-
-let milestoneCounter = 0;
-function newMilestone(): MilestoneItem {
-  milestoneCounter += 1;
-  return {
-    id: `ms-${milestoneCounter}`,
-    title: "",
-    amount: "",
-    description: "",
-  };
-}
-
-function formatIcp(balance: bigint): string {
-  return (Number(balance) / 1_000_000_00).toFixed(4);
-}
-
-/** Inline banner shown when treasury has no funds. */
-function InsufficientFundsBanner({
-  onFundWallet,
-  balanceText,
-}: {
-  onFundWallet: () => void;
-  balanceText?: string;
-}) {
-  return (
-    <div
-      className="flex items-start gap-3 rounded-xl border border-amber-400/40 bg-amber-500/8 px-4 py-3"
-      data-ocid="escrow-insufficient-funds-banner"
-      role="alert"
-    >
-      <AlertTriangle className="h-4 w-4 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
-      <div className="flex-1 min-w-0">
-        <p className="text-sm font-medium text-foreground">
-          {balanceText
-            ? `Amount exceeds workspace treasury balance (${balanceText} ICP available)`
-            : "Your workspace wallet has no funds. You need to fund it before creating an escrow."}
-        </p>
-      </div>
-      <Button
-        type="button"
-        size="sm"
-        variant="outline"
-        onClick={onFundWallet}
-        className="shrink-0 gap-1.5 border-amber-400/60 text-amber-700 dark:text-amber-400 hover:bg-amber-500/10"
-        data-ocid="escrow-fund-wallet-btn"
-      >
-        <Wallet className="h-3.5 w-3.5" />
-        Fund Wallet
-      </Button>
-    </div>
-  );
+function formatICP(e8s: bigint): string {
+  return `${(Number(e8s) / 1e8).toFixed(4)} ICP`;
 }
 
 export default function EscrowNewPage() {
+  const { workspaceId } = useParams({ strict: false }) as {
+    workspaceId: string;
+  };
+  const { tenantId } = useWorkspace();
   const { actor, isFetching } = useBackend();
-  const tenantId = getTenantId();
-  const { activeWorkspaceId } = useWorkspace();
-  const workspaceId = activeWorkspaceId ?? "";
   const navigate = useNavigate();
   const queryClient = useQueryClient();
 
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
+  const [payeeId, setPayeeId] = useState("");
   const [amount, setAmount] = useState("");
   const [currency, setCurrency] = useState("ICP");
-  const [payeeId, setPayeeId] = useState("");
-  const [conditions, setConditions] = useState<ConditionItem[]>([
-    newCondition(),
-  ]);
-  const [dueDate, setDueDate] = useState("");
-  const [crossLinks, setCrossLinks] = useState<CrossLink[]>([]);
-  const [milestones, setMilestones] = useState<MilestoneItem[]>([]);
-  const [submitError, setSubmitError] = useState<string | null>(null);
+  const [conditions, setConditions] = useState("");
 
-  // Fetch workspace treasury
-  const { data: treasury, isLoading: treasuryLoading } =
+  const { data: wallet, isLoading: walletLoading } =
     useQuery<WalletAccount | null>({
-      queryKey: ["workspaceTreasury", tenantId, workspaceId],
+      queryKey: ["myWallet", tenantId, workspaceId],
       queryFn: async () => {
         if (!actor) return null;
-        return actor.getWorkspaceTreasury(tenantId, workspaceId);
+        return actor.getMyWalletAccount(tenantId, workspaceId);
       },
       enabled: !!actor && !isFetching && !!workspaceId,
     });
 
-  const icpBalance = treasury?.icpBalance ?? BigInt(0);
-  // icpBalance is in e8s (1 ICP = 100_000_000 e8s)
-  const icpBalanceFloat = Number(icpBalance) / 1_000_000_00;
-  const hasNoFunds = !treasuryLoading && icpBalance === BigInt(0);
-
-  // Amount-exceeds-balance check (only for ICP escrows)
-  const amountFloat = Number.parseFloat(amount) || 0;
-  const amountExceedsBalance =
-    !treasuryLoading &&
-    currency === "ICP" &&
-    amountFloat > 0 &&
-    icpBalance > BigInt(0) &&
-    amountFloat > icpBalanceFloat;
+  const hasBalance = wallet != null && wallet.icpBalance > 0n;
 
   const createMutation = useMutation({
-    mutationFn: async ({
-      input,
-      milestoneInputs,
-    }: {
-      input: EscrowInput;
-      milestoneInputs: EscrowMilestoneInput[];
-    }) => {
+    mutationFn: async () => {
       if (!actor) throw new Error("Not connected");
-      const result = await actor.createEscrow(tenantId, workspaceId, input);
-      if (result.__kind__ === "err") throw new Error(result.err);
-      const contract = result.ok;
-
-      for (const ms of milestoneInputs) {
-        const msResult = await actor.addEscrowMilestone(
-          tenantId,
-          workspaceId,
-          contract.id,
-          ms,
-        );
-        if (msResult.__kind__ === "err") throw new Error(msResult.err);
+      const result = await actor.createEscrow(tenantId, workspaceId, {
+        title: title.trim(),
+        description: description.trim(),
+        payeeId: payeeId.trim() as unknown as Parameters<
+          typeof actor.createEscrow
+        >[2]["payeeId"],
+        amount: BigInt(Math.round(Number.parseFloat(amount) * 1e8)),
+        currency,
+        conditions: conditions.trim()
+          ? conditions.split("\n").filter(Boolean)
+          : [],
+        crossLinks: [],
+      });
+      if (result.__kind__ === "err") {
+        // Friendly message for insufficient funds
+        const msg = result.err.toLowerCase();
+        if (
+          msg.includes("insufficient") ||
+          msg.includes("funds") ||
+          msg.includes("balance")
+        ) {
+          throw new Error(
+            "Please fund your wallet first before creating an escrow.",
+          );
+        }
+        throw new Error(result.err);
       }
-
-      return contract;
+      return result.ok;
     },
-    onSuccess: (contract) => {
-      queryClient.invalidateQueries({
-        queryKey: ["escrows", tenantId, workspaceId],
-      });
-      toast.success("Escrow contract created");
-      navigate({
-        to: `/app/${workspaceId}/escrow/$escrowId`,
-        params: { escrowId: contract.id },
-      });
+    onSuccess: (created) => {
+      toast.success("Escrow created successfully");
+      void queryClient.invalidateQueries({ queryKey: ["escrow"] });
+      navigate({ to: `/app/${workspaceId}/escrow/${created.id}` as "/" });
     },
     onError: (err: Error) => {
-      // Surface backend error inline, not just in a toast
-      const msg = err.message;
-      setSubmitError(msg);
-      toast.error(msg);
+      const msg = err.message ?? "Failed to create escrow";
+      toast.error(msg, {
+        description:
+          msg.toLowerCase().includes("wallet") ||
+          msg.toLowerCase().includes("fund")
+            ? "Go to Wallet to add funds."
+            : undefined,
+      });
+      window.scrollTo({ top: 0, behavior: "smooth" });
     },
   });
 
-  const handleAddCondition = () =>
-    setConditions((prev) => [...prev, newCondition()]);
-  const handleRemoveCondition = (id: string) =>
-    setConditions((prev) => prev.filter((c) => c.id !== id));
-  const handleConditionChange = (id: string, value: string) =>
-    setConditions((prev) =>
-      prev.map((c) => (c.id === id ? { ...c, text: value } : c)),
-    );
-
-  const handleAddMilestone = () =>
-    setMilestones((prev) => [...prev, newMilestone()]);
-  const handleRemoveMilestone = (id: string) =>
-    setMilestones((prev) => prev.filter((m) => m.id !== id));
-  const handleMilestoneChange = (
-    id: string,
-    field: keyof Omit<MilestoneItem, "id">,
-    value: string,
-  ) =>
-    setMilestones((prev) =>
-      prev.map((m) => (m.id === id ? { ...m, [field]: value } : m)),
-    );
-
-  const totalMilestoneAmount = milestones.reduce((sum, m) => {
-    const val = Number.parseFloat(m.amount);
-    return sum + (Number.isNaN(val) ? 0 : val);
-  }, 0);
-  const contractAmount = Number.parseFloat(amount) || 0;
-  const milestoneAmountMismatch =
-    milestones.length > 0 &&
-    contractAmount > 0 &&
-    Math.abs(totalMilestoneAmount - contractAmount) > 0.01;
-
-  const isSubmitDisabled =
-    createMutation.isPending ||
-    !title.trim() ||
-    !amount ||
-    !payeeId.trim() ||
-    hasNoFunds ||
-    amountExceedsBalance;
-
-  const handleSubmit = async (e: React.FormEvent) => {
+  function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    setSubmitError(null);
-    if (!title.trim() || !amount || !payeeId.trim()) {
-      toast.error("Please fill in all required fields");
+    if (!payeeId.trim()) {
+      toast.error("Payee principal ID is required");
       return;
     }
-    const amountVal = Math.round(Number.parseFloat(amount) * 100);
-    if (Number.isNaN(amountVal) || amountVal <= 0) {
-      toast.error("Please enter a valid amount");
+    if (!amount || Number.parseFloat(amount) <= 0) {
+      toast.error("Amount must be greater than 0");
       return;
     }
-
-    const validMilestones = milestones.filter(
-      (m) => m.title.trim().length > 0 && Number.parseFloat(m.amount) > 0,
-    );
-    if (milestones.length > 0 && validMilestones.length !== milestones.length) {
-      toast.error("All milestones must have a title and amount");
-      return;
-    }
-
-    const { Principal } = await import("@icp-sdk/core/principal");
-    let payeePrincipal: UserId;
-    try {
-      payeePrincipal = Principal.fromText(payeeId.trim());
-    } catch {
-      toast.error("Invalid principal ID");
-      return;
-    }
-
-    const input: EscrowInput = {
-      title: title.trim(),
-      description: description.trim(),
-      amount: BigInt(amountVal),
-      currency,
-      payeeId: payeePrincipal,
-      conditions: conditions
-        .filter((c) => c.text.trim().length > 0)
-        .map((c) => c.text),
-      dueDate: dueDate
-        ? BigInt(new Date(dueDate).getTime() * 1_000_000)
-        : undefined,
-      crossLinks,
-    };
-
-    const milestoneInputs: EscrowMilestoneInput[] = validMilestones.map(
-      (m) => ({
-        title: m.title.trim(),
-        description: m.description.trim(),
-        amount: BigInt(Math.round(Number.parseFloat(m.amount) * 100)),
-      }),
-    );
-
-    createMutation.mutate({ input, milestoneInputs });
-  };
-
-  const goFundWallet = () => navigate({ to: `/app/${workspaceId}/wallet` });
+    createMutation.mutate();
+  }
 
   return (
-    <div className="animate-fade-in-up p-6 md:p-8 max-w-2xl mx-auto space-y-6">
+    <div className="flex flex-col gap-6 p-4 sm:p-6 max-w-2xl mx-auto w-full">
       {/* Header */}
       <div className="flex items-center gap-3">
-        <button
-          type="button"
-          onClick={() => navigate({ to: `/app/${workspaceId}/escrow` })}
-          aria-label="Back to escrow"
-          className="flex h-8 w-8 items-center justify-center rounded-lg border border-border bg-card hover:bg-muted transition-smooth"
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={() => navigate({ to: `/app/${workspaceId}/escrow` as "/" })}
+          data-ocid="escrow-new-back"
         >
-          <ArrowLeft className="h-4 w-4 text-muted-foreground" />
-        </button>
-        <div>
-          <h1 className="font-display text-xl font-bold text-foreground flex items-center gap-2">
-            <Shield className="h-5 w-5 text-amber-500" />
-            New Escrow Contract
-          </h1>
-          <p className="text-sm text-muted-foreground">
-            Create a secure on-chain agreement between parties
-          </p>
+          <ArrowLeft className="w-4 h-4" />
+        </Button>
+        <div className="flex items-center gap-3">
+          <div className="w-9 h-9 rounded-lg bg-primary/10 flex items-center justify-center">
+            <Shield className="w-5 h-5 text-primary" />
+          </div>
+          <div>
+            <h1 className="text-xl font-semibold text-foreground font-display">
+              New Escrow
+            </h1>
+            <p className="text-sm text-muted-foreground">
+              Create a secure payment agreement
+            </p>
+          </div>
         </div>
       </div>
 
-      {/* Treasury balance chip */}
-      {!treasuryLoading && treasury && (
-        <div className="flex items-center gap-2 rounded-lg border border-border bg-card px-3 py-2 w-fit">
-          <Wallet className="h-3.5 w-3.5 text-muted-foreground" />
-          <span className="text-xs text-muted-foreground">
-            Workspace Treasury:
-          </span>
-          <span
-            className={`text-xs font-semibold tabular-nums ${
-              icpBalance === BigInt(0) ? "text-destructive" : "text-foreground"
-            }`}
-          >
-            {formatIcp(icpBalance)} ICP
-          </span>
-        </div>
-      )}
-
-      {/* No-funds banner */}
-      {hasNoFunds && <InsufficientFundsBanner onFundWallet={goFundWallet} />}
-
-      {/* Submit error (e.g. backend returns Insufficient treasury balance) */}
-      {submitError && !hasNoFunds && (
-        <InsufficientFundsBanner
-          onFundWallet={goFundWallet}
-          balanceText={
-            submitError.toLowerCase().includes("insufficient")
-              ? formatIcp(icpBalance)
-              : undefined
-          }
-        />
-      )}
-
-      <form onSubmit={handleSubmit} className="space-y-5">
-        {/* Basic Info */}
-        <Card>
-          <CardHeader className="pb-3">
-            <CardTitle className="text-sm font-semibold text-foreground">
-              Contract Details
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="space-y-1.5">
-              <Label htmlFor="title">
-                Title <span className="text-destructive">*</span>
-              </Label>
-              <Input
-                id="title"
-                value={title}
-                onChange={(e) => setTitle(e.target.value)}
-                data-ocid="escrow-title"
-                required
-              />
-            </div>
-
-            <div className="space-y-1.5">
-              <Label htmlFor="description">Description</Label>
-              <Textarea
-                id="description"
-                value={description}
-                onChange={(e) => setDescription(e.target.value)}
-                data-ocid="escrow-description"
-                rows={3}
-              />
-            </div>
-
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-1.5">
-                <Label htmlFor="amount">
-                  Amount <span className="text-destructive">*</span>
-                </Label>
-                <Input
-                  id="amount"
-                  type="number"
-                  min="0.01"
-                  step="0.01"
-                  placeholder="0.00"
-                  value={amount}
-                  onChange={(e) => {
-                    setAmount(e.target.value);
-                    setSubmitError(null);
-                  }}
-                  data-ocid="escrow-amount"
-                  required
-                />
-                {/* Amount exceeds balance inline error */}
-                {amountExceedsBalance && (
-                  <p className="text-xs text-destructive flex items-center gap-1 mt-1">
-                    <AlertTriangle className="h-3 w-3" />
-                    Amount exceeds workspace treasury balance (
-                    {formatIcp(icpBalance)} ICP available)
-                  </p>
-                )}
-              </div>
-              <div className="space-y-1.5">
-                <Label htmlFor="currency">Currency</Label>
-                <Select value={currency} onValueChange={setCurrency}>
-                  <SelectTrigger id="currency" data-ocid="escrow-currency">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {CURRENCIES.map((c) => (
-                      <SelectItem key={c} value={c}>
-                        {c}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-
-            <div className="space-y-1.5">
-              <Label htmlFor="payeeId">
-                Payee Principal ID <span className="text-destructive">*</span>
-              </Label>
-              <Input
-                id="payeeId"
-                placeholder="xxxxx-xxxxx-xxxxx-xxxxx-xxx"
-                value={payeeId}
-                onChange={(e) => setPayeeId(e.target.value)}
-                data-ocid="escrow-payee"
-                className="font-mono text-sm"
-                required
-              />
-            </div>
-
-            <div className="space-y-1.5">
-              <Label htmlFor="dueDate">Due Date</Label>
-              <Input
-                id="dueDate"
-                type="date"
-                value={dueDate}
-                onChange={(e) => setDueDate(e.target.value)}
-                data-ocid="escrow-due-date"
-                min={new Date().toISOString().split("T")[0]}
-              />
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Milestones */}
-        <Card>
-          <CardHeader className="pb-3">
-            <div className="flex items-center justify-between">
-              <CardTitle className="text-sm font-semibold text-foreground flex items-center gap-2">
-                <Layers className="h-4 w-4 text-amber-500" />
-                Milestones{" "}
-                <span className="text-xs font-normal text-muted-foreground">
-                  (optional)
-                </span>
-              </CardTitle>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={handleAddMilestone}
-                data-ocid="escrow-add-milestone"
-                className="h-7 text-xs gap-1"
-              >
-                <Plus className="h-3 w-3" />
-                Add Milestone
-              </Button>
-            </div>
-          </CardHeader>
-          <CardContent>
-            {milestones.length === 0 ? (
-              <div className="rounded-xl border border-dashed border-border py-8 text-center">
-                <Layers className="mx-auto h-7 w-7 text-muted-foreground/40 mb-2" />
-                <p className="text-xs text-muted-foreground">
-                  No milestones — funds release in one payment
-                </p>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  onClick={handleAddMilestone}
-                  className="mt-2 text-xs text-amber-600 hover:text-amber-700 h-7"
-                >
-                  <Plus className="h-3 w-3 mr-1" />
-                  Add first milestone
-                </Button>
-              </div>
-            ) : (
-              <div className="space-y-4">
-                {milestones.map((ms, idx) => (
-                  <div
-                    key={ms.id}
-                    className="rounded-xl border border-border bg-muted/20 p-4 space-y-3"
-                    data-ocid={`milestone-item-${ms.id}`}
-                  >
-                    <div className="flex items-center justify-between">
-                      <p className="text-xs font-semibold text-foreground">
-                        Milestone {idx + 1}
-                      </p>
-                      <button
-                        type="button"
-                        onClick={() => handleRemoveMilestone(ms.id)}
-                        aria-label={`Remove milestone ${idx + 1}`}
-                        className="flex h-6 w-6 items-center justify-center rounded-md hover:bg-destructive/10 hover:text-destructive transition-smooth"
-                      >
-                        <Trash2 className="h-3.5 w-3.5" />
-                      </button>
-                    </div>
-                    <div className="grid grid-cols-2 gap-3">
-                      <div className="space-y-1">
-                        <Label
-                          htmlFor={`ms-title-${ms.id}`}
-                          className="text-xs"
-                        >
-                          Title *
-                        </Label>
-                        <Input
-                          id={`ms-title-${ms.id}`}
-                          value={ms.title}
-                          onChange={(e) =>
-                            handleMilestoneChange(
-                              ms.id,
-                              "title",
-                              e.target.value,
-                            )
-                          }
-                          data-ocid={`ms-title-${ms.id}`}
-                          className="text-sm"
-                        />
-                      </div>
-                      <div className="space-y-1">
-                        <Label
-                          htmlFor={`ms-amount-${ms.id}`}
-                          className="text-xs"
-                        >
-                          Amount ({currency}) *
-                        </Label>
-                        <Input
-                          id={`ms-amount-${ms.id}`}
-                          type="number"
-                          min="0.01"
-                          step="0.01"
-                          placeholder="0.00"
-                          value={ms.amount}
-                          onChange={(e) =>
-                            handleMilestoneChange(
-                              ms.id,
-                              "amount",
-                              e.target.value,
-                            )
-                          }
-                          data-ocid={`ms-amount-${ms.id}`}
-                          className="text-sm"
-                        />
-                      </div>
-                    </div>
-                    <div className="space-y-1">
-                      <Label htmlFor={`ms-desc-${ms.id}`} className="text-xs">
-                        Description
-                      </Label>
-                      <Input
-                        id={`ms-desc-${ms.id}`}
-                        value={ms.description}
-                        onChange={(e) =>
-                          handleMilestoneChange(
-                            ms.id,
-                            "description",
-                            e.target.value,
-                          )
-                        }
-                        data-ocid={`ms-desc-${ms.id}`}
-                        className="text-sm"
-                      />
-                    </div>
-                  </div>
-                ))}
-
-                {/* Milestone total vs contract amount */}
-                <div
-                  className={`flex items-center justify-between rounded-lg px-3 py-2 text-xs font-medium ${
-                    milestoneAmountMismatch
-                      ? "bg-destructive/10 border border-destructive/30 text-destructive"
-                      : "bg-muted text-muted-foreground"
-                  }`}
-                >
-                  <span>
-                    Milestone total:{" "}
-                    <strong>
-                      {currency} {totalMilestoneAmount.toFixed(2)}
-                    </strong>
-                  </span>
-                  {contractAmount > 0 && (
-                    <span className="flex items-center gap-1">
-                      {milestoneAmountMismatch ? (
-                        "⚠ Doesn't match contract amount"
-                      ) : (
-                        <>
-                          <CheckCircle2 className="h-3.5 w-3.5 text-green-500" />
-                          Matches contract amount
-                        </>
-                      )}
-                    </span>
-                  )}
-                </div>
-              </div>
-            )}
-          </CardContent>
-        </Card>
-
-        {/* Conditions */}
-        <Card>
-          <CardHeader className="pb-3">
-            <div className="flex items-center justify-between">
-              <CardTitle className="text-sm font-semibold text-foreground">
-                Release Conditions
-              </CardTitle>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={handleAddCondition}
-                data-ocid="escrow-add-condition"
-                className="h-7 text-xs gap-1"
-              >
-                <Plus className="h-3 w-3" />
-                Add
-              </Button>
-            </div>
-          </CardHeader>
-          <CardContent className="space-y-2">
-            {conditions.length === 0 ? (
-              <p className="text-xs text-muted-foreground text-center py-2">
-                No conditions added — funds release manually
-              </p>
-            ) : (
-              conditions.map((cond, idx) => (
-                <div key={cond.id} className="flex gap-2">
-                  <Input
-                    placeholder={`Condition ${idx + 1}`}
-                    value={cond.text}
-                    onChange={(e) =>
-                      handleConditionChange(cond.id, e.target.value)
-                    }
-                    data-ocid={`escrow-condition-${cond.id}`}
-                    className="text-sm"
-                  />
-                  {conditions.length > 1 && (
-                    <button
-                      type="button"
-                      onClick={() => handleRemoveCondition(cond.id)}
-                      aria-label={`Remove condition ${idx + 1}`}
-                      className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md hover:bg-destructive/10 hover:text-destructive transition-smooth"
-                    >
-                      <Trash2 className="h-3.5 w-3.5" />
-                    </button>
-                  )}
-                </div>
-              ))
-            )}
-          </CardContent>
-        </Card>
-
-        {/* Cross-links */}
-        <Card>
-          <CardHeader className="pb-3">
-            <CardTitle className="text-sm font-semibold text-foreground">
-              Cross-Links
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <CrossLinkPicker
-              tenantId={tenantId}
-              value={crossLinks}
-              onChange={setCrossLinks}
-            />
-          </CardContent>
-        </Card>
-
-        {/* Actions */}
-        <div className="flex gap-3 justify-end pt-2">
+      {/* Wallet balance check */}
+      {walletLoading ? (
+        <Skeleton className="h-20 w-full rounded-lg" />
+      ) : !hasBalance ? (
+        /* Hard blocker — form is NOT shown when balance is zero */
+        <div
+          data-ocid="escrow-balance-blocker"
+          className="flex flex-col items-center gap-5 py-12 px-6 rounded-xl border border-destructive/30 bg-destructive/5 text-center"
+        >
+          <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-destructive/10">
+            <AlertTriangle className="w-7 h-7 text-destructive" />
+          </div>
+          <div>
+            <p className="text-base font-semibold text-destructive">
+              Insufficient wallet balance
+            </p>
+            <p className="text-sm text-muted-foreground mt-1.5 max-w-sm mx-auto">
+              Please fund your wallet before creating an escrow agreement. Your
+              wallet must have a positive ICP balance to proceed.
+            </p>
+          </div>
           <Button
-            type="button"
-            variant="outline"
-            onClick={() => navigate({ to: `/app/${workspaceId}/escrow` })}
-            data-ocid="escrow-cancel-btn"
-          >
-            Cancel
-          </Button>
-          <Button
-            type="submit"
-            disabled={isSubmitDisabled}
-            data-ocid="escrow-save-btn"
-            className="bg-amber-500 hover:bg-amber-600 text-white min-w-[120px] disabled:opacity-60"
-            title={
-              hasNoFunds
-                ? "Fund your workspace wallet before creating an escrow"
-                : amountExceedsBalance
-                  ? "Amount exceeds treasury balance"
-                  : undefined
+            className="gap-1.5"
+            onClick={() =>
+              navigate({ to: `/app/${workspaceId}/wallet` as "/" })
             }
+            data-ocid="escrow-go-to-wallet-btn"
           >
-            {createMutation.isPending ? "Creating..." : "Create Escrow"}
+            <Wallet className="w-4 h-4" />
+            Go to Wallet
           </Button>
         </div>
-      </form>
+      ) : (
+        <>
+          {/* Balance indicator */}
+          <div className="flex items-center gap-3 p-3 rounded-lg bg-primary/5 border border-primary/20">
+            <Wallet className="w-4 h-4 text-primary shrink-0" />
+            <p className="text-sm text-muted-foreground">
+              Available balance:{" "}
+              <span className="font-medium text-foreground">
+                {formatICP(wallet.icpBalance)}
+              </span>
+            </p>
+          </div>
+
+          {/* Form */}
+          <Card>
+            <CardHeader className="pb-4">
+              <CardTitle className="text-base font-display">
+                Agreement Details
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <form onSubmit={handleSubmit} className="flex flex-col gap-5">
+                <div className="flex flex-col gap-1.5">
+                  <Label htmlFor="esc-title">Title *</Label>
+                  <Input
+                    id="esc-title"
+                    data-ocid="escrow-title-input"
+                    placeholder="e.g. Website Design Agreement"
+                    value={title}
+                    onChange={(e) => setTitle(e.target.value)}
+                    required
+                  />
+                </div>
+
+                <div className="flex flex-col gap-1.5">
+                  <Label htmlFor="esc-desc">Description</Label>
+                  <Textarea
+                    id="esc-desc"
+                    data-ocid="escrow-description-input"
+                    placeholder="Describe the work or deliverables..."
+                    value={description}
+                    onChange={(e) => setDescription(e.target.value)}
+                    rows={3}
+                  />
+                </div>
+
+                <div className="flex flex-col gap-1.5">
+                  <Label htmlFor="esc-payee">Payee Principal ID *</Label>
+                  <Input
+                    id="esc-payee"
+                    data-ocid="escrow-payee-input"
+                    placeholder="e.g. xxxxx-xxxxx-xxxxx-xxxxx-xxx"
+                    value={payeeId}
+                    onChange={(e) => setPayeeId(e.target.value)}
+                    required
+                    className="font-mono text-sm"
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    The Internet Identity principal of the recipient
+                  </p>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="flex flex-col gap-1.5">
+                    <Label htmlFor="esc-amount">Amount *</Label>
+                    <Input
+                      id="esc-amount"
+                      data-ocid="escrow-amount-input"
+                      type="number"
+                      min="0"
+                      step="0.0001"
+                      placeholder="0.0000"
+                      value={amount}
+                      onChange={(e) => setAmount(e.target.value)}
+                      required
+                    />
+                  </div>
+                  <div className="flex flex-col gap-1.5">
+                    <Label htmlFor="esc-currency">Currency</Label>
+                    <select
+                      id="esc-currency"
+                      data-ocid="escrow-currency-select"
+                      value={currency}
+                      onChange={(e) => setCurrency(e.target.value)}
+                      className="h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm focus:outline-none focus:ring-1 focus:ring-ring"
+                    >
+                      <option value="ICP">ICP</option>
+                      <option value="ckBTC">ckBTC</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div className="flex flex-col gap-1.5">
+                  <Label htmlFor="esc-conditions">
+                    Conditions (one per line)
+                  </Label>
+                  <Textarea
+                    id="esc-conditions"
+                    data-ocid="escrow-conditions-input"
+                    placeholder={
+                      "Milestone 1: Initial mockups delivered\nMilestone 2: Revisions complete\nMilestone 3: Final files delivered"
+                    }
+                    value={conditions}
+                    onChange={(e) => setConditions(e.target.value)}
+                    rows={4}
+                  />
+                </div>
+
+                <div className="flex gap-3 justify-end pt-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() =>
+                      navigate({ to: `/app/${workspaceId}/escrow` as "/" })
+                    }
+                  >
+                    Cancel
+                  </Button>
+                  <Button
+                    type="submit"
+                    data-ocid="escrow-submit-btn"
+                    disabled={createMutation.isPending}
+                    className="gap-2"
+                  >
+                    {createMutation.isPending ? (
+                      "Creating..."
+                    ) : (
+                      <>
+                        <Plus className="w-4 h-4" />
+                        Create Escrow
+                      </>
+                    )}
+                  </Button>
+                </div>
+              </form>
+            </CardContent>
+          </Card>
+        </>
+      )}
     </div>
   );
 }
