@@ -47,9 +47,14 @@ const FILTERS: { key: Filter; label: string }[] = [
 interface TimelineViewProps {
   tasks: Task[];
   projectId: string;
+  workspaceId?: string;
 }
 
-export default function TimelineView({ tasks, projectId }: TimelineViewProps) {
+export default function TimelineView({
+  tasks,
+  projectId,
+  workspaceId = "",
+}: TimelineViewProps) {
   const [filter, setFilter] = useState<Filter>("all");
   const today = Date.now();
 
@@ -112,8 +117,8 @@ export default function TimelineView({ tasks, projectId }: TimelineViewProps) {
             return (
               <Link
                 key={task.id}
-                to="/app/projects/$projectId/tasks/$taskId"
-                params={{ projectId, taskId: task.id }}
+                to="/app/$workspaceId/projects/$projectId/tasks/$taskId"
+                params={{ workspaceId, projectId, taskId: task.id }}
                 data-ocid={`timeline-task-${task.id}`}
                 className="flex items-center gap-3 rounded-xl border border-border bg-card px-4 py-3 hover:border-orange-300 dark:hover:border-orange-700 hover:shadow-sm transition-all group"
               >

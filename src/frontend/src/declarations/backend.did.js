@@ -1337,10 +1337,12 @@ export const DailyTimesheetEntry = IDL.Record({
 export const DashboardStats = IDL.Record({
   'memberCount' : IDL.Nat,
   'goalCount' : IDL.Nat,
+  'completedTaskCount' : IDL.Nat,
   'noteCount' : IDL.Nat,
   'taskCount' : IDL.Nat,
   'payrollTotal' : IDL.Float64,
   'projectCount' : IDL.Nat,
+  'activeProjectCount' : IDL.Nat,
   'walletBalance' : IDL.Nat,
 });
 export const ActivityEntry = IDL.Record({
@@ -4204,10 +4206,12 @@ export const idlFactory = ({ IDL }) => {
   const DashboardStats = IDL.Record({
     'memberCount' : IDL.Nat,
     'goalCount' : IDL.Nat,
+    'completedTaskCount' : IDL.Nat,
     'noteCount' : IDL.Nat,
     'taskCount' : IDL.Nat,
     'payrollTotal' : IDL.Float64,
     'projectCount' : IDL.Nat,
+    'activeProjectCount' : IDL.Nat,
     'walletBalance' : IDL.Nat,
   });
   const ActivityEntry = IDL.Record({

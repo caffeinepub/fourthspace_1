@@ -200,7 +200,7 @@ export default function SprintDetailPage() {
   return (
     <div className="flex flex-col h-full min-h-0 overflow-y-auto">
       {/* Header */}
-      <div className="px-6 md:px-8 pt-4 pb-4 border-b border-border/60 bg-card/80 sticky top-0 z-10 backdrop-blur-subtle">
+      <div className="px-4 sm:px-6 md:px-8 pt-4 pb-4 border-b border-border/60 bg-card/80 sticky top-0 z-10 backdrop-blur-subtle">
         <div className="flex items-start gap-3">
           <Button
             variant="ghost"
@@ -311,7 +311,7 @@ export default function SprintDetailPage() {
         </div>
       </div>
 
-      <div className="px-6 md:px-8 py-6 flex gap-6">
+      <div className="px-4 sm:px-6 md:px-8 py-6 flex gap-6">
         {/* Board */}
         <div className="flex-1 overflow-x-auto">
           <div className="flex gap-4 min-w-fit pb-4">

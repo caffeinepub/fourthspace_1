@@ -58,9 +58,14 @@ function getInitials(id: { toText(): string } | string): string {
 interface TableViewProps {
   tasks: Task[];
   projectId: string;
+  workspaceId?: string;
 }
 
-export default function TableView({ tasks, projectId }: TableViewProps) {
+export default function TableView({
+  tasks,
+  projectId,
+  workspaceId = "",
+}: TableViewProps) {
   const [search, setSearch] = useState("");
   const [sortKey, setSortKey] = useState<SortKey>("createdAt");
   const [sortDir, setSortDir] = useState<SortDir>("desc");
@@ -194,8 +199,8 @@ export default function TableView({ tasks, projectId }: TableViewProps) {
                   >
                     <td className="px-4 py-3 max-w-[220px]">
                       <Link
-                        to="/app/projects/$projectId/tasks/$taskId"
-                        params={{ projectId, taskId: task.id }}
+                        to="/app/$workspaceId/projects/$projectId/tasks/$taskId"
+                        params={{ workspaceId, projectId, taskId: task.id }}
                         className="font-medium text-foreground hover:text-primary truncate block transition-colors"
                       >
                         {task.title}

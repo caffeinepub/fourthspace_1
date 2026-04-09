@@ -1,27 +1,15 @@
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
+import { Skeleton } from "@/components/ui/skeleton";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Link, useNavigate, useParams } from "@tanstack/react-router";
-import {
-  ArrowLeft,
-  ArrowRight,
-  Check,
-  FileText,
-  Loader2,
-  Save,
-  StickyNote,
-  Tag,
-  X,
-} from "lucide-react";
+import { ArrowLeft, ArrowRight, Check, FileText, Loader2 } from "lucide-react";
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
-import { CrossLinkPicker } from "../../components/CrossLinkPicker";
 import { useBackend } from "../../hooks/useBackend";
 import { useWorkspace } from "../../hooks/useWorkspace";
-import type { CrossLink, NoteInput } from "../../types";
+import type { NoteInput } from "../../types";
 
 // ─── Template definitions ────────────────────────────────────────────────────
 
@@ -32,6 +20,7 @@ interface NoteTemplateLocal {
   description: string;
   preview: string;
   content: string;
+  tags: string[];
 }
 
 const NOTE_TEMPLATES: NoteTemplateLocal[] = [
@@ -42,6 +31,7 @@ const NOTE_TEMPLATES: NoteTemplateLocal[] = [
     description:
       "Capture agenda, decisions, and action items from any meeting.",
     preview: "## Meeting Details\nDate · Attendees · Objective",
+    tags: ["meeting", "notes"],
     content: `## Meeting Details
 **Date:** [Today's date]
 **Attendees:** [List everyone present]
@@ -73,8 +63,8 @@ const NOTE_TEMPLATES: NoteTemplateLocal[] = [
 ---
 
 ## Decisions Made
-- [ ] Decision 1: [What was decided and why]
-- [ ] Decision 2: [What was decided and why]
+- Decision 1: [What was decided and why]
+- Decision 2: [What was decided and why]
 
 ---
 
@@ -83,11 +73,6 @@ const NOTE_TEMPLATES: NoteTemplateLocal[] = [
 |--------|-------|----------|--------|
 | [Task description] | @person | [date] | 🔴 Open |
 | [Task description] | @person | [date] | 🔴 Open |
-
----
-
-## Parking Lot (deferred topics)
-- [Topic] — revisit in [meeting/date]
 
 ---
 
@@ -102,6 +87,7 @@ const NOTE_TEMPLATES: NoteTemplateLocal[] = [
     name: "Project Brief",
     description: "Define scope, goals, and timeline before work begins.",
     preview: "## Project Overview\nGoal · Scope · Success criteria",
+    tags: ["project", "planning"],
     content: `## Project Overview
 **Project Name:** [Project name]
 **Owner:** [Your name]
@@ -112,19 +98,16 @@ const NOTE_TEMPLATES: NoteTemplateLocal[] = [
 ---
 
 ## Problem Statement
-Describe the problem this project solves in 2-3 sentences. Be specific — who is affected, how often, and what the current workaround costs in time or money.
-
-> Example: "Our support team spends 3 hours/day manually routing tickets because the current system has no auto-assignment rules. This causes avg. first-response time to spike to 6 hours on Mondays."
+Describe the problem this project solves in 2-3 sentences. Be specific about who is affected, how often, and what the current workaround costs.
 
 ---
 
 ## Goals & Success Criteria
-- **Goal 1:** [Measurable outcome, e.g. "Reduce first-response time to <2 hours"]
+- **Goal 1:** [Measurable outcome]
 - **Goal 2:** [Measurable outcome]
 - **Goal 3:** [Measurable outcome]
 
 **Out of scope:**
-- [What this project will NOT address]
 - [What this project will NOT address]
 
 ---
@@ -150,20 +133,12 @@ High-level description of the approach. Include any key technical decisions or a
 |------|------|--------------------|
 | [Name] | Sponsor | Final sign-off |
 | [Name] | Lead | Technical decisions |
-| [Name] | Contributor | Execution |
 
 ---
 
 ## Risks & Dependencies
 - **Risk:** [Description] → **Mitigation:** [How you'll address it]
 - **Dependency:** [What this project depends on] → **Owner:** @person
-
----
-
-## Resources Required
-- Engineering: [X] engineers × [Y] weeks
-- Design: [X] designers × [Y] weeks
-- Budget: $[amount] for [what]
 `,
   },
   {
@@ -173,6 +148,7 @@ High-level description of the approach. Include any key technical decisions or a
     description:
       "Reflect on wins, blockers, and priorities for the week ahead.",
     preview: "## Week of [date]\nAccomplishments · Blockers · Next week",
+    tags: ["review", "weekly"],
     content: `## Week of [Date]
 **Review completed:** [Today's date]
 **Mood this week:** [😊 / 😐 / 😔]
@@ -181,9 +157,9 @@ High-level description of the approach. Include any key technical decisions or a
 
 ## ✅ Accomplishments
 What did you finish or make meaningful progress on?
-- [Shipped X feature — link to PR/task]
-- [Completed Y deliverable — link]
-- [Had productive conversation about Z — outcome]
+- [Shipped X feature]
+- [Completed Y deliverable]
+- [Had productive conversation about Z]
 
 ---
 
@@ -195,23 +171,12 @@ What did you finish or make meaningful progress on?
 
 ## 🚫 Blockers & Challenges
 - **Blocker:** [What's stuck] → **Next step:** [Who can unblock, by when]
-- **Challenge:** [Difficult situation] → **How I'm handling it:** [approach]
-
----
-
-## 📊 Key Metrics This Week
-| Metric | Target | Actual | Trend |
-|--------|--------|--------|-------|
-| [KPI 1] | [goal] | [result] | ↑↓→ |
-| [KPI 2] | [goal] | [result] | ↑↓→ |
 
 ---
 
 ## 💡 Learnings
-What did you learn this week that's worth remembering?
 - [Insight or learning]
 - [Tool, technique, or pattern discovered]
-- [Something about a person, team, or process]
 
 ---
 
@@ -221,11 +186,6 @@ What did you learn this week that's worth remembering?
 3. [Third priority] — why it matters
 
 **One big thing I must NOT let slip:** [specific task or commitment]
-
----
-
-## 📝 Notes & Miscellaneous
-- [Anything else worth capturing]
 `,
   },
   {
@@ -234,15 +194,15 @@ What did you learn this week that's worth remembering?
     name: "Daily Standup",
     description: "Quick async update: yesterday, today, and blockers.",
     preview: "## Standup — [date]\nYesterday · Today · Blockers",
+    tags: ["standup", "daily"],
     content: `## Standup — [Today's date]
 
 ### ✅ Yesterday
 - [Completed task or made progress on X]
 - [Attended/led meeting about Y]
-- [Reviewed/approved Z]
 
 ### 🎯 Today
-- [Top priority task — link to ticket]
+- [Top priority task]
 - [Secondary task]
 - [Meeting or collaboration: time + topic]
 
@@ -261,9 +221,10 @@ What did you learn this week that's worth remembering?
     description:
       "PRD template covering user stories, requirements, and acceptance criteria.",
     preview: "## Feature: [Name]\nUser stories · Requirements · Edge cases",
+    tags: ["product", "requirements"],
     content: `## Feature: [Feature Name]
 **Author:** [PM/Lead name]
-**Status:** 🟡 Draft → 🟢 Approved → 🔵 In Development → ✅ Shipped
+**Status:** 🟡 Draft
 **Last Updated:** [Date]
 
 ---
@@ -271,16 +232,13 @@ What did you learn this week that's worth remembering?
 ## Background & Motivation
 Why are we building this? What user pain does it solve?
 
-> Example: "Users with large teams struggle to see who is online vs. offline in real-time. This leads to duplicate messages and wasted async back-and-forth."
-
 ---
 
 ## User Stories
 As a **[role]**, I want to **[action]** so that **[benefit]**.
 
-- As a **Team Member**, I want to see a presence indicator next to each teammate's name so I know if they're available for a quick sync.
-- As a **Manager**, I want to filter the members list by availability so I can find someone who's online right now.
-- As a **Guest**, I want my presence to be hidden by default so I have privacy when reviewing shared documents.
+- As a **Team Member**, I want to see a presence indicator so I know if teammates are available.
+- As a **Manager**, I want to filter by availability so I can find someone online now.
 
 ---
 
@@ -288,10 +246,8 @@ As a **[role]**, I want to **[action]** so that **[benefit]**.
 ### Must Have (P0)
 - [ ] [Requirement 1 — specific and testable]
 - [ ] [Requirement 2]
-- [ ] [Requirement 3]
 
 ### Should Have (P1)
-- [ ] [Nice-to-have requirement]
 - [ ] [Nice-to-have requirement]
 
 ### Won't Have (this release)
@@ -299,35 +255,13 @@ As a **[role]**, I want to **[action]** so that **[benefit]**.
 
 ---
 
-## Non-Functional Requirements
-- **Performance:** [e.g. "Presence updates must reflect within 5 seconds"]
-- **Accessibility:** [e.g. "Status indicators must have text labels, not color alone"]
-- **Privacy:** [e.g. "Users can opt out of sharing presence"]
-
----
-
-## Design & UX Notes
-- [Link to Figma designs]
-- [Key UX decision: why we chose X over Y]
-- [Mobile considerations]
-
----
-
-## Edge Cases & Error Handling
-- **Edge case:** [Scenario] → **Expected behavior:** [What should happen]
-- **Error state:** [What fails] → **User message:** [What they see]
-
----
-
 ## Acceptance Criteria
-- [ ] Given [context], when [action], then [outcome]
 - [ ] Given [context], when [action], then [outcome]
 - [ ] All P0 requirements pass QA
 
 ---
 
 ## Open Questions
-- [ ] [Question] — **Owner:** @person, **Due:** [date]
 - [ ] [Question] — **Owner:** @person, **Due:** [date]
 `,
   },
@@ -337,6 +271,7 @@ As a **[role]**, I want to **[action]** so that **[benefit]**.
     name: "One-on-One",
     description: "Structured 1:1 agenda for managers and direct reports.",
     preview: "## 1:1 — [Name] & [Manager]\nUpdates · Growth · Feedback",
+    tags: ["1:1", "management"],
     content: `## 1:1 — [Employee Name] & [Manager Name]
 **Date:** [Date]
 **Frequency:** [Weekly / Bi-weekly]
@@ -345,7 +280,6 @@ As a **[role]**, I want to **[action]** so that **[benefit]**.
 ---
 
 ## 🔄 Quick Updates (5 min)
-*Employee shares top-of-mind items — wins, blockers, anything urgent.*
 - [Update 1]
 - [Update 2]
 
@@ -362,16 +296,14 @@ As a **[role]**, I want to **[action]** so that **[benefit]**.
 ---
 
 ## 🌱 Career & Growth (5 min)
-**How are you feeling about your development?**
 - Skills being built: [skill or area]
 - Stretch goal for this quarter: [what they're working toward]
-- Support needed: [training, mentoring, exposure to X]
 
 ---
 
 ## 💬 Feedback Exchange (5 min)
 **Employee → Manager:**
-> [What's working well / what could be better about our working relationship or the team]
+> [What's working well / what could be better]
 
 **Manager → Employee:**
 > [Specific positive observation] + [One area to grow]
@@ -383,12 +315,6 @@ As a **[role]**, I want to **[action]** so that **[benefit]**.
 |--------|-------|-----|
 | [Task] | @employee | [date] |
 | [Task] | @manager | [date] |
-
----
-
-## 📝 Notes for Next Time
-- [Topic to revisit]
-- [Follow-up on previous action item]
 `,
   },
   {
@@ -398,6 +324,7 @@ As a **[role]**, I want to **[action]** so that **[benefit]**.
     description:
       "Structured retro: what went well, what didn't, and action items.",
     preview: "## Sprint [N] Retro\nWent well · Improve · Actions",
+    tags: ["retro", "agile"],
     content: `## Sprint [Number] Retrospective
 **Sprint:** [Sprint name/number]
 **Date:** [Retro date]
@@ -414,25 +341,19 @@ As a **[role]**, I want to **[action]** so that **[benefit]**.
 ---
 
 ## ✅ What Went Well
-*These are things we should protect and do more of.*
-- [Specific example: "Daily standups were focused and under 15 min"]
-- [Specific example: "PR review turnaround was <24 hours"]
-- [Specific example: "We shipped the auth refactor with zero regressions"]
+- [Specific example]
+- [Specific example]
 
 ---
 
 ## 🔧 What Could Be Improved
-*Frame as observations, not blame. Focus on process, not people.*
-- [Observation: "Acceptance criteria were unclear on 3 of 8 tickets — caused scope creep"]
-- [Observation: "Deployments happened manually — we spent 2 hours on Friday release process"]
-- [Observation: "Design handoff happened same day as dev start — compressed time"]
+- [Observation — focus on process, not people]
+- [Observation]
 
 ---
 
 ## 💡 Ideas & Experiments
-*Novel approaches the team wants to try.*
-- [Idea: "Add a 'definition of ready' checklist before tickets enter the sprint"]
-- [Idea: "Try async demo instead of live demo — record a Loom by Thursday"]
+- [Idea to try next sprint]
 
 ---
 
@@ -440,16 +361,13 @@ As a **[role]**, I want to **[action]** so that **[benefit]**.
 | Action | Owner | Sprint Target |
 |--------|-------|---------------|
 | [Specific, measurable change] | @person | Sprint [N+1] |
-| [Specific, measurable change] | @person | Sprint [N+1] |
 
 ---
 
 ## 😊 Team Health Check
-Rate 1–5 (5 = excellent):
-- **Collaboration:** [X/5] — [comment]
-- **Technical quality:** [X/5] — [comment]
-- **Morale:** [X/5] — [comment]
-- **Process clarity:** [X/5] — [comment]
+- **Collaboration:** [X/5]
+- **Technical quality:** [X/5]
+- **Morale:** [X/5]
 `,
   },
   {
@@ -459,24 +377,17 @@ Rate 1–5 (5 = excellent):
     description:
       "Capture candidate responses, scores, and hiring recommendation.",
     preview: "## Candidate: [Name]\nRole · Scorecard · Recommendation",
+    tags: ["interview", "hiring"],
     content: `## Candidate: [Full Name]
 **Role:** [Job title]
 **Interview Round:** [Phone screen / Technical / Cultural / Final]
 **Interviewer:** [Your name]
 **Date:** [Date]
-**Duration:** [45 min]
-
----
-
-## Candidate Background
-- **Current/Last Role:** [Title at Company]
-- **Years of Experience:** [X years in Y domain]
-- **Referral:** [Source — job board, referral, recruiter]
 
 ---
 
 ## Scorecard
-Rate each dimension 1–4 (1 = No hire, 2 = Lean no, 3 = Lean yes, 4 = Strong hire):
+Rate each dimension 1–4 (1 = No hire, 4 = Strong hire):
 
 | Dimension | Score | Notes |
 |-----------|-------|-------|
@@ -484,48 +395,38 @@ Rate each dimension 1–4 (1 = No hire, 2 = Lean no, 3 = Lean yes, 4 = Strong hi
 | Problem-solving | [1–4] | [Key observation] |
 | Communication | [1–4] | [Key observation] |
 | Culture alignment | [1–4] | [Key observation] |
-| Leadership potential | [1–4] | [Key observation] |
 
-**Overall Score:** [X/20]
+**Overall Score:** [X/16]
 
 ---
 
-## Interview Questions & Answers
+## Key Question Responses
 
 ### Q1: [Question asked]
-**A:** [Candidate's response — be specific, include examples they gave]
-**Notes:** [Your observation — did they use the STAR method? Was the answer concrete?]
+**A:** [Candidate's response]
+**Notes:** [Your observation]
 
 ### Q2: [Question asked]
 **A:** [Candidate's response]
 **Notes:** [Your observation]
 
-### Q3: [Technical question or case]
-**A:** [Their approach and solution]
-**Notes:** [What was strong? What was missing?]
-
 ---
 
 ## Strengths
-- [Specific strength backed by evidence from the interview]
-- [Specific strength]
-
----
+- [Specific strength backed by evidence]
 
 ## Concerns
 - [Specific concern] → [Mitigating factor, if any]
-- [Specific concern]
 
 ---
 
 ## Recommendation
-- [ ] **Strong hire** — exceeded expectations in [X] dimensions
-- [ ] **Hire** — meets bar, good fit for the role
-- [ ] **Lean no** — [specific concern holding back]
+- [ ] **Strong hire**
+- [ ] **Hire**
+- [ ] **Lean no** — [specific concern]
 - [ ] **No hire** — [specific reason]
 
-**Summary for hiring panel:**
-[2–3 sentences summarizing the candidate and your recommendation]
+**Summary:** [2–3 sentences for the hiring panel]
 `,
   },
   {
@@ -534,40 +435,35 @@ Rate each dimension 1–4 (1 = No hire, 2 = Lean no, 3 = Lean yes, 4 = Strong hi
     name: "Research Document",
     description: "Structure research findings, hypotheses, and conclusions.",
     preview: "## Research: [Topic]\nHypothesis · Findings · Conclusions",
+    tags: ["research"],
     content: `## Research: [Topic]
 **Researcher:** [Your name]
 **Date:** [Date]
-**Status:** 🔵 In Progress / ✅ Complete
+**Status:** 🔵 In Progress
 
 ---
 
 ## Research Question
 What specific question are you trying to answer?
 
-> Example: "What are the primary reasons users abandon the onboarding flow before completing profile setup?"
-
 ---
 
 ## Hypothesis
 What do you expect to find, and why?
 
-> Example: "We expect that users abandon because the required fields (phone, company size) create too much friction — not because they lack intent to complete setup."
-
 ---
 
 ## Method
-How did you conduct this research?
-- **Type:** [User interviews / Survey / Data analysis / Competitive review / Literature review]
+- **Type:** [User interviews / Survey / Data analysis / Competitive review]
 - **Sample size:** [N participants / X data points]
 - **Time period:** [Date range]
-- **Tools:** [Mixpanel, Hotjar, Google Sheets, etc.]
 
 ---
 
 ## Findings
 
 ### Finding 1: [Headline observation]
-**Evidence:** [Data, quotes, or observations that support this]
+**Evidence:** [Data, quotes, or observations]
 **Significance:** [Why this matters]
 
 ### Finding 2: [Headline observation]
@@ -579,14 +475,11 @@ How did you conduct this research?
 ## Conclusions
 Does the evidence support or refute your hypothesis?
 
-[2–3 sentences synthesizing the key takeaways]
-
 ---
 
 ## Recommendations
-1. [Actionable recommendation based on the research]
+1. [Actionable recommendation]
 2. [Actionable recommendation]
-3. [Actionable recommendation]
 `,
   },
   {
@@ -596,54 +489,41 @@ Does the evidence support or refute your hypothesis?
     description:
       "Record architectural or strategic decisions with rationale and trade-offs.",
     preview: "## Decision: [Title]\nContext · Options · Decision",
+    tags: ["decision", "architecture"],
     content: `## Decision: [Decision Title]
 **Date:** [Date]
-**Deciders:** [Names of everyone involved in the decision]
-**Status:** 🟡 Proposed / ✅ Accepted / ❌ Superseded by [link]
+**Deciders:** [Names of everyone involved]
+**Status:** 🟡 Proposed
 
 ---
 
 ## Context & Problem
 What situation or problem prompted this decision? Why does it need to be made now?
 
-[2–3 sentences explaining the context. Be specific about constraints, deadlines, and what happens if no decision is made.]
-
 ---
 
 ## Decision Drivers
-The key factors that this decision must satisfy:
-- [Driver 1: e.g. "Must work within existing infrastructure — no new third-party services"]
-- [Driver 2: e.g. "Must be reversible — we may change direction in 6 months"]
-- [Driver 3: e.g. "Must be understood by a junior engineer"]
+- [Driver 1: must work within existing infrastructure]
+- [Driver 2: must be reversible]
 
 ---
 
 ## Options Considered
 
 ### Option A: [Name]
-**Description:** [How this option works]
-**Pros:**
-- [Advantage]
-- [Advantage]
-**Cons:**
-- [Disadvantage]
-- [Disadvantage]
-**Estimated effort:** [Low / Medium / High]
+**Pros:** [Advantage]
+**Cons:** [Disadvantage]
 
 ### Option B: [Name]
-**Description:** [How this option works]
-**Pros:**
-- [Advantage]
-**Cons:**
-- [Disadvantage]
-**Estimated effort:** [Low / Medium / High]
+**Pros:** [Advantage]
+**Cons:** [Disadvantage]
 
 ---
 
 ## Decision
-**We will go with Option [A/B/C].**
+**We will go with Option [A/B].**
 
-Rationale: [2–3 sentences explaining WHY this option was chosen over the others. Reference the decision drivers.]
+Rationale: [2–3 sentences explaining WHY this option was chosen.]
 
 ---
 
@@ -651,11 +531,9 @@ Rationale: [2–3 sentences explaining WHY this option was chosen over the other
 
 ### Positive
 - [Expected benefit]
-- [Expected benefit]
 
-### Negative / Trade-offs Accepted
+### Trade-offs Accepted
 - [Known downside we are accepting and why]
-- [Known downside]
 
 ---
 
@@ -670,6 +548,7 @@ Rationale: [2–3 sentences explaining WHY this option was chosen over the other
     description:
       "Set quarterly goals with key results, milestones, and tracking.",
     preview: "## Q[N] Goals — [Name]\nObjectives · KRs · Milestones",
+    tags: ["goals", "okr"],
     content: `## Q[N] [Year] Goals — [Your Name / Team Name]
 **Period:** [Start date] → [End date]
 **Last updated:** [Date]
@@ -678,7 +557,6 @@ Rationale: [2–3 sentences explaining WHY this option was chosen over the other
 
 ## 🌟 Theme for This Quarter
 [One sentence that captures the spirit of this quarter's focus]
-> Example: "Ship the collaboration layer and prove we can grow without adding headcount."
 
 ---
 
@@ -693,25 +571,22 @@ Rationale: [2–3 sentences explaining WHY this option was chosen over the other
 | [Measurable KR 2] | [X] | [Y] | 🔴🟡🟢 |
 
 ### Objective 2: [Outcome-oriented goal]
-*Why this matters: [1–2 sentences]*
 
 | Key Result | Target | Current | Status |
 |------------|--------|---------|--------|
 | [Measurable KR 1] | [X] | [Y] | 🔴🟡🟢 |
-| [Measurable KR 2] | [X] | [Y] | 🔴🟡🟢 |
 
 ---
 
 ## 🗓️ Milestones
 | Milestone | Description | Due Date | Status |
 |-----------|-------------|----------|--------|
-| [Milestone 1] | [What gets shipped or decided] | [date] | ⬜ / ✅ |
-| [Milestone 2] | [Description] | [date] | ⬜ / ✅ |
+| [Milestone 1] | [What gets shipped] | [date] | ⬜ |
+| [Milestone 2] | [Description] | [date] | ⬜ |
 
 ---
 
 ## 🚫 What I'm NOT doing this quarter
-- [Deprioritized item and why]
 - [Deprioritized item and why]
 
 ---
@@ -720,7 +595,6 @@ Rationale: [2–3 sentences explaining WHY this option was chosen over the other
 | Week | Progress | Blockers | Confidence |
 |------|----------|----------|------------|
 | Week 1 | [Summary] | [Blockers] | 🟡 On track |
-| Week 2 | [Summary] | [Blockers] | 🟢 Ahead |
 `,
   },
   {
@@ -730,40 +604,41 @@ Rationale: [2–3 sentences explaining WHY this option was chosen over the other
     description:
       "Document incidents with timeline, impact, root cause, and remediation.",
     preview: "## Incident: [Name]\nTimeline · Root cause · Action items",
+    tags: ["incident", "ops"],
     content: `## Incident: [Incident Name / ID]
 **Severity:** P[0/1/2/3] — [Critical / High / Medium / Low]
-**Status:** 🔴 Active / 🟡 Mitigated / ✅ Resolved
+**Status:** 🔴 Active
 **Incident Commander:** [Name]
 **Start Time:** [Datetime in UTC]
-**End Time:** [Datetime in UTC] / [Ongoing]
+**End Time:** [Datetime in UTC]
 
 ---
 
 ## Executive Summary
-[2–3 sentences describing what happened, who was affected, and current status. Written for a non-technical audience.]
+[2–3 sentences describing what happened, who was affected, and current status.]
 
 ---
 
 ## Impact
-- **Users affected:** [X users / % of user base / specific cohort]
+- **Users affected:** [X users / % of user base]
 - **Services affected:** [List impacted services]
-- **Revenue impact:** [$X estimated / Not quantified]
+- **Revenue impact:** [$X estimated]
 
 ---
 
 ## Timeline
 | Time (UTC) | Event |
 |------------|-------|
-| [HH:MM] | [First alert or detection — what triggered it] |
-| [HH:MM] | [Incident declared — who declared it] |
+| [HH:MM] | [First alert or detection] |
+| [HH:MM] | [Incident declared] |
 | [HH:MM] | [Root cause identified] |
-| [HH:MM] | [Fix deployed — what was changed] |
-| [HH:MM] | [Incident resolved — confirmed by monitoring] |
+| [HH:MM] | [Fix deployed] |
+| [HH:MM] | [Incident resolved] |
 
 ---
 
 ## Root Cause Analysis
-**Root cause:** [The fundamental reason this happened, not just the proximate cause]
+**Root cause:** [The fundamental reason this happened]
 
 **Contributing factors:**
 - [Factor 1]
@@ -785,6 +660,7 @@ Rationale: [2–3 sentences explaining WHY this option was chosen over the other
     description:
       "Evergreen documentation: how-tos, explanations, and troubleshooting.",
     preview: "## [Topic]\nOverview · Steps · Troubleshooting",
+    tags: ["docs", "knowledge"],
     content: `## [Article Title]
 **Category:** [Category / Tag]
 **Author:** [Name]
@@ -795,8 +671,6 @@ Rationale: [2–3 sentences explaining WHY this option was chosen over the other
 
 ## Overview
 [1–3 sentences explaining what this article covers and who it's for.]
-
-> Example: "This article explains how to set up two-factor authentication (2FA) on your Fourthspace account. It covers authenticator app setup and backup code generation."
 
 ---
 
@@ -839,10 +713,166 @@ A: [Clear, direct answer]
 ## Related Articles
 - [Link to related article 1]
 - [Link to related article 2]
+`,
+  },
+  {
+    id: "brainstorm",
+    emoji: "💡",
+    name: "Brainstorm Session",
+    description:
+      "Ideation with HMW questions, ideas, top picks, and next steps.",
+    preview: "## Brainstorm: [Topic]\nHMW · Ideas · Top picks",
+    tags: ["brainstorm", "ideation"],
+    content: `## Brainstorm: [Topic]
+**Date:** [Date]
+**Participants:** [Names]
+**Facilitator:** [Name]
 
 ---
 
-*Last reviewed by [Name] on [date].*
+## Problem Statement
+[Describe the problem you're solving in 1–3 sentences. Be specific.]
+
+---
+
+## How Might We…
+- How might we [reduce friction for new users]?
+- How might we [make the experience feel more personal]?
+- How might we [eliminate the need for manual setup]?
+
+---
+
+## Raw Ideas (no judgment)
+1. [Idea]
+2. [Idea]
+3. [Idea]
+4. [Idea]
+5. [Idea]
+6. [Idea]
+
+---
+
+## Top Picks (after dot voting)
+- [Idea with most votes] — votes: [X]
+- [Idea with most votes] — votes: [X]
+
+---
+
+## Next Steps
+- [ ] [Action] — Owner: @person, Due: [date]
+- [ ] [Action] — Owner: @person, Due: [date]
+`,
+  },
+  {
+    id: "sales-call-notes",
+    emoji: "📞",
+    name: "Sales Call Notes",
+    description:
+      "Capture prospect details, pain points, next steps, and follow-ups.",
+    preview: "## Call: [Company]\nProspect · Pain points · Next steps",
+    tags: ["sales", "crm"],
+    content: `## Sales Call: [Company Name]
+**Date:** [Date]
+**Duration:** [X min]
+**Contact:** [Name, Title]
+**Attendees:** [Internal team]
+**Stage:** [Discovery / Demo / Proposal / Negotiation / Close]
+
+---
+
+## Prospect Background
+- **Company:** [Name] | [Industry] | [Size]
+- **Current solution:** [What they use today]
+- **How they found us:** [Referral, inbound, outreach]
+
+---
+
+## Pain Points Identified
+1. [Primary pain point — be specific, use their words]
+2. [Secondary pain point]
+3. [Nice-to-have they mentioned]
+
+---
+
+## Qualification (MEDDIC)
+- **Metrics:** [How they measure success]
+- **Economic Buyer:** [Who signs the check]
+- **Decision Criteria:** [What matters most to them]
+- **Decision Process:** [How they evaluate and decide]
+- **Identified Pain:** [Explicit problem they need solved]
+- **Champion:** [Internal advocate, if any]
+
+---
+
+## Demo / Discussion Notes
+[Key moments from the call — what resonated, what fell flat, specific objections]
+
+---
+
+## Objections & Responses
+- **Objection:** [What they said]
+  **Response:** [How you addressed it]
+
+---
+
+## Next Steps
+- [ ] [Action] — Owner: @person | Due: [date]
+- [ ] [Action] — Owner: @person | Due: [date]
+
+**Next meeting:** [Date + time] | **Agenda:** [Topic]
+`,
+  },
+  {
+    id: "okr-template",
+    emoji: "🏆",
+    name: "OKR Framework",
+    description:
+      "Full OKR template with objectives, key results, and initiative tracking.",
+    preview: "## OKRs — [Team/Period]\nObjectives · Key Results · Initiatives",
+    tags: ["okr", "goals", "strategy"],
+    content: `## OKRs — [Team Name] | [Q1 2025]
+**Period:** [Start] → [End]
+**Owner:** [Team lead]
+**Last updated:** [Date]
+
+---
+
+## Company / Team Context
+[1–2 sentences on the company strategy or team mission this OKR cycle serves.]
+
+---
+
+## Objective 1: [Ambitious, qualitative goal]
+
+> *Why it matters:* [1 sentence on the impact]
+
+| Key Result | Baseline | Target | Current | Status |
+|------------|---------|--------|---------|--------|
+| [Measurable outcome, not output] | [X] | [Y] | [Z] | 🔴/🟡/🟢 |
+| [Measurable outcome] | [X] | [Y] | [Z] | 🔴/🟡/🟢 |
+| [Measurable outcome] | [X] | [Y] | [Z] | 🔴/🟡/🟢 |
+
+**Key initiatives:**
+- [Initiative that drives KR1]
+- [Initiative that drives KR2]
+
+---
+
+## Objective 2: [Ambitious, qualitative goal]
+
+> *Why it matters:* [1 sentence]
+
+| Key Result | Baseline | Target | Current | Status |
+|------------|---------|--------|---------|--------|
+| [Measurable outcome] | [X] | [Y] | [Z] | 🔴/🟡/🟢 |
+| [Measurable outcome] | [X] | [Y] | [Z] | 🔴/🟡/🟢 |
+
+---
+
+## Check-in Log
+| Date | Notes | Confidence |
+|------|-------|------------|
+| [Date] | [What changed, any blockers] | 🟡 On track |
 `,
   },
 ];
@@ -851,9 +881,10 @@ A: [Clear, direct answer]
 
 interface TemplatePickerProps {
   onSelect: (template: NoteTemplateLocal | null) => void;
+  isCreating: boolean;
 }
 
-function TemplatePicker({ onSelect }: TemplatePickerProps) {
+function TemplatePicker({ onSelect, isCreating }: TemplatePickerProps) {
   const [selected, setSelected] = useState<NoteTemplateLocal | null>(null);
   const [search, setSearch] = useState("");
 
@@ -863,7 +894,8 @@ function TemplatePicker({ onSelect }: TemplatePickerProps) {
     return NOTE_TEMPLATES.filter(
       (t) =>
         t.name.toLowerCase().includes(q) ||
-        t.description.toLowerCase().includes(q),
+        t.description.toLowerCase().includes(q) ||
+        t.tags.some((tag) => tag.includes(q)),
     );
   }, [search]);
 
@@ -901,7 +933,8 @@ function TemplatePicker({ onSelect }: TemplatePickerProps) {
         <button
           type="button"
           onClick={() => onSelect(null)}
-          className="w-full mb-6 flex items-center gap-3 rounded-xl border-2 border-dashed border-border/60 bg-muted/30 px-4 py-3.5 text-left hover:border-primary/50 hover:bg-primary/5 transition-all duration-200 group"
+          disabled={isCreating}
+          className="w-full mb-6 flex items-center gap-3 rounded-xl border-2 border-dashed border-border/60 bg-muted/30 px-4 py-3.5 text-left hover:border-primary/50 hover:bg-primary/5 transition-all duration-200 group disabled:opacity-60"
           data-ocid="template-blank-btn"
         >
           <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-background border border-border/60 text-xl shrink-0 group-hover:border-primary/40 transition-colors">
@@ -915,7 +948,11 @@ function TemplatePicker({ onSelect }: TemplatePickerProps) {
               Open an empty note and write freely
             </p>
           </div>
-          <ArrowRight className="ml-auto h-4 w-4 text-muted-foreground group-hover:text-primary transition-colors shrink-0" />
+          {isCreating ? (
+            <Loader2 className="ml-auto h-4 w-4 text-muted-foreground animate-spin shrink-0" />
+          ) : (
+            <ArrowRight className="ml-auto h-4 w-4 text-muted-foreground group-hover:text-primary transition-colors shrink-0" />
+          )}
         </button>
 
         {filtered.length === 0 ? (
@@ -930,9 +967,10 @@ function TemplatePicker({ onSelect }: TemplatePickerProps) {
                 <button
                   key={tpl.id}
                   type="button"
+                  disabled={isCreating}
                   onClick={() => setSelected(isSelected ? null : tpl)}
                   className={[
-                    "relative text-left rounded-xl border bg-card p-4 transition-all duration-200 hover:shadow-md group",
+                    "relative text-left rounded-xl border bg-card p-4 transition-all duration-200 hover:shadow-md group disabled:opacity-60",
                     isSelected
                       ? "border-primary ring-2 ring-primary/30 shadow-md"
                       : "border-border/60 hover:border-primary/40",
@@ -948,12 +986,19 @@ function TemplatePicker({ onSelect }: TemplatePickerProps) {
                   <h3 className="text-sm font-semibold text-foreground mb-1 group-hover:text-primary transition-colors line-clamp-1">
                     {tpl.name}
                   </h3>
-                  <p className="text-xs text-muted-foreground mb-3 line-clamp-2">
+                  <p className="text-xs text-muted-foreground mb-2.5 line-clamp-2">
                     {tpl.description}
                   </p>
-                  <pre className="text-xs text-muted-foreground/80 font-mono bg-muted/50 rounded-md p-2 line-clamp-2 overflow-hidden whitespace-pre-wrap break-words">
-                    {tpl.preview}
-                  </pre>
+                  <div className="flex flex-wrap gap-1">
+                    {tpl.tags.slice(0, 3).map((tag) => (
+                      <span
+                        key={tag}
+                        className="rounded-full px-1.5 py-0.5 text-[10px] font-medium bg-muted text-muted-foreground"
+                      >
+                        {tag}
+                      </span>
+                    ))}
+                  </div>
                 </button>
               );
             })}
@@ -976,11 +1021,16 @@ function TemplatePicker({ onSelect }: TemplatePickerProps) {
             </div>
             <Button
               onClick={() => onSelect(selected)}
+              disabled={isCreating}
               className="gap-2 shrink-0"
               data-ocid="template-use-btn"
             >
-              Use Template
-              <ArrowRight className="h-4 w-4" />
+              {isCreating ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <ArrowRight className="h-4 w-4" />
+              )}
+              {isCreating ? "Creating…" : "Use Template"}
             </Button>
           </div>
         </div>
@@ -998,13 +1048,6 @@ export default function NoteNewPage() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
 
-  const [pickerDone, setPickerDone] = useState(false);
-  const [title, setTitle] = useState("");
-  const [content, setContent] = useState("");
-  const [tagInput, setTagInput] = useState("");
-  const [tags, setTags] = useState<string[]>([]);
-  const [crossLinks, setCrossLinks] = useState<CrossLink[]>([]);
-
   const { mutate: createNote, isPending } = useMutation({
     mutationFn: async (input: NoteInput) => {
       if (!actor) throw new Error("Not connected");
@@ -1012,214 +1055,55 @@ export default function NoteNewPage() {
       if (result.__kind__ === "err") throw new Error(result.err);
       return result.ok;
     },
-    onSuccess: () => {
+    onSuccess: (note) => {
       queryClient.invalidateQueries({
         queryKey: ["notes", tenantId, workspaceId],
       });
-      toast.success("Note created", {
-        description: "Your note has been saved.",
+      toast.success("Note created");
+      navigate({
+        to: "/app/$workspaceId/notes/$noteId",
+        params: { workspaceId, noteId: note.id },
       });
-      navigate({ to: "/app/$workspaceId/notes", params: { workspaceId } });
     },
     onError: (err: Error) =>
       toast.error("Failed to create note", { description: err.message }),
   });
 
-  const addTags = (input: string) => {
-    const newTags = input
-      .split(",")
-      .map((t) => t.trim().toLowerCase())
-      .filter((t) => t.length > 0 && !tags.includes(t));
-    if (newTags.length > 0) setTags((prev) => [...prev, ...newTags]);
-    setTagInput("");
-  };
-
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!title.trim()) {
-      toast.error("Title is required");
-      return;
-    }
-    createNote({ title: title.trim(), content, tags, crossLinks });
-  };
-
   const handleTemplateSelect = (tpl: NoteTemplateLocal | null) => {
     if (tpl) {
-      setTitle(tpl.name);
-      setContent(tpl.content);
+      createNote({
+        title: tpl.name,
+        content: tpl.content,
+        tags: tpl.tags,
+        crossLinks: [],
+        iconEmoji: tpl.emoji,
+      });
+    } else {
+      createNote({
+        title: "Untitled",
+        content: "",
+        tags: [],
+        crossLinks: [],
+      });
     }
-    setPickerDone(true);
   };
 
-  if (!pickerDone) return <TemplatePicker onSelect={handleTemplateSelect} />;
-
   return (
-    <div className="animate-fade-in-up p-6 max-w-2xl">
-      {/* Header */}
-      <div className="flex items-center gap-3 mb-6">
+    <div className="relative">
+      <div className="absolute top-4 left-4 z-20">
         <Button
           variant="ghost"
           size="icon"
-          onClick={() => setPickerDone(false)}
-          className="shrink-0 h-8 w-8"
-          aria-label="Back to template picker"
-          data-ocid="note-back-to-templates-btn"
+          asChild
+          className="h-8 w-8"
+          aria-label="Back to notes"
         >
-          <ArrowLeft className="h-4 w-4" />
+          <Link to="/app/$workspaceId/notes" params={{ workspaceId }}>
+            <ArrowLeft className="h-4 w-4" />
+          </Link>
         </Button>
-        <div className="flex items-center gap-2">
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10">
-            <StickyNote className="h-4 w-4 text-primary" />
-          </div>
-          <div>
-            <h1 className="font-display text-lg font-bold text-foreground tracking-tight">
-              New Note
-            </h1>
-            <p className="text-xs text-muted-foreground">
-              Capture your thoughts and ideas
-            </p>
-          </div>
-        </div>
       </div>
-
-      <form onSubmit={handleSubmit} className="space-y-5" noValidate>
-        {/* Title */}
-        <div className="space-y-1.5">
-          <Label
-            htmlFor="note-title"
-            className="text-xs font-semibold uppercase tracking-wider text-muted-foreground"
-          >
-            Title <span className="text-destructive">*</span>
-          </Label>
-          <Input
-            id="note-title"
-            placeholder="Give your note a clear title…"
-            value={title}
-            onChange={(e) => setTitle(e.target.value)}
-            className="text-base font-semibold h-11 border-border/60 focus:border-primary focus:ring-1 focus:ring-primary/30"
-            autoFocus
-            required
-            data-ocid="note-title-input"
-          />
-        </div>
-
-        {/* Content */}
-        <div className="space-y-1.5">
-          <Label
-            htmlFor="note-content"
-            className="text-xs font-semibold uppercase tracking-wider text-muted-foreground"
-          >
-            Content
-          </Label>
-          <Textarea
-            id="note-content"
-            placeholder="Write your note here… plain text, bullet points, or any format you like."
-            value={content}
-            onChange={(e) => setContent(e.target.value)}
-            className="min-h-[260px] resize-y leading-relaxed font-body text-sm border-border/60 focus:border-primary focus:ring-1 focus:ring-primary/30"
-            data-ocid="note-content-input"
-          />
-          <p className="text-xs text-muted-foreground text-right">
-            {content.length} character{content.length !== 1 ? "s" : ""}
-          </p>
-        </div>
-
-        {/* Tags */}
-        <div className="space-y-1.5">
-          <Label
-            htmlFor="note-tags"
-            className="text-xs font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5"
-          >
-            <Tag className="h-3 w-3" /> Tags
-          </Label>
-          <div className="rounded-lg border border-border/60 bg-background p-3 space-y-2 focus-within:border-primary focus-within:ring-1 focus-within:ring-primary/30">
-            {tags.length > 0 && (
-              <div className="flex flex-wrap gap-1.5">
-                {tags.map((tag) => (
-                  <span
-                    key={tag}
-                    className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium bg-primary/10 text-primary"
-                  >
-                    {tag}
-                    <button
-                      type="button"
-                      onClick={() =>
-                        setTags((prev) => prev.filter((t) => t !== tag))
-                      }
-                      aria-label={`Remove tag ${tag}`}
-                      className="hover:text-destructive"
-                    >
-                      <X className="h-2.5 w-2.5" />
-                    </button>
-                  </span>
-                ))}
-              </div>
-            )}
-            <Input
-              id="note-tags"
-              placeholder="Add tags… (comma-separated, Enter to add)"
-              value={tagInput}
-              onChange={(e) => setTagInput(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter" || e.key === ",") {
-                  e.preventDefault();
-                  addTags(tagInput);
-                }
-              }}
-              onBlur={() => tagInput.trim() && addTags(tagInput)}
-              className="border-0 px-0 h-7 focus-visible:ring-0 shadow-none bg-transparent text-sm"
-              data-ocid="note-tags-input"
-            />
-          </div>
-          <p className="text-xs text-muted-foreground">
-            Press Enter or comma to add a tag
-          </p>
-        </div>
-
-        {/* Cross-links */}
-        <div className="space-y-1.5">
-          <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-            Cross-links
-          </Label>
-          <div className="rounded-lg border border-border/60 bg-background p-3.5">
-            <p className="text-xs text-muted-foreground mb-3">
-              Link this note to other entities in your workspace
-            </p>
-            <CrossLinkPicker
-              tenantId={tenantId}
-              value={crossLinks}
-              onChange={setCrossLinks}
-            />
-          </div>
-        </div>
-
-        {/* Actions */}
-        <div className="flex items-center gap-3 pt-2 border-t border-border/40">
-          <Button
-            type="submit"
-            disabled={!title.trim() || isPending}
-            className="gap-2 active-press"
-            data-ocid="note-save-btn"
-          >
-            {isPending ? (
-              <Loader2 className="h-4 w-4 animate-spin" />
-            ) : (
-              <Save className="h-4 w-4" />
-            )}
-            {isPending ? "Saving…" : "Save Note"}
-          </Button>
-          <Button
-            type="button"
-            variant="outline"
-            asChild
-            data-ocid="note-cancel-btn"
-          >
-            <Link to="/app/$workspaceId/notes" params={{ workspaceId }}>
-              Cancel
-            </Link>
-          </Button>
-        </div>
-      </form>
+      <TemplatePicker onSelect={handleTemplateSelect} isCreating={isPending} />
     </div>
   );
 }

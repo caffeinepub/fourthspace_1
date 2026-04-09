@@ -29,10 +29,12 @@ function TreeItem({
   node,
   depth,
   currentPageId,
+  workspaceId,
 }: {
   node: TreeNode;
   depth: number;
   currentPageId?: string;
+  workspaceId: string;
 }) {
   const [expanded, setExpanded] = useState(false);
   const isActive = node.id === currentPageId;
@@ -62,8 +64,8 @@ function TreeItem({
           <span className="w-3.5 shrink-0" />
         )}
         <Link
-          to="/app/pages/$pageId"
-          params={{ pageId: node.id }}
+          to="/app/$workspaceId/pages/$pageId"
+          params={{ workspaceId, pageId: node.id }}
           className="flex items-center gap-2 flex-1 min-w-0"
           data-ocid={`sidebar-page-${node.id}`}
         >
@@ -81,6 +83,7 @@ function TreeItem({
                 node={child}
                 depth={depth + 1}
                 currentPageId={currentPageId}
+                workspaceId={workspaceId}
               />
             ))}
         </ul>
@@ -93,12 +96,14 @@ interface PageSidebarProps {
   pages: PageNode[];
   currentPageId?: string;
   tenantId: string;
+  workspaceId: string;
 }
 
 export function PageSidebar({
   pages,
   currentPageId,
   tenantId: _tenantId,
+  workspaceId,
 }: PageSidebarProps) {
   const navigate = useNavigate();
   const tree = buildTree(pages);
@@ -114,7 +119,12 @@ export function PageSidebar({
         </div>
         <button
           type="button"
-          onClick={() => navigate({ to: "/app/pages/new" })}
+          onClick={() =>
+            navigate({
+              to: "/app/$workspaceId/pages/new",
+              params: { workspaceId },
+            })
+          }
           className="rounded-md p-1.5 text-muted-foreground hover:text-foreground hover:bg-muted transition-colors duration-150"
           aria-label="New page"
           data-ocid="sidebar-new-page-btn"
@@ -129,7 +139,12 @@ export function PageSidebar({
             <p className="text-xs text-muted-foreground">No pages yet</p>
             <button
               type="button"
-              onClick={() => navigate({ to: "/app/pages/new" })}
+              onClick={() =>
+                navigate({
+                  to: "/app/$workspaceId/pages/new",
+                  params: { workspaceId },
+                })
+              }
               className="mt-2 text-xs text-primary hover:underline"
             >
               Create first page
@@ -143,6 +158,7 @@ export function PageSidebar({
                 node={node}
                 depth={0}
                 currentPageId={currentPageId}
+                workspaceId={workspaceId}
               />
             ))}
           </ul>

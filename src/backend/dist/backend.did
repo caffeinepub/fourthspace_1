@@ -1303,6 +1303,8 @@ type Deduction =
  };
 type DashboardStats = 
  record {
+   activeProjectCount: nat;
+   completedTaskCount: nat;
    goalCount: nat;
    memberCount: nat;
    noteCount: nat;

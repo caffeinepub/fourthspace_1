@@ -49,7 +49,7 @@ import {
   type TaskInput,
   TaskPriority,
   TaskStatus,
-  type TimeEntry,
+  type TimeEntryLocal,
   type WorkspaceMember,
 } from "../../types";
 
@@ -188,7 +188,7 @@ function CollapsibleSection({
 
 // ─── Main Component ───────────────────────────────────────────────────────────
 
-const MOCK_TIME_ENTRIES: TimeEntry[] = [];
+const MOCK_TIME_ENTRIES: TimeEntryLocal[] = [];
 
 export default function TaskDetailPage() {
   const { workspaceId, projectId, taskId } = useParams({
@@ -240,7 +240,7 @@ export default function TaskDetailPage() {
   const [assigneeId, setAssigneeId] = useState<string>("none");
   const [crossLinks, setCrossLinks] = useState<CrossLink[]>([]);
   const [isDirty, setIsDirty] = useState(false);
-  const [timeEntries, setTimeEntries] = useState<TimeEntry[]>(
+  const [timeEntries, setTimeEntries] = useState<TimeEntryLocal[]>(
     isNew ? [] : MOCK_TIME_ENTRIES,
   );
 
@@ -448,9 +448,9 @@ export default function TaskDetailPage() {
   }
 
   function handleTimerStart(
-    entry: Omit<TimeEntry, "id" | "createdAt" | "updatedAt">,
+    entry: Omit<TimeEntryLocal, "id" | "createdAt" | "updatedAt">,
   ) {
-    const newEntry: TimeEntry = {
+    const newEntry: TimeEntryLocal = {
       ...entry,
       id: `te-${Date.now()}`,
       createdAt: Date.now(),

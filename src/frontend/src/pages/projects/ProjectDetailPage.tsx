@@ -849,44 +849,101 @@ export default function ProjectDetailPage() {
 
       {/* View Content */}
       <div
-        className={`px-4 sm:px-6 md:px-8 pt-5 pb-5 ${view === "kanban" ? "overflow-x-auto" : ""}`}
+        className={`px-4 sm:px-6 md:px-8 pt-5 pb-5 ${view === "kanban" ? "md:overflow-x-auto" : ""}`}
       >
         {view === "kanban" && (
-          <div
-            className="flex gap-3 sm:gap-4 pb-4"
-            style={{ minWidth: "max-content" }}
-          >
-            {COLUMNS.map((col) => (
-              <KanbanColumn
-                key={col.status}
-                status={col.status}
-                label={col.label}
-                icon={col.icon}
-                color={col.color}
-                bg={col.bg}
-                border={col.border}
-                tasks={tasksWithStatus.filter((t) => t.status === col.status)}
-                projectId={projectId}
-                workspaceId={workspaceId}
-                members={members}
-                subtaskCounts={subtaskCounts}
-                isDragOver={dragOverColumn === col.status}
-                onDragOver={handleDragOver}
-                onDragLeave={handleDragLeave}
-                onDrop={handleDrop}
-                onDragStart={handleDragStart}
-              />
-            ))}
-          </div>
+          <>
+            {/* Mobile: vertical list view */}
+            <div className="md:hidden space-y-4 pb-4">
+              {COLUMNS.map((col) => {
+                const colTasks = tasksWithStatus.filter(
+                  (t) => t.status === col.status,
+                );
+                if (colTasks.length === 0) return null;
+                return (
+                  <div key={col.status}>
+                    <div
+                      className={`flex items-center gap-1.5 font-semibold text-sm mb-2 ${col.color}`}
+                    >
+                      {col.icon} {col.label}
+                      <span className="ml-1 text-xs text-muted-foreground bg-muted px-1.5 py-0.5 rounded-full font-normal">
+                        {colTasks.length}
+                      </span>
+                    </div>
+                    <div className="space-y-2">
+                      {colTasks.map((task) => (
+                        <TaskCard
+                          key={task.id}
+                          task={task}
+                          projectId={projectId}
+                          workspaceId={workspaceId}
+                          members={members}
+                          subtaskCounts={subtaskCounts}
+                          onDragStart={handleDragStart}
+                        />
+                      ))}
+                    </div>
+                  </div>
+                );
+              })}
+              {tasksWithStatus.length === 0 && (
+                <div className="flex flex-col items-center justify-center py-16 gap-3 rounded-2xl border border-dashed border-border">
+                  <p className="text-sm text-muted-foreground">No tasks yet</p>
+                  <Link
+                    to="/app/$workspaceId/projects/$projectId/tasks/$taskId"
+                    params={{ workspaceId, projectId, taskId: "new" }}
+                    className="text-xs text-primary hover:underline flex items-center gap-1"
+                  >
+                    <Plus className="h-3.5 w-3.5" /> Add first task
+                  </Link>
+                </div>
+              )}
+            </div>
+            {/* Desktop: kanban columns */}
+            <div
+              className="hidden md:flex gap-3 sm:gap-4 pb-4"
+              style={{ minWidth: "max-content" }}
+            >
+              {COLUMNS.map((col) => (
+                <KanbanColumn
+                  key={col.status}
+                  status={col.status}
+                  label={col.label}
+                  icon={col.icon}
+                  color={col.color}
+                  bg={col.bg}
+                  border={col.border}
+                  tasks={tasksWithStatus.filter((t) => t.status === col.status)}
+                  projectId={projectId}
+                  workspaceId={workspaceId}
+                  members={members}
+                  subtaskCounts={subtaskCounts}
+                  isDragOver={dragOverColumn === col.status}
+                  onDragOver={handleDragOver}
+                  onDragLeave={handleDragLeave}
+                  onDrop={handleDrop}
+                  onDragStart={handleDragStart}
+                />
+              ))}
+            </div>
+          </>
         )}
         {view === "gantt" && (
           <GanttView tasks={tasksWithStatus} projectId={projectId} />
         )}
         {view === "timeline" && (
-          <TimelineView tasks={tasksWithStatus} projectId={projectId} />
+          <TimelineView
+            tasks={tasksWithStatus}
+            projectId={projectId}
+            workspaceId={workspaceId}
+          />
         )}
         {view === "table" && (
-          <TableView tasks={tasksWithStatus} projectId={projectId} />
+          <TableView
+            tasks={tasksWithStatus}
+            projectId={projectId}
+            workspaceId={workspaceId}
+          />
         )}
         {view === "workload" && (
           <WorkloadView tasks={tasksWithStatus} projectId={projectId} />

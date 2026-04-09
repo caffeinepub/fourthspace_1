@@ -287,8 +287,43 @@ export default function SettingsPage() {
   const [deleteConfirmText, setDeleteConfirmText] = useState("");
 
   // Workspace name/desc local edits
+  const [workspaceName, setWorkspaceName] = useState(
+    activeWorkspace?.name ?? "",
+  );
+  const [workspaceDescription, setWorkspaceDescription] = useState(
+    lsGet(`fs_ws_desc_${activeWorkspace?.id ?? ""}`, ""),
+  );
+  // Sync workspaceName when activeWorkspace loads
+  useEffect(() => {
+    if (activeWorkspace?.name) {
+      setWorkspaceName((prev) => (prev === "" ? activeWorkspace.name : prev));
+    }
+  }, [activeWorkspace]);
+
+  const workspaceSaveMutation = useMutation({
+    mutationFn: async () => {
+      if (!actor || !activeWorkspace) throw new Error("Not connected");
+      const res = await actor.updateWorkspace(
+        tenantId,
+        activeWorkspace.id,
+        workspaceName,
+      );
+      if (res.__kind__ === "err") throw new Error(res.err);
+      // description is persisted locally since the backend only stores name
+      lsSet(`fs_ws_desc_${activeWorkspace.id}`, workspaceDescription);
+      return res.ok;
+    },
+    onSuccess: () => {
+      toast.success("Workspace settings saved");
+      queryClient.invalidateQueries({ queryKey: ["workspaces"] });
+    },
+    onError: (err: Error) => {
+      toast.error(err.message || "Failed to save workspace settings");
+    },
+  });
+
   function handleWorkspaceSave() {
-    toast.success("Workspace settings saved");
+    workspaceSaveMutation.mutate();
   }
 
   // Apply accent color + font size to :root on load and change
@@ -1148,7 +1183,8 @@ export default function SettingsPage() {
                       Workspace Name
                     </Label>
                     <Input
-                      defaultValue={activeWorkspace?.name ?? ""}
+                      value={workspaceName}
+                      onChange={(e) => setWorkspaceName(e.target.value)}
                       placeholder="My Workspace"
                       className="h-8 text-xs"
                       data-ocid="workspace-name-input"
@@ -1157,6 +1193,8 @@ export default function SettingsPage() {
                   <div className="space-y-1.5">
                     <Label className="text-xs font-medium">Description</Label>
                     <Input
+                      value={workspaceDescription}
+                      onChange={(e) => setWorkspaceDescription(e.target.value)}
                       placeholder="What is this workspace for?"
                       className="h-8 text-xs"
                       data-ocid="workspace-desc-input"

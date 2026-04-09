@@ -149,7 +149,7 @@ export default function MilestonesPage() {
   return (
     <div className="flex flex-col h-full min-h-0 overflow-y-auto">
       {/* Header */}
-      <div className="px-6 md:px-8 pt-4 pb-4 border-b border-border/60 bg-card/80 sticky top-0 z-10 backdrop-blur-subtle">
+      <div className="px-4 sm:px-6 md:px-8 pt-4 pb-4 border-b border-border/60 bg-card/80 sticky top-0 z-10 backdrop-blur-subtle">
         <div className="flex items-center gap-3">
           <Button
             variant="ghost"
@@ -197,7 +197,7 @@ export default function MilestonesPage() {
         </div>
       </div>
 
-      <div className="px-6 md:px-8 py-6 space-y-6">
+      <div className="px-4 sm:px-6 md:px-8 py-6 space-y-6">
         {/* Create form */}
         {showForm && (
           <div

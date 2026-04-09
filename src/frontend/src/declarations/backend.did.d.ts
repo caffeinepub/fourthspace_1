@@ -328,10 +328,12 @@ export interface DailyTimesheetEntry {
 export interface DashboardStats {
   'memberCount' : bigint,
   'goalCount' : bigint,
+  'completedTaskCount' : bigint,
   'noteCount' : bigint,
   'taskCount' : bigint,
   'payrollTotal' : number,
   'projectCount' : bigint,
+  'activeProjectCount' : bigint,
   'walletBalance' : bigint,
 }
 export interface Deduction {

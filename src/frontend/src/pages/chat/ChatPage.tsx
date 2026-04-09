@@ -308,6 +308,7 @@ function CreateChannelForm({
   const { actor } = useBackend();
   const tenantId = getTenantId();
   const queryClient = useQueryClient();
+  const navigate = useNavigate();
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [isPublic, setIsPublic] = useState(true);
@@ -319,12 +320,16 @@ function CreateChannelForm({
       if (result.__kind__ === "err") throw new Error(result.err);
       return result.ok;
     },
-    onSuccess: () => {
+    onSuccess: (channel) => {
       queryClient.invalidateQueries({
         queryKey: ["channels", tenantId, workspaceId],
       });
       toast.success("Channel created");
       onClose();
+      void navigate({
+        to: "/app/$workspaceId/chat/$channelId",
+        params: { workspaceId, channelId: channel.id },
+      });
     },
     onError: (err: Error) => toast.error(err.message),
   });
@@ -445,7 +450,9 @@ const UNREAD_POLL_MS = 5_000;
 const CHANNEL_POLL_MS = 5_000;
 
 export default function ChatPage() {
-  const { workspaceId } = useParams({ from: "/app/$workspaceId/chat" });
+  const { workspaceId } = useParams({ strict: false }) as {
+    workspaceId: string;
+  };
   const { actor, isFetching } = useBackend();
   const { identity } = useInternetIdentity();
   const tenantId = getTenantId();
@@ -824,7 +831,7 @@ export default function ChatPage() {
         </div>
       )}
 
-      {/* Direct Messages section — only show if there are other members */}
+      {/* Direct Messages section — show if there are other members */}
       {dmMembers.length > 0 && (
         <section data-ocid="dm-section">
           <div className="flex items-center gap-2 mb-2.5">
@@ -855,6 +862,21 @@ export default function ChatPage() {
             })}
           </div>
         </section>
+      )}
+      {/* Show "New DM" prompt when there are no other workspace members yet */}
+      {members && members.length <= 1 && (
+        <div
+          className="flex flex-col items-center justify-center rounded-xl border border-dashed border-border bg-muted/20 py-10 text-center"
+          data-ocid="dm-empty"
+        >
+          <MessageCircle className="h-8 w-8 text-muted-foreground/40 mb-2" />
+          <p className="text-sm font-medium text-foreground">
+            No teammates yet
+          </p>
+          <p className="text-xs text-muted-foreground mt-1">
+            Invite members to your workspace to start direct conversations.
+          </p>
+        </div>
       )}
     </div>
   );

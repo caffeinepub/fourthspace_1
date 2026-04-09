@@ -70,7 +70,7 @@ export function useChannelPins(
 export function useUnreadCounts(tenantId: string, workspaceId: string) {
   const { actor, isFetching } = useBackend();
   return useQuery({
-    queryKey: ["unread-counts", tenantId, workspaceId],
+    queryKey: ["unreadCounts", tenantId, workspaceId],
     queryFn: async () => {
       if (!actor) return [] as [string, bigint][];
       return actor.getUnreadCounts(tenantId, workspaceId);
@@ -310,7 +310,7 @@ export function useMarkChannelRead() {
     },
     onSuccess: (_data, vars) => {
       qc.invalidateQueries({
-        queryKey: ["unread-counts", vars.tenantId, vars.workspaceId],
+        queryKey: ["unreadCounts", vars.tenantId, vars.workspaceId],
       });
     },
   });

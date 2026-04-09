@@ -52,6 +52,10 @@ export type {
   RecurringTaskInput,
   TaskTemplate,
   TaskTemplateInput,
+  // Time tracking
+  TimeEntry,
+  TimeEntryInput,
+  TimeReport,
   // Pages / block editor
   Block,
   PageNode,
@@ -262,10 +266,11 @@ export interface Integration {
   updatedAt: number;
 }
 
-// ---- Time Tracking Types ----
+// ---- Time Tracking UI types ----
 export type TimeEntryStatus = "running" | "stopped";
 
-export interface TimeEntry {
+/** UI-only time entry used by TimeTracker widget (client-side timer state) */
+export interface TimeEntryLocal {
   id: string;
   tenantId: string;
   userId: string;
@@ -279,19 +284,6 @@ export interface TimeEntry {
   tags: string[];
   createdAt: number;
   updatedAt: number;
-}
-
-export interface TimeReport {
-  id: string;
-  tenantId: string;
-  name: string;
-  projectId?: string;
-  userId?: string;
-  startDate: number;
-  endDate: number;
-  totalSeconds: number;
-  entries: TimeEntry[];
-  generatedAt: number;
 }
 
 // ---- Guest / External User Types ----

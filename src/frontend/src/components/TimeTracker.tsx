@@ -3,14 +3,16 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Clock, Pause, Play, Timer } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { TimeEntry } from "../types";
+import type { TimeEntryLocal } from "../types";
 
 interface TimeTrackerProps {
   taskId: string;
   projectId: string;
-  entries: TimeEntry[];
+  entries: TimeEntryLocal[];
   isLoading?: boolean;
-  onStart?: (entry: Omit<TimeEntry, "id" | "createdAt" | "updatedAt">) => void;
+  onStart?: (
+    entry: Omit<TimeEntryLocal, "id" | "createdAt" | "updatedAt">,
+  ) => void;
   onStop?: (entryId: string, durationSeconds: number) => void;
 }
 

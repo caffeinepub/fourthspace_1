@@ -31,7 +31,7 @@ import { toast } from "sonner";
 import { EmojiPicker } from "../../components/chat/EmojiPicker";
 import { useBackend } from "../../hooks/useBackend";
 import { getTenantId } from "../../hooks/useWorkspace";
-import type { Channel, Message, Reaction } from "../../types";
+import type { Channel, Message, Reaction, UserId } from "../../types";
 import { clearDraft, getDraft, saveDraft } from "../../utils/chatDrafts";
 import {
   applyBold,
@@ -558,7 +558,6 @@ export default function ChannelPage() {
   const hasDraft = getDraft(channelId).length > 0;
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
   const bottomRef = useRef<HTMLDivElement | null>(null);
-  const scrollAreaRef = useRef<HTMLDivElement | null>(null);
 
   // ── Queries ──
 
@@ -654,17 +653,59 @@ export default function ChannelPage() {
 
   // ── Mutations ──
 
+  // Capture pending send content to avoid closure issues with optimistic updates
+  const pendingSendRef = useRef<{ content: string; replyToId?: string } | null>(
+    null,
+  );
+
   const sendMutation = useMutation({
     mutationFn: async () => {
       if (!actor) throw new Error("Not connected");
+      const payload = pendingSendRef.current;
+      if (!payload) throw new Error("No message content");
       const result = await actor.sendMessage(tenantId, workspaceId, {
-        content: messageText.trim(),
+        content: payload.content,
         channelId,
-        replyToId: replyTo?.id,
+        replyToId: payload.replyToId,
         crossLinks: [],
       });
       if (result.__kind__ === "err") throw new Error(result.err);
       return result.ok;
+    },
+    onMutate: async () => {
+      const optimisticContent = pendingSendRef.current?.content ?? "";
+      const optimisticReplyTo = pendingSendRef.current?.replyToId;
+      await queryClient.cancelQueries({
+        queryKey: ["messages", tenantId, workspaceId, channelId],
+      });
+      const previous = queryClient.getQueryData<Message[]>([
+        "messages",
+        tenantId,
+        workspaceId,
+        channelId,
+      ]);
+      const optimistic: Message = {
+        id: `optimistic-${Date.now()}`,
+        content: optimisticContent,
+        channelId,
+        senderId: { toString: () => myPrincipal } as UserId,
+        createdAt: BigInt(Date.now()) * 1_000_000n,
+        updatedAt: BigInt(Date.now()) * 1_000_000n,
+        tenantId,
+        workspaceId,
+        crossLinks: [],
+        replyToId: optimisticReplyTo,
+        reactions: [],
+        threadCount: BigInt(0),
+      };
+      queryClient.setQueryData<Message[]>(
+        ["messages", tenantId, workspaceId, channelId],
+        (old) => [...(old ?? []), optimistic],
+      );
+      requestAnimationFrame(() => {
+        bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+      });
+      return { previous };
     },
     onSuccess: () => {
       queryClient.invalidateQueries({
@@ -673,11 +714,16 @@ export default function ChannelPage() {
       queryClient.invalidateQueries({
         queryKey: ["unreadCounts", tenantId, workspaceId],
       });
-      clearDraft(channelId);
-      setMessageText("");
-      setReplyTo(null);
     },
-    onError: (err: Error) => toast.error(err.message),
+    onError: (err: Error, _vars, context) => {
+      if (context?.previous) {
+        queryClient.setQueryData(
+          ["messages", tenantId, workspaceId, channelId],
+          context.previous,
+        );
+      }
+      toast.error(err.message);
+    },
   });
 
   const reactionMutation = useMutation({
@@ -770,6 +816,13 @@ export default function ChannelPage() {
 
   function handleSend() {
     if (!messageText.trim()) return;
+    pendingSendRef.current = {
+      content: messageText.trim(),
+      replyToId: replyTo?.id,
+    };
+    clearDraft(channelId);
+    setMessageText("");
+    setReplyTo(null);
     sendMutation.mutate();
   }
 
@@ -833,11 +886,7 @@ export default function ChannelPage() {
         </div>
 
         {/* Messages */}
-        <ScrollArea
-          className="flex-1 py-2"
-          data-ocid="messages-list"
-          ref={scrollAreaRef}
-        >
+        <ScrollArea className="flex-1 py-2" data-ocid="messages-list">
           {isLoading ? (
             <div className="space-y-3 px-4 py-4">
               {[1, 2, 3, 4].map((n) => (

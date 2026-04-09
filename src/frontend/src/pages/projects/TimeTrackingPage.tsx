@@ -11,8 +11,10 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Skeleton } from "@/components/ui/skeleton";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useParams } from "@tanstack/react-router";
 import {
   ArrowLeft,
@@ -25,111 +27,35 @@ import {
 } from "lucide-react";
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
-import type { TimeEntry } from "../../types";
+import { useBackend } from "../../hooks/useBackend";
+import { useWorkspace } from "../../hooks/useWorkspace";
+import type { Task, TimeEntry } from "../../types";
 
-const MOCK_TASKS = [
-  { id: "t1", title: "Design system setup" },
-  { id: "t2", title: "API integration" },
-  { id: "t3", title: "Sprint planning" },
-  { id: "t4", title: "Code review" },
-];
-
-const NOW = Date.now();
-const DAY = 86400000;
-
-const INITIAL_ENTRIES: TimeEntry[] = [
-  {
-    id: "e1",
-    tenantId: "t",
-    userId: "u1",
-    projectId: "p1",
-    taskId: "t1",
-    description: "Initial design tokens and component scaffolding",
-    startedAt: NOW - DAY - 7200000,
-    stoppedAt: NOW - DAY - 4500000,
-    durationSeconds: 9000,
-    status: "stopped",
-    tags: [],
-    createdAt: NOW - DAY - 7200000,
-    updatedAt: NOW - DAY - 4500000,
-  },
-  {
-    id: "e2",
-    tenantId: "t",
-    userId: "u2",
-    projectId: "p1",
-    taskId: "t2",
-    description: "REST endpoint wiring and error handling",
-    startedAt: NOW - DAY - 3600000,
-    stoppedAt: NOW - DAY - 1800000,
-    durationSeconds: 5400,
-    status: "stopped",
-    tags: [],
-    createdAt: NOW - DAY - 3600000,
-    updatedAt: NOW - DAY - 1800000,
-  },
-  {
-    id: "e3",
-    tenantId: "t",
-    userId: "u1",
-    projectId: "p1",
-    taskId: "t3",
-    description: "Sprint 14 planning session",
-    startedAt: NOW - 7200000,
-    stoppedAt: NOW - 3600000,
-    durationSeconds: 3600,
-    status: "stopped",
-    tags: [],
-    createdAt: NOW - 7200000,
-    updatedAt: NOW - 3600000,
-  },
-  {
-    id: "e4",
-    tenantId: "t",
-    userId: "u3",
-    projectId: "p1",
-    taskId: "t4",
-    description: "PR review — auth module",
-    startedAt: NOW - 5400000,
-    stoppedAt: NOW - 3000000,
-    durationSeconds: 2700,
-    status: "stopped",
-    tags: ["billable"],
-    createdAt: NOW - 5400000,
-    updatedAt: NOW - 3000000,
-  },
-];
-
-const MOCK_USERS: Record<string, string> = {
-  u1: "Alex Martinez",
-  u2: "Sam Kim",
-  u3: "Jordan Lee",
-};
-
-function formatDurationHHMM(seconds: number): string {
-  const h = Math.floor(seconds / 3600);
-  const m = Math.floor((seconds % 3600) / 60);
+function formatDurationHHMM(minutes: number): string {
+  const h = Math.floor(minutes / 60);
+  const m = Math.floor(minutes % 60);
   return `${h.toString().padStart(2, "0")}:${m.toString().padStart(2, "0")}`;
 }
 
-function formatDate(ts: number): string {
-  return new Date(ts).toLocaleDateString("en-US", {
+function formatDate(ts: bigint): string {
+  return new Date(Number(ts) / 1_000_000).toLocaleDateString("en-US", {
     month: "short",
     day: "numeric",
     year: "numeric",
   });
 }
 
-function exportToCSV(entries: TimeEntry[], tasks: typeof MOCK_TASKS) {
-  const header = "Task,User,Date,Duration,Notes,Billable\n";
+function exportToCSV(entries: TimeEntry[], tasks: Task[]) {
+  const header = "Task,Date,Duration,Notes,Billable\n";
   const rows = entries.map((e) => {
-    const task = tasks.find((t) => t.id === e.taskId)?.title ?? e.taskId ?? "";
-    const user = MOCK_USERS[e.userId] ?? e.userId;
-    const date = formatDate(e.startedAt);
-    const dur = formatDurationHHMM(e.durationSeconds);
-    const notes = e.description.replace(/,/g, ";");
-    const billable = e.tags.includes("billable") ? "Yes" : "No";
-    return `"${task}","${user}","${date}","${dur}","${notes}","${billable}"`;
+    const task = e.taskId
+      ? (tasks.find((t) => t.id === e.taskId)?.title ?? e.taskId)
+      : "No task";
+    const date = formatDate(e.startTime);
+    const dur = formatDurationHHMM(Number(e.durationMinutes));
+    const notes = e.notes.replace(/,/g, ";");
+    const billable = e.billable ? "Yes" : "No";
+    return `"${task}","${date}","${dur}","${notes}","${billable}"`;
   });
   const csv = header + rows.join("\n");
   const blob = new Blob([csv], { type: "text/csv" });
@@ -141,130 +67,132 @@ function exportToCSV(entries: TimeEntry[], tasks: typeof MOCK_TASKS) {
   URL.revokeObjectURL(url);
 }
 
+const DAY_MS = 86_400_000;
+
 export default function TimeTrackingPage() {
   const { workspaceId, projectId } = useParams({
     from: "/app/$workspaceId/projects/$projectId/time-tracking",
   });
+  const { actor, isFetching } = useBackend();
+  const { tenantId } = useWorkspace();
+  const queryClient = useQueryClient();
 
-  const [entries, setEntries] = useState<TimeEntry[]>(INITIAL_ENTRIES);
-  const [filterUser, setFilterUser] = useState("all");
   const [filterTask, setFilterTask] = useState("all");
   const [filterFrom, setFilterFrom] = useState("");
   const [filterTo, setFilterTo] = useState("");
 
   const [showForm, setShowForm] = useState(false);
-  const [formTask, setFormTask] = useState("");
-  const [formStart, setFormStart] = useState("");
-  const [formEnd, setFormEnd] = useState("");
+  const [formTask, setFormTask] = useState("none");
   const [formDuration, setFormDuration] = useState("");
   const [formNotes, setFormNotes] = useState("");
   const [formBillable, setFormBillable] = useState(false);
-  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const filtered = useMemo(() => {
-    return entries.filter((e) => {
-      if (filterUser !== "all" && e.userId !== filterUser) return false;
-      if (filterTask !== "all" && e.taskId !== filterTask) return false;
-      if (filterFrom) {
-        const from = new Date(filterFrom).getTime();
-        if (e.startedAt < from) return false;
-      }
-      if (filterTo) {
-        const to = new Date(filterTo).getTime() + DAY;
-        if (e.startedAt > to) return false;
-      }
-      return true;
-    });
-  }, [entries, filterUser, filterTask, filterFrom, filterTo]);
+  const { data: tasks = [], isLoading: tasksLoading } = useQuery<Task[]>({
+    queryKey: ["tasks", tenantId, workspaceId, projectId],
+    queryFn: async () => {
+      if (!actor) return [];
+      return actor.listTasks(tenantId, workspaceId, projectId);
+    },
+    enabled: !!actor && !isFetching,
+  });
 
-  const totalSeconds = filtered.reduce((a, e) => a + e.durationSeconds, 0);
-  const billableSeconds = filtered
-    .filter((e) => e.tags.includes("billable"))
-    .reduce((a, e) => a + e.durationSeconds, 0);
+  const { data: entries = [], isLoading: entriesLoading } = useQuery<
+    TimeEntry[]
+  >({
+    queryKey: ["timeEntries", tenantId, workspaceId, projectId],
+    queryFn: async () => {
+      if (!actor) return [];
+      return actor.getProjectTimeEntries(tenantId, workspaceId, projectId);
+    },
+    enabled: !!actor && !isFetching,
+  });
 
-  function handleDelete(id: string) {
-    setEntries((prev) => prev.filter((e) => e.id !== id));
-    toast.success("Entry deleted");
-  }
-
-  function handleBillableToggle(id: string, checked: boolean) {
-    setEntries((prev) =>
-      prev.map((e) =>
-        e.id === id
-          ? {
-              ...e,
-              tags: checked
-                ? [...e.tags.filter((t) => t !== "billable"), "billable"]
-                : e.tags.filter((t) => t !== "billable"),
-            }
-          : e,
-      ),
-    );
-  }
-
-  function handleAddEntry() {
-    if (!formTask) {
-      toast.error("Please select a task");
-      return;
-    }
-    let durationSeconds = 0;
-    let startedAt = Date.now();
-    let stoppedAt = Date.now();
-    if (formStart && formEnd) {
-      const start = new Date(formStart).getTime();
-      const end = new Date(formEnd).getTime();
-      if (end <= start) {
-        toast.error("End time must be after start time");
-        return;
-      }
-      startedAt = start;
-      stoppedAt = end;
-      durationSeconds = Math.floor((end - start) / 1000);
-    } else if (formDuration) {
+  const createMutation = useMutation({
+    mutationFn: async () => {
+      if (!actor) throw new Error("Not connected");
+      if (!formDuration) throw new Error("Provide duration (HH:MM)");
       const [h, m] = formDuration.split(":").map(Number);
-      durationSeconds = (h || 0) * 3600 + (m || 0) * 60;
-    } else {
-      toast.error("Provide start/end time or duration (HH:MM)");
-      return;
-    }
-    setIsSubmitting(true);
-    setTimeout(() => {
-      const newEntry: TimeEntry = {
-        id: `e${Date.now()}`,
-        tenantId: "t",
-        userId: "u1",
+      const minutes = (h || 0) * 60 + (m || 0);
+      if (minutes <= 0) throw new Error("Duration must be greater than zero");
+      const r = await actor.createTimeEntry(tenantId, workspaceId, {
         projectId,
-        taskId: formTask,
-        description: formNotes,
-        startedAt,
-        stoppedAt,
-        durationSeconds,
-        status: "stopped",
-        tags: formBillable ? ["billable"] : [],
-        createdAt: Date.now(),
-        updatedAt: Date.now(),
-      };
-      setEntries((prev) => [newEntry, ...prev]);
-      setFormTask("");
-      setFormStart("");
-      setFormEnd("");
+        taskId: formTask !== "none" ? formTask : undefined,
+        startTime: BigInt(Date.now() * 1_000_000),
+        endTime: undefined,
+        durationMinutes: BigInt(minutes),
+        notes: formNotes,
+        billable: formBillable,
+      });
+      if (r.__kind__ === "err") throw new Error(r.err);
+      return r.ok;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({
+        queryKey: ["timeEntries", tenantId, workspaceId, projectId],
+      });
+      setFormTask("none");
       setFormDuration("");
       setFormNotes("");
       setFormBillable(false);
       setShowForm(false);
-      setIsSubmitting(false);
-      toast.success("Time entry added");
-    }, 400);
-  }
+      toast.success("Time entry logged");
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: async (id: string) => {
+      if (!actor) throw new Error("Not connected");
+      const r = await actor.deleteTimeEntry(tenantId, workspaceId, id);
+      if (r.__kind__ === "err") throw new Error(r.err);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({
+        queryKey: ["timeEntries", tenantId, workspaceId, projectId],
+      });
+      toast.success("Entry deleted");
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  const filtered = useMemo(() => {
+    return entries.filter((e) => {
+      if (filterTask !== "all" && e.taskId !== filterTask) return false;
+      if (filterFrom) {
+        const from = BigInt(new Date(filterFrom).getTime() * 1_000_000);
+        if (e.startTime < from) return false;
+      }
+      if (filterTo) {
+        const to = BigInt((new Date(filterTo).getTime() + DAY_MS) * 1_000_000);
+        if (e.startTime > to) return false;
+      }
+      return true;
+    });
+  }, [entries, filterTask, filterFrom, filterTo]);
+
+  const totalMinutes = filtered.reduce(
+    (a, e) => a + Number(e.durationMinutes),
+    0,
+  );
+  const billableMinutes = filtered
+    .filter((e) => e.billable)
+    .reduce((a, e) => a + Number(e.durationMinutes), 0);
+
+  const isLoading = tasksLoading || entriesLoading;
 
   return (
     <div
-      className="animate-fade-in-up p-6 space-y-5"
+      className="animate-fade-in-up p-4 sm:p-6 space-y-5 pb-20 md:pb-6"
       data-ocid="time-tracking-page"
     >
       {/* Header */}
       <div className="flex items-center gap-3">
-        <Button variant="ghost" size="icon" asChild className="h-8 w-8">
+        <Button
+          variant="ghost"
+          size="icon"
+          asChild
+          className="h-8 w-8 min-h-[44px] min-w-[44px]"
+        >
           <Link
             to="/app/$workspaceId/projects/$projectId"
             params={{ workspaceId, projectId }}
@@ -273,10 +201,10 @@ export default function TimeTrackingPage() {
           </Link>
         </Button>
         <div className="flex-1 min-w-0">
-          <h1 className="text-xl font-display font-bold text-foreground tracking-tight">
+          <h1 className="text-lg font-display font-bold text-foreground tracking-tight">
             Time Tracking
           </h1>
-          <p className="text-xs text-muted-foreground">
+          <p className="text-xs text-muted-foreground hidden sm:block">
             Track and manage time spent on project tasks
           </p>
         </div>
@@ -284,10 +212,11 @@ export default function TimeTrackingPage() {
           variant="outline"
           size="sm"
           className="gap-1.5 h-8 text-xs"
-          onClick={() => exportToCSV(filtered, MOCK_TASKS)}
+          onClick={() => exportToCSV(filtered, tasks)}
           data-ocid="export-csv-btn"
         >
-          <Download className="h-3.5 w-3.5" /> Export CSV
+          <Download className="h-3.5 w-3.5" />
+          <span className="hidden sm:inline">Export CSV</span>
         </Button>
         <Button
           size="sm"
@@ -295,28 +224,29 @@ export default function TimeTrackingPage() {
           onClick={() => setShowForm((v) => !v)}
           data-ocid="add-entry-btn"
         >
-          <Plus className="h-3.5 w-3.5" /> Log Time
+          <Plus className="h-3.5 w-3.5" />
+          <span className="hidden sm:inline">Log Time</span>
         </Button>
       </div>
 
       {/* Summary cards */}
-      <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         {[
           {
             label: "Total Hours",
-            value: formatDurationHHMM(totalSeconds),
+            value: formatDurationHHMM(totalMinutes),
             icon: Clock,
             color: "text-primary bg-primary/10",
           },
           {
             label: "Billable",
-            value: formatDurationHHMM(billableSeconds),
+            value: formatDurationHHMM(billableMinutes),
             icon: Timer,
             color: "text-accent bg-accent/10",
           },
           {
             label: "Non-Billable",
-            value: formatDurationHHMM(totalSeconds - billableSeconds),
+            value: formatDurationHHMM(totalMinutes - billableMinutes),
             icon: Users,
             color: "text-secondary bg-secondary/10",
           },
@@ -336,7 +266,7 @@ export default function TimeTrackingPage() {
               </div>
             </CardHeader>
             <CardContent className="px-4 pb-4">
-              <p className="text-2xl font-display font-bold text-foreground font-mono">
+              <p className="text-xl font-display font-bold text-foreground font-mono">
                 {s.value}
               </p>
               <p className="text-xs text-muted-foreground">{s.label}</p>
@@ -347,7 +277,7 @@ export default function TimeTrackingPage() {
 
       {/* Manual Entry Form */}
       {showForm && (
-        <Card className="border-border border-primary/30 bg-card">
+        <Card className="border-primary/30 bg-card">
           <CardHeader className="pb-3">
             <CardTitle className="text-sm flex items-center gap-2">
               <Plus className="h-4 w-4 text-primary" />
@@ -357,14 +287,25 @@ export default function TimeTrackingPage() {
           <CardContent className="space-y-4">
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="space-y-1.5">
-                <Label htmlFor="entry-task">Task</Label>
+                <Label htmlFor="entry-task" className="text-xs">
+                  Task (optional)
+                </Label>
                 <Select value={formTask} onValueChange={setFormTask}>
-                  <SelectTrigger id="entry-task" data-ocid="entry-task-select">
+                  <SelectTrigger
+                    id="entry-task"
+                    data-ocid="entry-task-select"
+                    className="h-9 text-xs"
+                  >
                     <SelectValue placeholder="Select task…" />
                   </SelectTrigger>
                   <SelectContent>
-                    {MOCK_TASKS.map((t) => (
-                      <SelectItem key={t.id} value={t.id}>
+                    <SelectItem value="none">
+                      <span className="text-xs text-muted-foreground">
+                        No specific task
+                      </span>
+                    </SelectItem>
+                    {tasks.map((t) => (
+                      <SelectItem key={t.id} value={t.id} className="text-xs">
                         {t.title}
                       </SelectItem>
                     ))}
@@ -372,45 +313,30 @@ export default function TimeTrackingPage() {
                 </Select>
               </div>
               <div className="space-y-1.5">
-                <Label htmlFor="entry-duration">Duration (HH:MM)</Label>
+                <Label htmlFor="entry-duration" className="text-xs">
+                  Duration (HH:MM) *
+                </Label>
                 <Input
                   id="entry-duration"
                   placeholder="e.g. 01:30"
                   value={formDuration}
                   onChange={(e) => setFormDuration(e.target.value)}
+                  className="h-9 text-xs"
                   data-ocid="entry-duration-input"
-                />
-              </div>
-              <div className="space-y-1.5">
-                <Label htmlFor="entry-start">Start Time</Label>
-                <Input
-                  id="entry-start"
-                  type="datetime-local"
-                  value={formStart}
-                  onChange={(e) => setFormStart(e.target.value)}
-                  data-ocid="entry-start-input"
-                />
-              </div>
-              <div className="space-y-1.5">
-                <Label htmlFor="entry-end">End Time</Label>
-                <Input
-                  id="entry-end"
-                  type="datetime-local"
-                  value={formEnd}
-                  onChange={(e) => setFormEnd(e.target.value)}
-                  data-ocid="entry-end-input"
                 />
               </div>
             </div>
             <div className="space-y-1.5">
-              <Label htmlFor="entry-notes">Notes</Label>
+              <Label htmlFor="entry-notes" className="text-xs">
+                Notes
+              </Label>
               <Textarea
                 id="entry-notes"
                 placeholder="What did you work on?"
                 value={formNotes}
                 onChange={(e) => setFormNotes(e.target.value)}
                 rows={2}
-                className="resize-none"
+                className="resize-none text-xs"
                 data-ocid="entry-notes-input"
               />
             </div>
@@ -422,7 +348,10 @@ export default function TimeTrackingPage() {
                   onCheckedChange={setFormBillable}
                   data-ocid="entry-billable-switch"
                 />
-                <Label htmlFor="entry-billable" className="cursor-pointer">
+                <Label
+                  htmlFor="entry-billable"
+                  className="text-xs cursor-pointer"
+                >
                   Billable
                 </Label>
               </div>
@@ -430,17 +359,19 @@ export default function TimeTrackingPage() {
                 <Button
                   variant="ghost"
                   size="sm"
+                  className="text-xs h-8"
                   onClick={() => setShowForm(false)}
                 >
                   Cancel
                 </Button>
                 <Button
                   size="sm"
-                  onClick={handleAddEntry}
-                  disabled={isSubmitting}
+                  className="text-xs h-8 gap-1.5"
+                  onClick={() => createMutation.mutate()}
+                  disabled={createMutation.isPending || !formDuration}
                   data-ocid="entry-submit-btn"
                 >
-                  {isSubmitting ? "Adding…" : "Add Entry"}
+                  {createMutation.isPending ? "Logging…" : "Log Entry"}
                 </Button>
               </div>
             </div>
@@ -450,27 +381,6 @@ export default function TimeTrackingPage() {
 
       {/* Filters */}
       <div className="flex flex-wrap gap-3 rounded-xl border border-border bg-muted/30 px-4 py-3">
-        <div className="flex items-center gap-2 min-w-0">
-          <Label className="text-xs text-muted-foreground whitespace-nowrap">
-            User
-          </Label>
-          <Select value={filterUser} onValueChange={setFilterUser}>
-            <SelectTrigger
-              className="h-8 w-36 text-xs"
-              data-ocid="filter-user-select"
-            >
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All users</SelectItem>
-              {Object.entries(MOCK_USERS).map(([id, name]) => (
-                <SelectItem key={id} value={id}>
-                  {name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
         <div className="flex items-center gap-2 min-w-0">
           <Label className="text-xs text-muted-foreground whitespace-nowrap">
             Task
@@ -483,10 +393,14 @@ export default function TimeTrackingPage() {
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">All tasks</SelectItem>
-              {MOCK_TASKS.map((t) => (
-                <SelectItem key={t.id} value={t.id}>
-                  {t.title}
+              <SelectItem value="all" className="text-xs">
+                All tasks
+              </SelectItem>
+              {tasks.map((t) => (
+                <SelectItem key={t.id} value={t.id} className="text-xs">
+                  <span className="truncate max-w-[160px] block">
+                    {t.title}
+                  </span>
                 </SelectItem>
               ))}
             </SelectContent>
@@ -512,16 +426,12 @@ export default function TimeTrackingPage() {
             data-ocid="filter-to-input"
           />
         </div>
-        {(filterUser !== "all" ||
-          filterTask !== "all" ||
-          filterFrom ||
-          filterTo) && (
+        {(filterTask !== "all" || filterFrom || filterTo) && (
           <Button
             variant="ghost"
             size="sm"
             className="h-8 text-xs"
             onClick={() => {
-              setFilterUser("all");
               setFilterTask("all");
               setFilterFrom("");
               setFilterTo("");
@@ -545,13 +455,19 @@ export default function TimeTrackingPage() {
             <span className="text-xs font-mono text-muted-foreground">
               Total:{" "}
               <span className="text-foreground font-semibold">
-                {formatDurationHHMM(totalSeconds)}
+                {formatDurationHHMM(totalMinutes)}
               </span>
             </span>
           </CardTitle>
         </CardHeader>
         <CardContent className="p-0">
-          {filtered.length === 0 ? (
+          {isLoading ? (
+            <div className="px-6 pb-6 space-y-3 pt-2">
+              {[1, 2, 3].map((n) => (
+                <Skeleton key={n} className="h-12 w-full rounded-xl" />
+              ))}
+            </div>
+          ) : filtered.length === 0 ? (
             <div
               className="flex flex-col items-center justify-center py-12 gap-3"
               data-ocid="time-entries-empty"
@@ -560,11 +476,12 @@ export default function TimeTrackingPage() {
                 <Clock className="h-6 w-6 text-muted-foreground" />
               </div>
               <p className="text-sm text-muted-foreground">
-                No time entries found
+                No time entries yet
               </p>
               <Button
                 variant="outline"
                 size="sm"
+                className="text-xs h-8"
                 onClick={() => setShowForm(true)}
               >
                 <Plus className="h-3.5 w-3.5 mr-1.5" />
@@ -573,15 +490,13 @@ export default function TimeTrackingPage() {
             </div>
           ) : (
             <>
+              {/* Desktop table */}
               <div className="hidden sm:block overflow-x-auto">
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="border-b border-border bg-muted/40">
                       <th className="text-left text-xs font-medium text-muted-foreground px-6 py-3">
                         Task
-                      </th>
-                      <th className="text-left text-xs font-medium text-muted-foreground px-3 py-3">
-                        User
                       </th>
                       <th className="text-left text-xs font-medium text-muted-foreground px-3 py-3">
                         Date
@@ -600,53 +515,45 @@ export default function TimeTrackingPage() {
                   </thead>
                   <tbody className="divide-y divide-border">
                     {filtered.map((entry) => {
-                      const taskName =
-                        MOCK_TASKS.find((t) => t.id === entry.taskId)?.title ??
-                        entry.taskId ??
-                        "Unknown task";
-                      const userName = MOCK_USERS[entry.userId] ?? entry.userId;
-                      const isBillable = entry.tags.includes("billable");
+                      const taskTitle = entry.taskId
+                        ? (tasks.find((t) => t.id === entry.taskId)?.title ??
+                          entry.taskId)
+                        : "General";
                       return (
                         <tr
                           key={entry.id}
                           className="hover:bg-muted/30 transition-colors"
                           data-ocid={`time-entry-row-${entry.id}`}
                         >
-                          <td className="px-6 py-3 font-medium text-foreground truncate max-w-[160px]">
-                            {taskName}
+                          <td className="px-6 py-3 font-medium text-foreground truncate max-w-[180px] text-xs">
+                            {taskTitle}
                           </td>
-                          <td className="px-3 py-3 text-muted-foreground whitespace-nowrap">
-                            {userName}
+                          <td className="px-3 py-3 text-muted-foreground whitespace-nowrap text-xs">
+                            {formatDate(entry.startTime)}
                           </td>
-                          <td className="px-3 py-3 text-muted-foreground whitespace-nowrap">
-                            {formatDate(entry.startedAt)}
+                          <td className="px-3 py-3 text-right font-mono font-semibold text-foreground whitespace-nowrap text-xs">
+                            {formatDurationHHMM(Number(entry.durationMinutes))}
                           </td>
-                          <td className="px-3 py-3 text-right font-mono font-semibold text-foreground whitespace-nowrap">
-                            {formatDurationHHMM(entry.durationSeconds)}
-                          </td>
-                          <td className="px-3 py-3 text-muted-foreground truncate max-w-[200px]">
-                            {entry.description || (
-                              <span className="text-muted-foreground/50 italic">
+                          <td className="px-3 py-3 text-muted-foreground truncate max-w-[200px] text-xs">
+                            {entry.notes || (
+                              <span className="text-muted-foreground/40 italic">
                                 —
                               </span>
                             )}
                           </td>
                           <td className="px-3 py-3 text-center">
-                            <Checkbox
-                              checked={isBillable}
-                              onCheckedChange={(c) =>
-                                handleBillableToggle(entry.id, c === true)
-                              }
-                              data-ocid={`billable-toggle-${entry.id}`}
-                              aria-label="Billable"
-                            />
+                            {entry.billable && (
+                              <Badge className="bg-accent/10 text-accent border-accent/20 text-[10px]">
+                                Billable
+                              </Badge>
+                            )}
                           </td>
                           <td className="px-4 py-3">
                             <Button
                               variant="ghost"
                               size="icon"
                               className="h-7 w-7 text-muted-foreground hover:text-destructive"
-                              onClick={() => handleDelete(entry.id)}
+                              onClick={() => deleteMutation.mutate(entry.id)}
                               data-ocid={`delete-entry-${entry.id}`}
                               aria-label="Delete entry"
                             >
@@ -659,12 +566,13 @@ export default function TimeTrackingPage() {
                   </tbody>
                 </table>
               </div>
+              {/* Mobile cards */}
               <div className="sm:hidden divide-y divide-border">
                 {filtered.map((entry) => {
-                  const taskName =
-                    MOCK_TASKS.find((t) => t.id === entry.taskId)?.title ??
-                    "Unknown task";
-                  const isBillable = entry.tags.includes("billable");
+                  const taskTitle = entry.taskId
+                    ? (tasks.find((t) => t.id === entry.taskId)?.title ??
+                      "Task")
+                    : "General";
                   return (
                     <div
                       key={entry.id}
@@ -673,23 +581,22 @@ export default function TimeTrackingPage() {
                     >
                       <div className="flex-1 min-w-0">
                         <p className="text-sm font-medium text-foreground truncate">
-                          {taskName}
+                          {taskTitle}
                         </p>
                         <p className="text-xs text-muted-foreground mt-0.5">
-                          {MOCK_USERS[entry.userId]} ·{" "}
-                          {formatDate(entry.startedAt)}
+                          {formatDate(entry.startTime)}
                         </p>
-                        {entry.description && (
+                        {entry.notes && (
                           <p className="text-xs text-muted-foreground/70 mt-1 line-clamp-2">
-                            {entry.description}
+                            {entry.notes}
                           </p>
                         )}
                       </div>
                       <div className="flex flex-col items-end gap-1.5 shrink-0">
                         <span className="text-sm font-mono font-semibold text-foreground">
-                          {formatDurationHHMM(entry.durationSeconds)}
+                          {formatDurationHHMM(Number(entry.durationMinutes))}
                         </span>
-                        {isBillable && (
+                        {entry.billable && (
                           <Badge className="bg-accent/10 text-accent border-accent/20 text-xs">
                             Billable
                           </Badge>
@@ -698,7 +605,7 @@ export default function TimeTrackingPage() {
                           variant="ghost"
                           size="icon"
                           className="h-6 w-6 text-muted-foreground hover:text-destructive"
-                          onClick={() => handleDelete(entry.id)}
+                          onClick={() => deleteMutation.mutate(entry.id)}
                           aria-label="Delete entry"
                         >
                           <Trash2 className="h-3 w-3" />

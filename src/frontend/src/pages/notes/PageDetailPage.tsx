@@ -252,6 +252,7 @@ export default function PageDetailPage() {
             pages={allPages}
             currentPageId={pageId}
             tenantId={tenantId}
+            workspaceId={workspaceId}
           />
         </div>
       )}

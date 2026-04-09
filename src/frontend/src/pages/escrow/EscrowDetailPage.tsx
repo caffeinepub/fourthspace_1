@@ -224,6 +224,8 @@ export default function EscrowDetailPage() {
       return r.__kind__ === "ok" ? r.ok : null;
     },
     enabled: !!actor && !isFetching && !!workspaceId,
+    // Poll every 10s so status updates from other workspace members appear automatically
+    refetchInterval: 10_000,
   });
 
   const { data: milestones } = useQuery<EscrowMilestone[]>({
@@ -233,6 +235,7 @@ export default function EscrowDetailPage() {
       return actor.listEscrowMilestones(tenantId, workspaceId, contractId);
     },
     enabled: !!actor && !isFetching && !!workspaceId,
+    refetchInterval: 10_000,
   });
 
   const { data: disputes } = useQuery<EscrowDispute[]>({
@@ -242,6 +245,7 @@ export default function EscrowDetailPage() {
       return actor.listEscrowDisputes(tenantId, workspaceId, contractId);
     },
     enabled: !!actor && !isFetching && !!workspaceId,
+    refetchInterval: 10_000,
   });
 
   const { data: summary } = useQuery<EscrowSummary | null>({
@@ -864,82 +868,135 @@ export default function EscrowDetailPage() {
               </p>
             </div>
           ) : (
-            milestoneList.map((milestone) => (
-              <Card key={milestone.id}>
-                <CardContent className="pt-4 pb-4">
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 mb-1">
-                        <p className="font-medium text-sm text-foreground truncate">
-                          {milestone.title}
+            <>
+              {/* Milestone progress bar */}
+              {(() => {
+                const releasedCount = milestoneList.filter(
+                  (m) => m.status === MS.Released,
+                ).length;
+                const releasedAmount = milestoneList
+                  .filter((m) => m.status === MS.Released)
+                  .reduce((s, m) => s + Number(m.amount), 0);
+                const totalAmount = milestoneList.reduce(
+                  (s, m) => s + Number(m.amount),
+                  0,
+                );
+                const pct =
+                  totalAmount > 0
+                    ? Math.round((releasedAmount / totalAmount) * 100)
+                    : 0;
+                return (
+                  <Card className="border-border" key="progress-bar">
+                    <CardContent className="pt-4 pb-4">
+                      <div className="flex items-center justify-between mb-2">
+                        <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                          Milestone Progress
                         </p>
-                        <Badge
-                          className={`text-[10px] px-1.5 py-0.5 ${MILESTONE_STATUS_STYLES[milestone.status]}`}
-                          variant="secondary"
-                        >
-                          {milestone.status}
-                        </Badge>
-                      </div>
-                      {milestone.description && (
-                        <p className="text-xs text-muted-foreground line-clamp-2">
-                          {milestone.description}
+                        <p className="text-xs font-semibold text-foreground tabular-nums">
+                          {releasedCount} / {milestoneList.length} released ·{" "}
+                          {pct}%
                         </p>
-                      )}
-                      <p className="text-xs text-muted-foreground mt-1">
-                        Created {formatDate(milestone.createdAt)}
-                      </p>
-                    </div>
-                    <div className="text-right shrink-0 space-y-2">
-                      <p className="font-bold text-sm text-amber-600 dark:text-amber-400">
-                        {formatAmount(milestone.amount, contract.currency)}
-                      </p>
-                      <div className="flex gap-1.5 justify-end">
-                        {/* Approve milestone — payer only */}
-                        {milestone.status === MS.Pending && isPayer && (
-                          <Button
-                            size="sm"
-                            onClick={() =>
-                              approveMilestoneMutation.mutate(milestone.id)
-                            }
-                            disabled={approveMilestoneMutation.isPending}
-                            className="h-7 text-xs bg-blue-600 hover:bg-blue-700 text-white"
-                            data-ocid={`milestone-approve-${milestone.id}`}
+                      </div>
+                      <div className="h-2 rounded-full bg-muted overflow-hidden">
+                        <div
+                          className="h-full rounded-full bg-amber-500 transition-all duration-500"
+                          style={{ width: `${pct}%` }}
+                        />
+                      </div>
+                      <div className="flex items-center justify-between mt-2">
+                        <p className="text-xs text-muted-foreground">
+                          Released:{" "}
+                          {formatAmount(
+                            BigInt(releasedAmount),
+                            contract.currency,
+                          )}
+                        </p>
+                        <p className="text-xs text-muted-foreground">
+                          Total:{" "}
+                          {formatAmount(contract.amount, contract.currency)}
+                        </p>
+                      </div>
+                    </CardContent>
+                  </Card>
+                );
+              })()}
+              {milestoneList.map((milestone) => (
+                <Card key={milestone.id}>
+                  <CardContent className="pt-4 pb-4">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 mb-1">
+                          <p className="font-medium text-sm text-foreground truncate">
+                            {milestone.title}
+                          </p>
+                          <Badge
+                            className={`text-[10px] px-1.5 py-0.5 ${MILESTONE_STATUS_STYLES[milestone.status]}`}
+                            variant="secondary"
                           >
-                            Approve
-                          </Button>
+                            {milestone.status}
+                          </Badge>
+                        </div>
+                        {milestone.description && (
+                          <p className="text-xs text-muted-foreground line-clamp-2">
+                            {milestone.description}
+                          </p>
                         )}
-                        {/* Show pending indicator to non-payers */}
-                        {milestone.status === MS.Pending && !isPayer && (
-                          <span className="flex items-center gap-1 text-xs text-muted-foreground">
-                            <Clock className="h-3.5 w-3.5" />
-                            Awaiting payer
-                          </span>
-                        )}
-                        {milestone.status === MS.Approved && (
-                          <Button
-                            size="sm"
-                            onClick={() =>
-                              releaseMilestoneMutation.mutate(milestone.id)
-                            }
-                            disabled={releaseMilestoneMutation.isPending}
-                            className="h-7 text-xs bg-green-600 hover:bg-green-700 text-white"
-                            data-ocid={`milestone-release-${milestone.id}`}
-                          >
-                            Release Funds
-                          </Button>
-                        )}
-                        {milestone.status === MS.Released && (
-                          <span className="flex items-center gap-1 text-xs text-green-600 dark:text-green-400">
-                            <CheckCircle2 className="h-3.5 w-3.5" />
-                            Released
-                          </span>
-                        )}
+                        <p className="text-xs text-muted-foreground mt-1">
+                          Created {formatDate(milestone.createdAt)}
+                        </p>
+                      </div>
+                      <div className="text-right shrink-0 space-y-2">
+                        <p className="font-bold text-sm text-amber-600 dark:text-amber-400">
+                          {formatAmount(milestone.amount, contract.currency)}
+                        </p>
+                        <div className="flex gap-1.5 justify-end">
+                          {/* Approve milestone — payer only */}
+                          {milestone.status === MS.Pending && isPayer && (
+                            <Button
+                              size="sm"
+                              onClick={() =>
+                                approveMilestoneMutation.mutate(milestone.id)
+                              }
+                              disabled={approveMilestoneMutation.isPending}
+                              className="h-7 text-xs bg-blue-600 hover:bg-blue-700 text-white"
+                              data-ocid={`milestone-approve-${milestone.id}`}
+                            >
+                              Approve
+                            </Button>
+                          )}
+                          {/* Show pending indicator to non-payers */}
+                          {milestone.status === MS.Pending && !isPayer && (
+                            <span className="flex items-center gap-1 text-xs text-muted-foreground">
+                              <Clock className="h-3.5 w-3.5" />
+                              Awaiting payer
+                            </span>
+                          )}
+                          {milestone.status === MS.Approved && (
+                            <Button
+                              size="sm"
+                              onClick={() =>
+                                releaseMilestoneMutation.mutate(milestone.id)
+                              }
+                              disabled={releaseMilestoneMutation.isPending}
+                              className="h-7 text-xs bg-green-600 hover:bg-green-700 text-white"
+                              data-ocid={`milestone-release-${milestone.id}`}
+                            >
+                              Release Funds
+                            </Button>
+                          )}
+                          {milestone.status === MS.Released && (
+                            <span className="flex items-center gap-1 text-xs text-green-600 dark:text-green-400">
+                              <CheckCircle2 className="h-3.5 w-3.5" />
+                              Released
+                            </span>
+                          )}
+                        </div>
                       </div>
                     </div>
-                  </div>
-                </CardContent>
-              </Card>
-            ))
+                  </CardContent>
+                </Card>
+              ))}
+            </>
           )}
         </div>
       )}

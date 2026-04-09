@@ -1049,20 +1049,70 @@ export default function NoteDetailPage() {
     handleSaveRef.current = handleSave;
   }, [handleSave]);
 
-  // Autosave 1.5s debounce
-  useEffect(() => {
+  // Autosave: fires 2s after last change to title, blocks, tags, cover, or icon
+  const triggerAutoSave = useCallback(() => {
     if (debounceRef.current) clearTimeout(debounceRef.current);
     debounceRef.current = setTimeout(() => {
       if (editTitle.trim()) handleSaveRef.current();
-    }, 1500);
+    }, 2000);
+  }, [editTitle]);
+
+  useEffect(() => {
+    triggerAutoSave();
     return () => {
       if (debounceRef.current) clearTimeout(debounceRef.current);
     };
-  }, [editTitle]);
+  }, [triggerAutoSave]);
+
+  // Also trigger save when blocks/tags/cover/icon change (not just title)
+  const blocksRef = useRef(blocks);
+  useEffect(() => {
+    if (blocksRef.current !== blocks) {
+      blocksRef.current = blocks;
+      triggerAutoSave();
+    }
+  }, [blocks, triggerAutoSave]);
+
+  const editTagsRef = useRef(editTags);
+  useEffect(() => {
+    if (editTagsRef.current !== editTags) {
+      editTagsRef.current = editTags;
+      triggerAutoSave();
+    }
+  }, [editTags, triggerAutoSave]);
 
   // Block mutations
   function updateBlockContent(id: string, content: string) {
     setBlocks((prev) => prev.map((b) => (b.id === id ? { ...b, content } : b)));
+  }
+
+  function checkMarkdownShortcut(value: string, blockId: string): boolean {
+    const shortcuts: Array<{ prefix: string; type: BlockType }> = [
+      { prefix: "# ", type: "heading1" },
+      { prefix: "## ", type: "heading2" },
+      { prefix: "### ", type: "heading3" },
+      { prefix: "> ", type: "quote" },
+      { prefix: "- ", type: "bulletList" },
+      { prefix: "* ", type: "bulletList" },
+      { prefix: "1. ", type: "numberedList" },
+      { prefix: "``` ", type: "code" },
+      { prefix: "```\n", type: "code" },
+    ];
+    for (const { prefix, type } of shortcuts) {
+      if (value === prefix) {
+        setBlocks((prev) =>
+          prev.map((b) => (b.id === blockId ? { ...b, type, content: "" } : b)),
+        );
+        requestAnimationFrame(() => {
+          const target = document.querySelector(
+            `[data-block-id="${blockId}"]`,
+          ) as HTMLTextAreaElement;
+          if (target) target.value = "";
+        });
+        return true;
+      }
+    }
+    return false;
   }
 
   function handleBlockKeyDown(
@@ -1072,6 +1122,15 @@ export default function NoteDetailPage() {
     const el = e.currentTarget;
     const { selectionStart, selectionEnd, value } = el;
     const blockIdx = blocks.findIndex((b) => b.id === blockId);
+
+    // Markdown shortcut check on Space key
+    if (e.key === " ") {
+      const withSpace = `${value.slice(0, selectionStart)} `;
+      if (checkMarkdownShortcut(withSpace, blockId)) {
+        e.preventDefault();
+        return;
+      }
+    }
 
     // Slash menu trigger
     if (e.key === "/" && selectionStart === 0 && value === "") {

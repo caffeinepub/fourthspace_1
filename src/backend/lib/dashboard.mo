@@ -15,9 +15,11 @@ module {
   public type DashboardStats = {
     noteCount : Nat;
     projectCount : Nat;
+    activeProjectCount : Nat;  // projects with status #Active (for "1 active project" pluralization)
     memberCount : Nat;
     goalCount : Nat;
     taskCount : Nat;
+    completedTaskCount : Nat;  // tasks with status #Done
     walletBalance : Nat;       // treasury ICP balance in e8s (bigint-compatible Nat)
     payrollTotal : Float;      // sum of approved/processed payroll record gross amounts
   };
@@ -45,11 +47,19 @@ module {
     let noteCount = notes.filter(
       func((_, n)) { n.tenantId == tenantId and n.workspaceId == workspaceId },
     ).size();
-    let projectCount = projects.filter(
+    let wsProjects = projects.filter(
       func((_, p)) { p.tenantId == tenantId and p.workspaceId == workspaceId },
+    );
+    let projectCount = wsProjects.size();
+    let activeProjectCount = wsProjects.filter(
+      func((_, p)) { p.status == #Active },
     ).size();
-    let taskCount = tasks.filter(
+    let wsTasks = tasks.filter(
       func((_, t)) { t.tenantId == tenantId and t.workspaceId == workspaceId },
+    );
+    let taskCount = wsTasks.size();
+    let completedTaskCount = wsTasks.filter(
+      func((_, t)) { t.status == #Done },
     ).size();
     let goalCount = goals.filter(
       func((_, g)) { g.tenantId == tenantId and g.workspaceId == workspaceId },
@@ -76,7 +86,7 @@ module {
     for ((_, r) in payrollFiltered.values()) {
       payrollTotal += r.grossAmount;
     };
-    { noteCount; projectCount; memberCount; goalCount; taskCount; walletBalance; payrollTotal }
+    { noteCount; projectCount; activeProjectCount; memberCount; goalCount; taskCount; completedTaskCount; walletBalance; payrollTotal }
   };
 
   /// Build a recent activity feed from notes, tasks, and projects (most recent first, up to limit).

@@ -346,10 +346,32 @@ export default function ThreadPage() {
     onError: (err: Error) => toast.error(err.message),
   });
 
-  // ── Add reaction ──────────────────────────────────────────────────────────
+  // ── Add/toggle reaction ──────────────────────────────────────────────────
   const reactMutation = useMutation({
     mutationFn: async ({ msgId, emoji }: { msgId: string; emoji: string }) => {
       if (!actor) throw new Error("Not connected");
+      // Find the message to check if user already reacted
+      const allMsgs = [
+        ...(threadMessages ?? []),
+        ...(parentMessage ? [parentMessage] : []),
+      ];
+      const targetMsg = allMsgs.find((m) => m.id === msgId);
+      const alreadyReacted =
+        targetMsg?.reactions?.some(
+          (r) =>
+            r.emoji === emoji &&
+            r.userIds.some((u) => u.toString() === myPrincipal),
+        ) ?? false;
+      if (alreadyReacted) {
+        const result = await actor.removeReaction(
+          tenantId,
+          workspaceId,
+          msgId,
+          emoji,
+        );
+        if (result.__kind__ === "err") throw new Error(result.err);
+        return result.ok;
+      }
       const result = await actor.addReaction(
         tenantId,
         workspaceId,
